@@ -8,7 +8,7 @@ on:
       - "v*"
     paths:
       - "src/**"
-      - "Dockerfile"
+      - "src/ImmichReverseGeo.Web/Dockerfile"
       - ".github/workflows/docker-publish.yml"
   workflow_dispatch:
 
@@ -47,7 +47,7 @@ jobs:
         uses: docker/build-push-action@v6
         with:
           context: .
-          file: ./Dockerfile
+          file: ./src/ImmichReverseGeo.Web/Dockerfile
           push: true
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}

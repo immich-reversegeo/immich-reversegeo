@@ -31,4 +31,4 @@ jobs:
         run: dotnet test --solution immich-reversegeo.slnx --configuration Release --no-build --filter "TestCategory!=Integration&TestCategory!=Performance"
 
       - name: Build Docker image
-        run: docker build -t immich-reversegeo:test .
+        run: docker build -f src/ImmichReverseGeo.Web/Dockerfile -t immich-reversegeo:test .
