@@ -1,13 +1,16 @@
 name: Release
 
 on:
-  push:
-    tags:
-      - "v*"
   workflow_dispatch:
+    inputs:
+      release_name:
+        description: "Optional label for the release artifacts"
+        required: false
+        default: ""
+        type: string
 
 permissions:
-  contents: write
+  contents: read
 
 jobs:
   build:
@@ -51,10 +54,14 @@ jobs:
         run: Compress-Archive -Path _out/website/* -DestinationPath immich-reversegeo-docs.zip
         shell: pwsh
 
-      - name: Create release
-        if: startsWith(github.ref, 'refs/tags/')
-        uses: softprops/action-gh-release@v2
+      - name: Upload app artifact
+        uses: actions/upload-artifact@v6
         with:
-          files: |
-            immich-reversegeo-web.zip
-            immich-reversegeo-docs.zip
+          name: ${{ inputs.release_name != '' && format('{0}-web', inputs.release_name) || 'immich-reversegeo-web' }}
+          path: immich-reversegeo-web.zip
+
+      - name: Upload docs artifact
+        uses: actions/upload-artifact@v6
+        with:
+          name: ${{ inputs.release_name != '' && format('{0}-docs', inputs.release_name) || 'immich-reversegeo-docs' }}
+          path: immich-reversegeo-docs.zip
