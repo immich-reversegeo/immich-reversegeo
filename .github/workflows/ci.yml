@@ -12,7 +12,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           lfs: true
 
@@ -28,7 +28,7 @@ jobs:
         run: dotnet build immich-reversegeo.slnx --configuration Release --no-restore
 
       - name: Test
-        run: dotnet test immich-reversegeo.slnx --configuration Release --no-build --filter "TestCategory!=Integration&TestCategory!=Performance"
+        run: dotnet test --solution immich-reversegeo.slnx --configuration Release --no-build --filter "TestCategory!=Integration&TestCategory!=Performance"
 
       - name: Build Docker image
         run: docker build -t immich-reversegeo:test .

@@ -5,8 +5,9 @@ on:
     branches:
       - master
     paths:
-      - "docs/**"
+      - "docs/website/**"
       - "mkdocs.yml"
+      - "docker-compose.yml"
       - ".github/workflows/pages.yml"
   workflow_dispatch:
 
@@ -24,10 +25,10 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -42,7 +43,7 @@ jobs:
         run: zensical build --clean
 
       - name: Upload artifact
-        uses: actions/upload-pages-artifact@v3
+        uses: actions/upload-pages-artifact@v4
         with:
           path: _out/website
 

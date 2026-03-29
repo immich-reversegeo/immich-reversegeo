@@ -14,7 +14,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
         with:
           lfs: true
 
@@ -24,7 +24,7 @@ jobs:
           dotnet-version: 10.0.x
 
       - name: Setup Python
-        uses: actions/setup-python@v5
+        uses: actions/setup-python@v6
         with:
           python-version: "3.12"
 
@@ -35,7 +35,7 @@ jobs:
         run: dotnet restore immich-reversegeo.slnx
 
       - name: Test
-        run: dotnet test immich-reversegeo.slnx --configuration Release --filter "TestCategory!=Integration&TestCategory!=Performance"
+        run: dotnet test --solution immich-reversegeo.slnx --configuration Release --filter "TestCategory!=Integration&TestCategory!=Performance"
 
       - name: Publish app
         run: dotnet publish src/ImmichReverseGeo.Web/ImmichReverseGeo.Web.csproj -c Release -o artifacts/web
