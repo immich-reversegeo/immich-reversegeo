@@ -31,7 +31,7 @@ public class ConfigServiceTests
     {
         var svc = new ConfigService(NullLogger<ConfigService>.Instance, configDir: _tempDir);
         var cfg = await svc.GetConfigAsync();
-        Assert.AreEqual("0 2 * * *", cfg.Schedule.Cron);
+        Assert.AreEqual("0 * * * *", cfg.Schedule.Cron);
         Assert.AreEqual(50, cfg.Processing.BatchSize);
     }
 
