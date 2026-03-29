@@ -1,0 +1,32 @@
+<svg width="920" height="240" viewBox="0 0 920 240" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!--
+    Horizontal banner — dark background, icon left + wordmark right.
+    Icon: circle r=72, center (110, 115). Pin tip at (110, 215).
+    Segment endpoints:
+      (110,43)  (178.5,92.8)  (152.3,173.2)  (67.7,173.2)  (41.5,92.8)
+  -->
+  <defs>
+    <clipPath id="irg-head-h">
+      <circle cx="110" cy="115" r="72"/>
+    </clipPath>
+  </defs>
+
+  <rect width="920" height="240" rx="40" fill="#0F172A"/>
+
+  <path d="M 78 165 L 142 165 L 110 215 Z" fill="#1E3A8A"/>
+
+  <g clip-path="url(#irg-head-h)">
+    <path d="M 110 115 L 110 43 A 72 72 0 0 1 178.5 92.8 Z" fill="#FA2921"/>
+    <path d="M 110 115 L 178.5 92.8 A 72 72 0 0 1 152.3 173.2 Z" fill="#FFB400"/>
+    <path d="M 110 115 L 152.3 173.2 A 72 72 0 0 1 67.7 173.2 Z" fill="#18C249"/>
+    <path d="M 110 115 L 67.7 173.2 A 72 72 0 0 1 41.5 92.8 Z" fill="#1E83F7"/>
+    <path d="M 110 115 L 41.5 92.8 A 72 72 0 0 1 110 43 Z" fill="#ED79B5"/>
+  </g>
+
+  <circle cx="110" cy="115" r="29" fill="#FFFFFF"/>
+  <circle cx="110" cy="115" r="15" fill="#1E293B"/>
+  <circle cx="110" cy="115" r="7" fill="#1E83F7"/>
+
+  <text x="218" y="108" font-size="60" font-family="Segoe UI, Inter, Arial, sans-serif" font-weight="700" fill="#E2E8F0" letter-spacing="-1">Immich ReverseGeo</text>
+  <text x="220" y="152" font-size="22" font-family="Segoe UI, Inter, Arial, sans-serif" font-weight="500" fill="#93C5FD" letter-spacing="2">SHARPER PHOTO LOCATIONS FOR IMMICH</text>
+</svg>

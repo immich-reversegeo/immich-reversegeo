@@ -1,0 +1,46 @@
+@* src/ImmichReverseGeo.Web/Components/Layout/NavMenu.razor *@
+@using ImmichReverseGeo.Web.Services
+@inject ProcessingState State
+@implements IDisposable
+
+<nav class="nav-menu">
+    <div class="nav-brand">
+        <div class="nav-brand-header">
+            <img class="nav-logo" src="brand/logo-mark.svg" alt="Immich ReverseGeo" />
+            <span class="nav-title">Immich ReverseGeo
+                <span class="status-dot @(State.IsRunning ? "running" : State.LastError is not null ? "error" : "idle")"
+                      title="@(State.IsRunning ? "Processing..." : State.LastError is not null ? "Error" : "Idle")"></span>
+            </span>
+        </div>
+        <p class="nav-tagline">Reverse geocoding for your Immich library.</p>
+    </div>
+
+    <div class="nav-section">
+        <div class="nav-section-title">Navigation</div>
+        <NavLink href="/" Match="NavLinkMatch.All">Dashboard</NavLink>
+        <div class="nav-subsection">
+            <NavLink href="/data" Match="NavLinkMatch.Prefix">Data</NavLink>
+            <div class="nav-submenu">
+                <NavLink href="/data/geoboundaries">Administrative Areas</NavLink>
+            </div>
+        </div>
+        <NavLink href="/lookup">Lookup</NavLink>
+        <NavLink href="/settings">Settings</NavLink>
+        <NavLink href="/logs">Logs</NavLink>
+    </div>
+</nav>
+
+@code {
+    private Action? _handler;
+
+    protected override void OnInitialized()
+    {
+        _handler = () => InvokeAsync(StateHasChanged);
+        State.OnChanged += _handler;
+    }
+
+    public void Dispose()
+    {
+        State.OnChanged -= _handler;
+    }
+}

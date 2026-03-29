@@ -1,0 +1,18 @@
+{
+  "name": "immich-reversegeo",
+  "private": true,
+  "description": "Task runner for Immich ReverseGeo",
+  "scripts": {
+    "build": "dotnet build",
+    "test": "dotnet test --filter \"TestCategory!=Integration&TestCategory!=Performance\"",
+    "test:integration": "dotnet test --filter \"TestCategory=Integration\"",
+    "start": "dotnet run --project src/ImmichReverseGeo.Web",
+    "docker:build": "docker compose -f docker-compose.local.yml build --no-cache",
+    "docker:up": "docker compose -f docker-compose.local.yml build --no-cache && docker compose -f docker-compose.local.yml up -d --force-recreate",
+    "docker:down": "docker compose -f docker-compose.local.yml down",
+    "docs:serve": "py -m zensical serve",
+    "docs:build": "py -m zensical build",
+    "export:airports": "dotnet run --project src/ImmichReverseGeo.Tools.OvertureExport -- --dataset airports",
+    "export:country-divisions": "dotnet run --project src/ImmichReverseGeo.Tools.OvertureExport -- --dataset country-divisions"
+  }
+}

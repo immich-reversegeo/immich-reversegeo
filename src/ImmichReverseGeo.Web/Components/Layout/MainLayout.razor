@@ -1,0 +1,26 @@
+@* src/ImmichReverseGeo.Web/Components/Layout/MainLayout.razor *@
+@inherits LayoutComponentBase
+
+<div class="page">
+    <aside class="sidebar-shell">
+        <NavMenu />
+    </aside>
+    <main class="main-shell">
+        <div class="content-shell">
+            <div class="content">
+                @Body
+            </div>
+        </div>
+        <footer class="attribution">
+            <span class="attribution-label">Data sources &amp; licences</span>
+            <span class="attribution-items">
+                <a href="https://docs.overturemaps.org/attribution/" target="_blank" rel="noopener">Overture Maps</a> <span class="licence">Divisions/Base: ODbL · Places: mixed open licences</span>
+            </span>
+            <span class="attribution-detail">
+                © OpenStreetMap contributors, Overture Maps Foundation.
+                Bundled Overture-derived data also carries upstream source attributions including geoBoundaries, Esri Community Maps contributors, Land Information New Zealand (LINZ), Meta, Microsoft, PinMeTo, Krick, RenderSEO, DAC, Foursquare, and AllThePlaces.
+                See the bundled Overture attribution notice for the fuller source and licence breakdown.
+            </span>
+        </footer>
+    </main>
+</div>

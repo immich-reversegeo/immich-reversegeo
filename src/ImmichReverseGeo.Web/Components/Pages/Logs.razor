@@ -1,0 +1,46 @@
+@page "/logs"
+@rendermode InteractiveServer
+@inject ProcessingState State
+@inject IJSRuntime JS
+@implements IDisposable
+
+<h2>Logs</h2>
+
+<div class="log-controls">
+    <label>Filter
+        <select @bind="_levelFilter">
+            <option value="">All</option>
+            <option value="[ERROR]">Errors only</option>
+            <option value="[WARN]">Warnings+</option>
+        </select>
+    </label>
+    <button @onclick="DownloadLog" class="btn btn-secondary">↓ Download</button>
+</div>
+
+<div class="log-full">
+    @foreach (var line in FilteredLog)
+    {
+        <div class="log-line @(line.Contains("[ERROR]") ? "error" : line.Contains("[WARN]") ? "warn" : "")">@line</div>
+    }
+</div>
+
+@code {
+    private string _levelFilter = "";
+
+    private IEnumerable<string> FilteredLog =>
+        string.IsNullOrEmpty(_levelFilter)
+            ? State.GetRecentLog()
+            : State.GetRecentLog().Where(l => l.Contains(_levelFilter));
+
+    protected override void OnInitialized() => State.OnChanged += Refresh;
+    public void Dispose() => State.OnChanged -= Refresh;
+    private void Refresh() => InvokeAsync(StateHasChanged);
+
+    private async Task DownloadLog()
+    {
+        var content = string.Join("\n", FilteredLog);
+        var bytes = System.Text.Encoding.UTF8.GetBytes(content);
+        var base64 = Convert.ToBase64String(bytes);
+        await JS.InvokeVoidAsync("downloadFile", "immich-reversegeo.log", "text/plain", base64);
+    }
+}

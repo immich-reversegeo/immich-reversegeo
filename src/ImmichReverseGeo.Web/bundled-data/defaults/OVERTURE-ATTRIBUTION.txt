@@ -1,0 +1,53 @@
+Overture Maps bundled data notice
+=================================
+
+This application may bundle or cache Overture Maps datasets, including:
+
+- Divisions (`theme=divisions`, `type=division_area`)
+- Base infrastructure (`theme=base`, `type=infrastructure`)
+- Places (`theme=places`, `type=place`)
+
+Official attribution and licensing reference:
+https://docs.overturemaps.org/attribution/
+
+Required attribution shown by Overture for ODbL-backed themes:
+© OpenStreetMap contributors, Overture Maps Foundation
+
+Theme licensing summary from Overture documentation
+---------------------------------------------------
+
+- Base: ODbL
+- Divisions: ODbL
+- Places: mixed open licences from contributing sources
+
+Additional source attributions relevant to themes used by this application
+--------------------------------------------------------------------------
+
+Divisions
+- © OpenStreetMap contributors. Available under the Open Database License.
+- geoBoundaries. Available under CC BY 4.0.
+- Esri Community Maps contributors. Available under CC BY 4.0.
+- Land Information New Zealand (LINZ). Available under CC BY 4.0.
+
+Base
+- © OpenStreetMap contributors. Available under the Open Database License.
+- Data from the Daylight Map Distribution.
+- ESA WorldCover. Available under CC BY 4.0 DEED.
+- Data products from ETOPO1. Available under Open Data Commons Public Domain Dedication and License.
+- Data from GLOBathy. Available under CC0 1.0 (assumed by Overture documentation).
+
+Places
+- Data from Meta. Available under CDLA Permissive 2.0.
+- Data from Microsoft. Available under CDLA Permissive 2.0.
+- Data from PinMeTo. Available under CDLA Permissive 2.0.
+- Data from Krick. Available under CDLA Permissive 2.0.
+- Data from RenderSEO. Available under CDLA Permissive 2.0.
+- Data from DAC. Available under CDLA Permissive 2.0.
+- Data from Foursquare. Copyright 2024 Foursquare Labs, Inc. All rights reserved. Available under Apache 2.0.
+- Data from AllThePlaces. Available under CC0 1.0.
+
+Notes
+-----
+
+- The authoritative and current source for Overture attribution and licensing is the Overture documentation page linked above.
+- If the bundled Overture datasets are refreshed, review the current Overture attribution page and update this file if needed.

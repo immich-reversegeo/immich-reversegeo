@@ -1,0 +1,189 @@
+@page "/"
+@rendermode InteractiveServer
+@inject ProcessingState State
+@inject ProcessingBackgroundService Processor
+@inject ImmichDbRepository Db
+@inject SkippedAssetsRepository Skipped
+@implements IDisposable
+
+<h2>Dashboard</h2>
+
+@if (!_circuitReady)
+{
+    <div class="alert alert-info">Starting the interactive UI…</div>
+}
+else if (_loadingStats)
+{
+    <div class="alert alert-info">Checking the Immich database connection and loading dashboard statistics…</div>
+}
+else if (_dbError is not null)
+{
+    <div class="settings-card">
+        <h3>Database Connection Needed</h3>
+        <p class="section-intro">
+            The dashboard could not load Immich statistics yet because the database is currently unavailable.
+        </p>
+        <div class="alert alert-error">Database unavailable: @_dbError</div>
+        <p class="section-intro">
+            Check the database environment variables on the Settings page and make sure the app can reach the same PostgreSQL instance that Immich uses.
+        </p>
+        <div class="btn-row">
+            <button @onclick="RefreshStats" class="btn btn-secondary">Retry Connection</button>
+            <a href="/settings" class="btn btn-primary">Open Settings</a>
+        </div>
+    </div>
+}
+
+<div class="stats-row">
+    <div class="stat-card">
+        <div class="stat-value">@UnprocessedDisplay</div>
+        <div class="stat-label">Unprocessed Assets</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">@State.ProcessedThisRun</div>
+        <div class="stat-label">Processed This Run</div>
+    </div>
+    <div class="stat-card">
+        <div class="stat-value">@SkippedDisplay</div>
+        <div class="stat-label">Skipped (total)</div>
+    </div>
+    <div class="stat-card @(State.ErrorsThisRun > 0 ? "has-errors" : "")">
+        <div class="stat-value">@State.ErrorsThisRun</div>
+        <div class="stat-label">Errors</div>
+    </div>
+</div>
+
+@{
+    var pct = (State.IsRunning && State.TotalUnprocessed > 0)
+        ? (int)(State.ProcessedThisRun * 100.0 / State.TotalUnprocessed)
+        : 0;
+}
+<div class="progress-bar-wrap" style="visibility:@(State.IsRunning && State.TotalUnprocessed > 0 ? "visible" : "hidden")">
+    <div class="progress-bar" style="width:@pct%"></div>
+</div>
+<p class="run-info" style="visibility:@(State.IsRunning && State.TotalUnprocessed > 0 ? "visible" : "hidden")">
+    @pct% — @State.ProcessedThisRun / @State.TotalUnprocessed
+</p>
+<p class="run-info activity">@(State.CurrentActivity is not null ? $"⏳ {State.CurrentActivity}" : "\u00a0")</p>
+
+<div class="btn-row">
+    <button @onclick="RunNow" disabled="@(!_circuitReady || _loadingStats || State.IsRunning || _runPending || _dbError is not null)" class="btn btn-primary">
+        @(!_circuitReady ? "Starting UI…" : _loadingStats ? "Checking DB…" : State.IsRunning ? "Running…" : _runPending ? "Starting…" : "Run Now")
+    </button>
+    <button @onclick="() => Processor.CancelRun()" class="btn btn-secondary"
+            style="visibility:@(State.IsRunning ? "visible" : "hidden")">Cancel</button>
+    <button @onclick="RefreshStats" disabled="@(!_circuitReady || _loadingStats)" class="btn btn-secondary">
+        @(_loadingStats ? "Refreshing…" : "Refresh Stats")
+    </button>
+    @if (State.LastRunCompleted.HasValue)
+    {
+        <span class="run-info">Last completed: @State.LastRunCompleted.Value.ToString("u")</span>
+    }
+</div>
+
+<h3>Recent Activity</h3>
+<div class="log-tail">
+    @foreach (var line in State.GetRecentLog().TakeLast(50).Reverse())
+    {
+        <div class="log-line @(line.Contains("[ERROR]") ? "error" : "")">@line</div>
+    }
+</div>
+
+@code {
+    private long _unprocessedCount;
+    private long _totalSkipped;
+    private bool _wasRunning;
+
+    // Live: decrease as assets are processed/skipped during a run
+    private long UnprocessedDisplay =>
+        State.IsRunning
+            ? Math.Max(0, _unprocessedCount - State.ProcessedThisRun - State.SkippedThisRun)
+            : _unprocessedCount;
+
+    // Persistent total from file, plus newly skipped in the current run
+    private long SkippedDisplay =>
+        State.IsRunning ? _totalSkipped + State.SkippedThisRun : _totalSkipped;
+
+    private string? _dbError;
+    private bool _runPending;
+    private bool _circuitReady;
+    private bool _loadingStats;
+
+    protected override Task OnInitializedAsync()
+    {
+        State.OnChanged += OnStateChanged;
+        _wasRunning = State.IsRunning;
+        // No DB calls here — Npgsql connect timeout (15 s) would block SSR and delay
+        // the browser receiving the page, keeping the button stuck before the
+        // interactive circuit is established.
+        // OnAfterRenderAsync fires on the interactive path and kicks off stats loading.
+        return Task.CompletedTask;
+    }
+
+    protected override Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (firstRender && !_circuitReady)
+        {
+            _circuitReady = true;
+            // Start stats load in background — button becomes clickable immediately,
+            // counts update shortly after without blocking interactivity.
+            _ = LoadStatsAsync().ContinueWith(_ => InvokeAsync(StateHasChanged));
+            StateHasChanged();
+        }
+        return Task.CompletedTask;
+    }
+
+    private async Task LoadStatsAsync()
+    {
+        _loadingStats = true;
+        await InvokeAsync(StateHasChanged);
+        try
+        {
+            _unprocessedCount = await Db.GetUnprocessedCountAsync();
+            _totalSkipped = await Skipped.GetCountAsync();
+            _dbError = null;
+        }
+        catch (Exception ex)
+        {
+            _dbError = ex.Message;
+        }
+        finally
+        {
+            _loadingStats = false;
+            await InvokeAsync(StateHasChanged);
+        }
+    }
+
+    private async Task RunNow()
+    {
+        _runPending = true;
+        StateHasChanged();
+        await LoadStatsAsync();
+        _runPending = false;
+        if (_dbError is null)
+        {
+            await Processor.TriggerRunAsync();
+        }
+    }
+
+    private async Task RefreshStats()
+    {
+        await LoadStatsAsync();
+    }
+
+    private void OnStateChanged()
+    {
+        InvokeAsync(async () =>
+        {
+            // Reload DB stats when a run finishes
+            if (!State.IsRunning && _wasRunning)
+            {
+                await LoadStatsAsync();
+            }
+            _wasRunning = State.IsRunning;
+            StateHasChanged();
+        });
+    }
+
+    public void Dispose() => State.OnChanged -= OnStateChanged;
+}

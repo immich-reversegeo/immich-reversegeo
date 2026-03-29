@@ -1,0 +1,115 @@
+.md-content h1 {
+  margin-bottom: 0.4rem;
+}
+
+.md-typeset .md-button {
+  border-radius: 999px;
+}
+
+.md-header,
+.md-tabs {
+  box-shadow: none;
+}
+
+.md-typeset h2 {
+  margin-top: 2.6rem;
+}
+
+.hero-lead {
+  max-width: 48rem;
+  font-size: 1.12rem;
+  line-height: 1.75;
+  color: var(--md-default-fg-color--light);
+}
+
+.hero-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.8rem;
+  margin: 1.4rem 0 2rem;
+}
+
+.highlight-grid,
+.feature-grid,
+.quick-grid {
+  display: grid;
+  gap: 1rem;
+  margin: 1.4rem 0 0;
+}
+
+.highlight-grid,
+.feature-grid {
+  grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+}
+
+.quick-grid {
+  grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+}
+
+.card {
+  padding: 1rem 1.1rem;
+  border-radius: 1rem;
+  border: 1px solid color-mix(in srgb, var(--md-accent-fg-color) 25%, transparent);
+  background:
+    linear-gradient(180deg, color-mix(in srgb, var(--md-accent-fg-color) 7%, var(--md-default-bg-color)) 0%, var(--md-default-bg-color) 100%);
+}
+
+.card h3 {
+  margin-top: 0;
+  margin-bottom: 0.45rem;
+  font-size: 1rem;
+}
+
+.card p {
+  margin: 0;
+  color: var(--md-default-fg-color--light);
+}
+
+.quick-link {
+  display: block;
+  padding: 0.95rem 1rem;
+  border-radius: 1rem;
+  border: 1px solid color-mix(in srgb, var(--md-accent-fg-color) 22%, transparent);
+  background: color-mix(in srgb, var(--md-accent-fg-color) 6%, var(--md-default-bg-color));
+  color: inherit;
+  text-decoration: none;
+  font-weight: 600;
+}
+
+.quick-link:hover {
+  background: color-mix(in srgb, var(--md-accent-fg-color) 10%, var(--md-default-bg-color));
+}
+
+.section-intro {
+  max-width: 44rem;
+  color: var(--md-default-fg-color--light);
+}
+
+.step-grid {
+  display: grid;
+  gap: 1rem;
+  margin: 1.25rem 0 1.75rem;
+}
+
+.step-card {
+  padding: 1rem 1.1rem;
+  border-radius: 1rem;
+  border: 1px solid color-mix(in srgb, var(--md-accent-fg-color) 20%, transparent);
+  background: color-mix(in srgb, var(--md-accent-fg-color) 4%, var(--md-default-bg-color));
+}
+
+.step-card h3 {
+  margin-top: 0;
+  margin-bottom: 0.45rem;
+  font-size: 1rem;
+}
+
+.step-card p,
+.step-card ul {
+  margin: 0;
+  color: var(--md-default-fg-color--light);
+}
+
+.step-card ul {
+  padding-left: 1.1rem;
+}

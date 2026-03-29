@@ -1,0 +1,65 @@
+name: Bug report
+description: Report a problem with Immich ReverseGeo, its docs, or its build and deployment flow.
+title: "[Bug]: "
+labels:
+  - bug
+body:
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      description: Where are you seeing the issue?
+      options:
+        - Processing / writeback
+        - Coordinate lookup
+        - Overture data / caches
+        - Web UI
+        - Documentation / website
+        - Build / CI / Docker
+    validations:
+      required: true
+
+  - type: textarea
+    id: summary
+    attributes:
+      label: What happened?
+      description: Tell us what you expected and what happened instead.
+      placeholder: A clear and short description of the problem.
+    validations:
+      required: true
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to reproduce
+      description: List the steps we can follow to reproduce the issue.
+      placeholder: |
+        1. Open ...
+        2. Enter coordinate ...
+        3. Start processing ...
+        4. See error ...
+    validations:
+      required: true
+
+  - type: textarea
+    id: environment
+    attributes:
+      label: Environment
+      description: Share anything relevant about your setup.
+      placeholder: |
+        - Immich ReverseGeo version / commit:
+        - Immich version:
+        - Docker or local run:
+        - OS details:
+        - Coordinate(s), if relevant:
+    validations:
+      required: false
+
+  - type: textarea
+    id: logs
+    attributes:
+      label: Logs, screenshots, or extra context
+      description: Paste relevant logs or add screenshots if they help.
+      render: shell
+    validations:
+      required: false

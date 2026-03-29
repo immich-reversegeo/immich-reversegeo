@@ -1,0 +1,36 @@
+<svg width="640" height="720" viewBox="0 0 640 720" fill="none" xmlns="http://www.w3.org/2000/svg">
+  <!--
+    Stacked badge — dark background, centered icon above stacked wordmark.
+    Icon: circle r=135, center (320, 245). Pin tip at (320, 460).
+    Segment endpoints:
+      (320,110)  (448.4,203.3)  (399.4,354.2)  (240.6,354.2)  (191.6,203.3)
+  -->
+  <defs>
+    <clipPath id="irg-head-s">
+      <circle cx="320" cy="245" r="135"/>
+    </clipPath>
+  </defs>
+
+  <rect width="640" height="720" rx="80" fill="#0F172A"/>
+
+  <!-- Pin tail -->
+  <path d="M 272 360 L 368 360 L 320 460 Z" fill="#1E3A8A"/>
+
+  <!-- 5 pie segments -->
+  <g clip-path="url(#irg-head-s)">
+    <path d="M 320 245 L 320 110 A 135 135 0 0 1 448.4 203.3 Z" fill="#FA2921"/>
+    <path d="M 320 245 L 448.4 203.3 A 135 135 0 0 1 399.4 354.2 Z" fill="#FFB400"/>
+    <path d="M 320 245 L 399.4 354.2 A 135 135 0 0 1 240.6 354.2 Z" fill="#18C249"/>
+    <path d="M 320 245 L 240.6 354.2 A 135 135 0 0 1 191.6 203.3 Z" fill="#1E83F7"/>
+    <path d="M 320 245 L 191.6 203.3 A 135 135 0 0 1 320 110 Z" fill="#ED79B5"/>
+  </g>
+
+  <!-- Center -->
+  <circle cx="320" cy="245" r="54" fill="#FFFFFF"/>
+  <circle cx="320" cy="245" r="28" fill="#1E293B"/>
+  <circle cx="320" cy="245" r="14" fill="#1E83F7"/>
+
+  <!-- Wordmark -->
+  <text x="320" y="570" font-size="72" font-family="Segoe UI, Inter, Arial, sans-serif" font-weight="700" fill="#E2E8F0" letter-spacing="-1.5" text-anchor="middle">Immich</text>
+  <text x="320" y="655" font-size="72" font-family="Segoe UI, Inter, Arial, sans-serif" font-weight="700" fill="#E2E8F0" letter-spacing="-1.5" text-anchor="middle">ReverseGeo</text>
+</svg>

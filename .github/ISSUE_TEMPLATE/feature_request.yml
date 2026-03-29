@@ -1,0 +1,45 @@
+name: Feature request
+description: Suggest an improvement or new idea for Immich ReverseGeo.
+title: "[Feature]: "
+labels:
+  - enhancement
+body:
+  - type: textarea
+    id: problem
+    attributes:
+      label: What problem are you trying to solve?
+      description: Explain the user need or pain point first.
+      placeholder: It is hard to...
+    validations:
+      required: true
+
+  - type: textarea
+    id: proposal
+    attributes:
+      label: Proposed solution
+      description: Describe the change you would like to see.
+      placeholder: I would like Immich ReverseGeo to...
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives considered
+      description: Share any workaround or alternative you have already considered.
+    validations:
+      required: false
+
+  - type: dropdown
+    id: area
+    attributes:
+      label: Area
+      options:
+        - Processing / writeback
+        - Coordinate lookup
+        - Overture data / caches
+        - Web UI
+        - Documentation / website
+        - Developer tooling / CI
+    validations:
+      required: true

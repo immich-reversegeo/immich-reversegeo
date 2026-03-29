@@ -1,0 +1,584 @@
+@page "/lookup"
+@rendermode InteractiveServer
+@inject OverturePlacesService Overture
+@inject OvertureDivisionsService OvertureDivisions
+@inject DataCacheService Cache
+
+<h2>Coordinate Lookup</h2>
+<p class="page-desc">Enter coordinates to inspect how the Overture-backed resolver behaves.</p>
+
+<div class="lookup-form">
+    <div class="lookup-paste-row">
+        <label for="paste">Paste coordinates</label>
+        <input id="paste" type="text" class="paste-input"
+               placeholder="47.4647, 8.5492  or  47°27'52&quot;N 8°32'57&quot;E  or  N47.4647 E8.5492"
+               @oninput="OnPasteInput" />
+        @if (_parseError is not null)
+        {
+            <span class="parse-error">@_parseError</span>
+        }
+    </div>
+    <div class="lookup-coord-row">
+        <div class="input-group">
+            <label for="lat">Latitude</label>
+            <input id="lat" type="number" step="any" placeholder="47.4647"
+                   @bind="_lat" @bind:event="oninput" class="coord-input" />
+        </div>
+        <div class="input-group">
+            <label for="lon">Longitude</label>
+            <input id="lon" type="number" step="any" placeholder="8.5492"
+                   @bind="_lon" @bind:event="oninput" class="coord-input" />
+        </div>
+        <button class="btn btn-primary" @onclick="RunLookup" disabled="@_running">
+            @(_running ? "Looking up…" : "Lookup")
+        </button>
+    </div>
+    <div class="lookup-options-row">
+        <label class="checkbox-label">
+            <input type="checkbox" @bind="_includeLivePlaces" />
+            <span>Include live Overture Places lookup (slower)</span>
+        </label>
+    </div>
+</div>
+
+@if (_error is not null)
+{
+    <div class="alert alert-error">@_error</div>
+}
+
+@if (_result is not null)
+{
+    <div class="lookup-results">
+        <div class="result-card @(_result.Iso3 is not null ? "found" : "not-found")">
+            <div class="result-header">
+                <span class="result-source">Country — Overture Bundled Cache</span>
+                <span class="result-badge @(_result.Iso3 is not null ? "badge-found" : "badge-miss")">
+                    @(_result.Iso3 is not null ? "found" : "no match")
+                </span>
+            </div>
+            @if (_result.Iso3 is not null)
+            {
+                <div class="result-row"><span class="result-key">Name</span><span class="result-val">@_result.CountryName</span></div>
+                <div class="result-row"><span class="result-key">ISO3</span><span class="result-val mono">@_result.Iso3</span></div>
+                <div class="result-row"><span class="result-key">Alpha-2</span><span class="result-val mono">@(_result.Alpha2 ?? "—")</span></div>
+            }
+            else
+            {
+                <div class="result-note">No bundled Overture country division matched this point.</div>
+            }
+        </div>
+
+        <div class="result-card @(_result.OvertureDivisionState is not null ? "found" : "not-found")">
+            <div class="result-header">
+                <span class="result-source">Administrative Areas — Cached Overture Divisions</span>
+                <span class="result-badge @(_result.Iso3 is null ? "badge-miss" : _result.OvertureDivisionState is not null || _result.OvertureDivisionCity is not null ? "badge-found" : "badge-miss")">
+                    @(_result.Iso3 is null ? "skipped" : _result.OvertureDivisionState is not null || _result.OvertureDivisionCity is not null ? "found" : "no match")
+                </span>
+            </div>
+            @if (_result.Iso3 is null)
+            {
+                <div class="result-note">Country lookup must succeed before per-country division caches can be queried.</div>
+            }
+            else
+            {
+                <div class="result-row"><span class="result-key">State</span><span class="result-val">@(_result.OvertureDivisionState ?? "—")</span></div>
+                <div class="result-row"><span class="result-key">City</span><span class="result-val">@(_result.OvertureDivisionCity ?? "—")</span></div>
+                <div class="result-row"><span class="result-key">Winning Area</span><span class="result-val">@(_result.OvertureDivision?.Name ?? "—")</span></div>
+                <div class="result-row"><span class="result-key">Winning Subtype</span><span class="result-val">@(_result.OvertureDivision?.SubType ?? "—")</span></div>
+                <div class="result-row"><span class="result-key">Winning Admin Level</span><span class="result-val">@(_result.OvertureDivision?.AdminLevel?.ToString() ?? "—")</span></div>
+                <div class="result-row"><span class="result-key">Cache</span><span class="result-val">@(_result.OvertureDivisionCacheReady ? "ready" : "missing")</span></div>
+                <div class="result-note">Ranking prefers real geometry matches first, then the most specific subtype, then lower admin level, then territorial areas, then tighter bounds.</div>
+            }
+        </div>
+
+        <div class="result-card @(_result.OvertureInfrastructure is not null ? "found" : "not-found")">
+            <div class="result-header">
+                <span class="result-source">Airport Infrastructure — Bundled Overture</span>
+                <span class="result-badge @(_result.Iso3 is null ? "badge-miss" : _result.OvertureInfrastructure is not null ? "badge-found" : "badge-miss")">
+                    @(_result.Iso3 is null ? "skipped" : _result.OvertureInfrastructure is not null ? "found" : "no match")
+                </span>
+            </div>
+            @if (_result.OvertureInfrastructure is not null)
+            {
+                <div class="result-row"><span class="result-key">Name</span><span class="result-val">@_result.OvertureInfrastructure.Name</span></div>
+                <div class="result-row"><span class="result-key">Subtype</span><span class="result-val">@(_result.OvertureInfrastructure.SubType ?? "—")</span></div>
+                <div class="result-row"><span class="result-key">Class</span><span class="result-val">@(_result.OvertureInfrastructure.ClassName ?? "—")</span></div>
+                <div class="result-row"><span class="result-key">BBox Contains Point</span><span class="result-val">@(_result.OvertureInfrastructure.BoundingBoxContainsPoint ? "yes" : "no")</span></div>
+                <div class="result-row"><span class="result-key">Geometry Contains Point</span><span class="result-val">@(_result.OvertureInfrastructure.GeometryContainsPoint ? "yes" : "no")</span></div>
+                <div class="result-row"><span class="result-key">Distance</span><span class="result-val">@((int)_result.OvertureInfrastructure.DistanceMetres) m</span></div>
+            }
+            else if (_result.Iso3 is not null)
+            {
+                <div class="result-note">No cached Overture airport infrastructure feature matched this point.</div>
+            }
+            @if (_result.Iso3 is not null)
+            {
+                <div class="result-note">Ranking prefers better airport class, then real geometry matches, then bbox matches, then distance.</div>
+            }
+        </div>
+
+        <div class="result-card @(_result.OverturePoi is not null ? "found" : "not-found")">
+            <div class="result-header">
+                <span class="result-source">Overture Places — Live Lookup</span>
+                <span class="result-badge @(!_result.LivePlacesEnabled || _result.Iso3 is null ? "badge-miss" : _result.OvertureDiagnostics?.Error is not null ? "badge-miss" : _result.OverturePoi is not null ? "badge-found" : "badge-miss")">
+                    @(!_result.LivePlacesEnabled || _result.Iso3 is null ? "skipped" : _result.OvertureDiagnostics?.Error is not null ? "error" : _result.OverturePoi is not null ? "found" : "no match")
+                </span>
+            </div>
+            @if (!_result.LivePlacesEnabled)
+            {
+                <div class="result-note">Live Overture Places lookup is disabled for this run.</div>
+            }
+            else if (_result.OverturePoi is not null)
+            {
+                <div class="result-row"><span class="result-key">Name</span><span class="result-val">@_result.OverturePoi.Name</span></div>
+                <div class="result-row"><span class="result-key">Category</span><span class="result-val">@(_result.OverturePoi.Category ?? _result.OverturePoi.BasicCategory ?? "—")</span></div>
+                <div class="result-row"><span class="result-key">Confidence</span><span class="result-val">@_result.OverturePoi.Confidence.ToString("0.00")</span></div>
+                <div class="result-row"><span class="result-key">Status</span><span class="result-val">@(_result.OverturePoi.OperatingStatus ?? "—")</span></div>
+                <div class="result-row"><span class="result-key">BBox Contains Point</span><span class="result-val">@(_result.OverturePoi.BoundingBoxContainsPoint ? "yes" : "no")</span></div>
+                <div class="result-row"><span class="result-key">Sources</span><span class="result-val">@DescribeSources(_result.OverturePoi.Sources)</span></div>
+                <div class="result-row"><span class="result-key">Distance</span><span class="result-val">@((int)_result.OverturePoi.DistanceMetres) m</span></div>
+            }
+            else if (_result.OvertureDiagnostics?.Error is not null)
+            {
+                <div class="result-note">Live Overture Places lookup failed: @_result.OvertureDiagnostics.Error</div>
+            }
+            else if (_result.Iso3 is not null)
+            {
+                <div class="result-note">No live Overture place matched inside the current search window.</div>
+            }
+            @if (_result.LivePlacesEnabled && _result.Iso3 is not null)
+            {
+                <div class="result-note">Confidence below 0.90 is filtered out. Among the remaining candidates, ranking prefers active/open places, then bbox containment, then distance.</div>
+            }
+        </div>
+
+        <div class="result-card final-card @(_result.FinalCity is not null ? "found" : "not-found")">
+            <div class="result-header">
+                <span class="result-source">Final output (what would be written to Immich)</span>
+                <span class="result-badge @(_result.FinalCity is not null ? "badge-found" : "badge-miss")">
+                    @(_result.FinalCity is not null ? "complete" : "incomplete — would not write")
+                </span>
+            </div>
+            <div class="result-row"><span class="result-key">City</span><span class="result-val">@(_result.FinalCity ?? "—")</span></div>
+            <div class="result-row"><span class="result-key">City Source</span><span class="result-val">@(_result.FinalCitySource ?? "—")</span></div>
+            <div class="result-row"><span class="result-key">State</span><span class="result-val">@(_result.FinalState ?? "—")</span></div>
+            <div class="result-row"><span class="result-key">State Source</span><span class="result-val">@(_result.FinalStateSource ?? "—")</span></div>
+            <div class="result-row"><span class="result-key">Country</span><span class="result-val">@(_result.CountryName ?? "—")</span></div>
+            <div class="result-row"><span class="result-key">Country Source</span><span class="result-val">@(_result.FinalCountrySource ?? "—")</span></div>
+        </div>
+
+        <div class="result-card trace-card">
+            <div class="result-header">
+                <span class="result-source">Lookup Trace</span>
+                <span class="result-badge badge-found">debug</span>
+            </div>
+            <details class="trace-details" @attributes="GetDetailsAttributes(_expandTrace)">
+                <summary class="trace-summary">Trace Lines (@_result.Trace.Count)</summary>
+                <div class="trace-section">
+                    @foreach (var line in _result.Trace)
+                    {
+                        <div class="trace-line">@line</div>
+                    }
+                </div>
+            </details>
+            @if (_result.OvertureInfrastructureDiagnostics is not null)
+            {
+                <details class="trace-details">
+                    <summary class="trace-summary">Cached Infrastructure Candidates (@_result.OvertureInfrastructureDiagnostics.Candidates.Count considered, release @(_result.OvertureInfrastructureDiagnostics.Release ?? "unknown"))</summary>
+                    <div class="trace-section">
+                        @if (_result.OvertureInfrastructureDiagnostics.Error is not null)
+                        {
+                            <div class="trace-line">Infrastructure error: @_result.OvertureInfrastructureDiagnostics.Error</div>
+                        }
+                        else if (_result.OvertureInfrastructureDiagnostics.Candidates.Count == 0)
+                        {
+                            <div class="trace-line">No cached airport infrastructure candidates were returned.</div>
+                        }
+                        else
+                        {
+                            @foreach (var candidate in SortInfrastructureCandidates(_result.OvertureInfrastructureDiagnostics.Candidates))
+                            {
+                                <div class="trace-candidate @(candidate.Selected ? "selected" : null)">
+                                    <div class="trace-candidate-main">
+                                        <span class="trace-name">@candidate.Name</span>
+                                        <span class="trace-meta">@((int)candidate.DistanceMetres) m</span>
+                                        <span class="trace-meta">bbox @(candidate.BoundingBoxContainsPoint ? "yes" : "no")</span>
+                                        <span class="trace-meta">geom @(candidate.GeometryContainsPoint ? "yes" : "no")</span>
+                                        <span class="trace-meta">@((candidate.SubType ?? candidate.FeatureType ?? "unknown").ToLowerInvariant())</span>
+                                    </div>
+                                    <div class="trace-candidate-sub">
+                                        <span class="mono">@candidate.Id</span>
+                                        <span>@(candidate.ClassName ?? "unclassified")</span>
+                                        <span>@candidate.Decision</span>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+                </details>
+            }
+            @if (_result.OvertureDivisionDiagnostics is not null)
+            {
+                <details class="trace-details">
+                    <summary class="trace-summary">Cached Division Areas (@_result.OvertureDivisionDiagnostics.Candidates.Count considered, release @(_result.OvertureDivisionDiagnostics.Release ?? "unknown"))</summary>
+                    <div class="trace-section">
+                        @if (_result.OvertureDivisionDiagnostics.Error is not null)
+                        {
+                            <div class="trace-line">Division error: @_result.OvertureDivisionDiagnostics.Error</div>
+                        }
+                        else if (_result.OvertureDivisionDiagnostics.Candidates.Count == 0)
+                        {
+                            <div class="trace-line">No cached division areas were returned for the point.</div>
+                        }
+                        else
+                        {
+                            @foreach (var candidate in SortDivisionCandidates(_result.OvertureDivisionDiagnostics.Candidates))
+                            {
+                                <div class="trace-candidate @(candidate.Selected ? "selected" : null)">
+                                    <div class="trace-candidate-main">
+                                        <span class="trace-name">@candidate.Name</span>
+                                        <span class="trace-meta">@((candidate.SubType ?? "unknown").ToLowerInvariant())</span>
+                                        <span class="trace-meta">admin @((candidate.AdminLevel?.ToString()) ?? "—")</span>
+                                        <span class="trace-meta">bbox @(candidate.BoundingBoxContainsPoint ? "yes" : "no")</span>
+                                        <span class="trace-meta">geom @(candidate.GeometryContainsPoint ? "yes" : "no")</span>
+                                        <span class="trace-meta">territorial @(candidate.IsTerritorial ? "yes" : "no")</span>
+                                    </div>
+                                    <div class="trace-candidate-sub">
+                                        <span class="mono">@candidate.Id</span>
+                                        <span>@(candidate.ClassName ?? "unclassified")</span>
+                                        <span>@(candidate.Country ?? "—")</span>
+                                        <span>bbox area @candidate.BoundingBoxArea.ToString("0.######")</span>
+                                        <span>@candidate.Decision</span>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+                </details>
+            }
+            @if (_result.OvertureDiagnostics is not null)
+            {
+                <details class="trace-details">
+                    <summary class="trace-summary">Live Overture Places (@_result.OvertureDiagnostics.Candidates.Count considered, release @(_result.OvertureDiagnostics.Release ?? "unknown"))</summary>
+                    <div class="trace-section">
+                        @if (_result.OvertureDiagnostics.Error is not null)
+                        {
+                            <div class="trace-line">Places error: @_result.OvertureDiagnostics.Error</div>
+                        }
+                        else if (_result.OvertureDiagnostics.Candidates.Count == 0)
+                        {
+                            <div class="trace-line">No live Overture places were returned inside the search window.</div>
+                        }
+                        else
+                        {
+                            @foreach (var candidate in SortPlaceCandidates(_result.OvertureDiagnostics.Candidates))
+                            {
+                                <div class="trace-candidate @(candidate.Selected ? "selected" : null)">
+                                    <div class="trace-candidate-main">
+                                        <span class="trace-name">@candidate.Name</span>
+                                        <span class="trace-meta">@((int)candidate.DistanceMetres) m</span>
+                                        <span class="trace-meta">conf @candidate.Confidence.ToString("0.00")</span>
+                                        <span class="trace-meta">bbox @(candidate.BoundingBoxContainsPoint ? "yes" : "no")</span>
+                                        <span class="trace-meta">@((candidate.OperatingStatus ?? "unknown").ToLowerInvariant())</span>
+                                    </div>
+                                    <div class="trace-candidate-sub">
+                                        <span class="mono">@candidate.Id</span>
+                                        <span>@(candidate.Category ?? candidate.BasicCategory ?? "uncategorized")</span>
+                                        <span>@DescribeSources(candidate.Sources)</span>
+                                        <span>@candidate.Decision</span>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+                </details>
+            }
+        </div>
+    </div>
+}
+
+@code {
+    private double _lat;
+    private double _lon;
+    private string? _parseError;
+    private bool _running;
+    private bool _expandTrace = true;
+    private bool _includeLivePlaces;
+    private string? _error;
+    private LookupResult? _result;
+
+    private void OnPasteInput(ChangeEventArgs e)
+    {
+        var text = e.Value?.ToString() ?? string.Empty;
+        _parseError = null;
+
+        if (string.IsNullOrWhiteSpace(text))
+        {
+            return;
+        }
+
+        if (TryParseCoordinates(text, out var lat, out var lon))
+        {
+            _lat = lat;
+            _lon = lon;
+        }
+        else
+        {
+            _parseError = "Could not parse coordinates";
+        }
+    }
+
+    private static bool TryParseCoordinates(string text, out double lat, out double lon)
+    {
+        lat = lon = 0;
+        text = text.Trim();
+        text = System.Text.RegularExpressions.Regex.Replace(text, @"[,;|]+", " ");
+        text = System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ").Trim();
+
+        var dms = System.Text.RegularExpressions.Regex.Match(text,
+            @"(\d+)[°d\s]\s*(\d+)['']\s*(\d+(?:\.\d+)?)['""s]?\s*([NSns])\s+" +
+            @"(\d+)[°d\s]\s*(\d+)['']\s*(\d+(?:\.\d+)?)['""s]?\s*([EWew])");
+        if (dms.Success)
+        {
+            lat = DmsToDecimal(dms.Groups[1], dms.Groups[2], dms.Groups[3], dms.Groups[4].Value);
+            lon = DmsToDecimal(dms.Groups[5], dms.Groups[6], dms.Groups[7], dms.Groups[8].Value);
+            return true;
+        }
+
+        var dir = System.Text.RegularExpressions.Regex.Match(text,
+            @"([NSns])\s*(\d+(?:\.\d+)?)\s+([EWew])\s*(\d+(?:\.\d+)?)");
+        if (!dir.Success)
+        {
+            dir = System.Text.RegularExpressions.Regex.Match(text,
+                @"(\d+(?:\.\d+)?)\s*([NSns])\s+(\d+(?:\.\d+)?)\s*([EWew])");
+            if (dir.Success)
+            {
+                lat = ApplyDirection(double.Parse(dir.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture), dir.Groups[2].Value);
+                lon = ApplyDirection(double.Parse(dir.Groups[3].Value, System.Globalization.CultureInfo.InvariantCulture), dir.Groups[4].Value);
+                return true;
+            }
+        }
+        else
+        {
+            lat = ApplyDirection(double.Parse(dir.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture), dir.Groups[1].Value);
+            lon = ApplyDirection(double.Parse(dir.Groups[4].Value, System.Globalization.CultureInfo.InvariantCulture), dir.Groups[3].Value);
+            return true;
+        }
+
+        var kv = System.Text.RegularExpressions.Regex.Match(text,
+            @"lat\s*=\s*(-?\d+(?:\.\d+)?)\s+lon\s*=\s*(-?\d+(?:\.\d+)?)",
+            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
+        if (kv.Success
+            && double.TryParse(kv.Groups[1].Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out lat)
+            && double.TryParse(kv.Groups[2].Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out lon))
+        {
+            return true;
+        }
+
+        var parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
+        if (parts.Length >= 2
+            && double.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var a)
+            && double.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var b))
+        {
+            lat = a;
+            lon = b;
+            return true;
+        }
+
+        return false;
+    }
+
+    private static double DmsToDecimal(System.Text.RegularExpressions.Group deg, System.Text.RegularExpressions.Group min, System.Text.RegularExpressions.Group sec, string direction)
+    {
+        var v = double.Parse(deg.Value) + double.Parse(min.Value) / 60.0
+              + double.Parse(sec.Value, System.Globalization.CultureInfo.InvariantCulture) / 3600.0;
+        return ApplyDirection(v, direction);
+    }
+
+    private static double ApplyDirection(double value, string direction)
+    {
+        return direction.ToUpperInvariant() is "S" or "W" ? -value : value;
+    }
+
+    private async Task RunLookup()
+    {
+        _error = null;
+        _result = null;
+        _running = true;
+        StateHasChanged();
+
+        try
+        {
+            await RunLookupCore();
+        }
+        finally
+        {
+            _running = false;
+        }
+    }
+
+    private async Task RunLookupCore()
+    {
+        var r = new LookupResult
+        {
+            LivePlacesEnabled = _includeLivePlaces
+        };
+
+        (r.Iso3, r.CountryName, r.Alpha2) = await OvertureDivisions.FindBundledCountryAsync(_lat, _lon);
+        if (r.Iso3 is null)
+        {
+            r.Trace.Add("Country lookup: bundled Overture country divisions found no match.");
+            _result = r;
+            StateHasChanged();
+            return;
+        }
+
+        r.Trace.Add($"Country matched from bundled Overture divisions: {r.CountryName} ({r.Iso3}, {r.Alpha2 ?? "no alpha-2"})");
+
+        var ensureDivisionTask = EnsureDivisionCacheAsync(r);
+        var infrastructureTask = Overture.FindNearestInfrastructureWithDiagnosticsAsync(_lat, _lon, r.Iso3);
+        Task<OvertureLookupDiagnostics>? livePlacesTask = null;
+        if (_includeLivePlaces)
+        {
+            livePlacesTask = Overture.FindNearestPlaceWithDiagnosticsAsync(_lat, _lon, r.Alpha2);
+        }
+
+        await ensureDivisionTask;
+        r.OvertureDivisionDiagnostics = await OvertureDivisions.FindContainingDivisionAreasAsync(_lat, _lon, r.Alpha2, r.Iso3);
+        r.OvertureDivision = r.OvertureDivisionDiagnostics.BestMatch;
+        r.OvertureDivisionState = OvertureDivisionsLogic.SelectStateName(r.OvertureDivisionDiagnostics.Candidates);
+        r.OvertureDivisionCity = OvertureDivisionsLogic.SelectCityName(r.OvertureDivisionDiagnostics.Candidates);
+        r.Trace.Add(r.OvertureDivisionDiagnostics.Error is not null
+            ? $"Overture division lookup failed: {r.OvertureDivisionDiagnostics.Error}"
+            : $"Overture division admin resolution: state={r.OvertureDivisionState ?? "—"}, city={r.OvertureDivisionCity ?? "—"}");
+
+        r.OvertureInfrastructureDiagnostics = await infrastructureTask;
+        r.OvertureInfrastructure = r.OvertureInfrastructureDiagnostics.BestMatch;
+        r.Trace.Add(r.OvertureInfrastructureDiagnostics.Error is not null
+            ? $"Overture infrastructure lookup failed: {r.OvertureInfrastructureDiagnostics.Error}"
+            : r.OvertureInfrastructure is not null
+                ? $"Overture infrastructure winner: {r.OvertureInfrastructure.Name} at {(int)r.OvertureInfrastructure.DistanceMetres} m (bbox={(r.OvertureInfrastructure.BoundingBoxContainsPoint ? "yes" : "no")}, geom={(r.OvertureInfrastructure.GeometryContainsPoint ? "yes" : "no")})"
+                : "Overture infrastructure lookup: no in-range match");
+
+        if (livePlacesTask is not null)
+        {
+            r.OvertureDiagnostics = await livePlacesTask;
+            r.OverturePoi = r.OvertureDiagnostics.BestMatch;
+            r.Trace.Add(r.OvertureDiagnostics.Error is not null
+                ? $"Overture Places lookup failed: {r.OvertureDiagnostics.Error}"
+                : r.OverturePoi is not null
+                    ? $"Overture Places winner: {r.OverturePoi.Name} at {(int)r.OverturePoi.DistanceMetres} m (conf={r.OverturePoi.Confidence:0.00}, status={r.OverturePoi.OperatingStatus ?? "unknown"})"
+                    : "Overture Places lookup: no in-range match");
+        }
+        else
+        {
+            r.Trace.Add("Overture Places lookup skipped.");
+        }
+
+        r.FinalState = r.OvertureDivisionState;
+        r.FinalStateSource = r.FinalState is not null ? "Cached Overture divisions" : null;
+        r.FinalCountrySource = r.CountryName is not null ? "Bundled Overture country divisions" : null;
+        var city = r.OvertureInfrastructure?.GeometryContainsPoint == true
+            ? r.OvertureInfrastructure.Name
+            : r.OvertureDivisionCity ?? r.OvertureInfrastructure?.Name;
+        r.FinalCitySource = r.OvertureInfrastructure?.GeometryContainsPoint == true
+            ? "Bundled airport infrastructure (geometry match)"
+            : r.OvertureDivisionCity is not null
+                ? "Cached Overture divisions"
+                : r.OvertureInfrastructure?.Name is not null
+                    ? "Bundled airport infrastructure (fallback)"
+                    : null;
+        if (city is null && r.FinalState is not null)
+        {
+            city = r.FinalState;
+            r.FinalCitySource = r.FinalStateSource;
+        }
+
+        r.FinalCity = city;
+        r.Trace.Add($"Final city decision: {r.FinalCity ?? "no result"}");
+
+        _result = r;
+        StateHasChanged();
+    }
+
+    private async Task EnsureDivisionCacheAsync(LookupResult r)
+    {
+        try
+        {
+            await Cache.EnsureOvertureDivisionDataAsync(r.Iso3!);
+            r.OvertureDivisionCacheReady = Cache.HasOvertureDivisionData(r.Iso3!);
+            r.Trace.Add($"Overture division cache ready for {r.Iso3}");
+        }
+        catch (Exception ex)
+        {
+            r.Trace.Add($"Overture division cache unavailable: {ex.Message}");
+        }
+    }
+
+    private sealed class LookupResult
+    {
+        public string? Iso3 { get; set; }
+        public string? CountryName { get; set; }
+        public string? Alpha2 { get; set; }
+        public bool LivePlacesEnabled { get; set; }
+        public bool OvertureDivisionCacheReady { get; set; }
+        public OvertureDivisionResult? OvertureDivision { get; set; }
+        public OvertureDivisionLookupDiagnostics? OvertureDivisionDiagnostics { get; set; }
+        public string? OvertureDivisionState { get; set; }
+        public string? OvertureDivisionCity { get; set; }
+        public OvertureInfrastructureResult? OvertureInfrastructure { get; set; }
+        public OvertureInfrastructureLookupDiagnostics? OvertureInfrastructureDiagnostics { get; set; }
+        public OverturePlaceResult? OverturePoi { get; set; }
+        public OvertureLookupDiagnostics? OvertureDiagnostics { get; set; }
+        public string? FinalState { get; set; }
+        public string? FinalStateSource { get; set; }
+        public string? FinalCity { get; set; }
+        public string? FinalCitySource { get; set; }
+        public string? FinalCountrySource { get; set; }
+        public List<string> Trace { get; } = [];
+    }
+
+    private static string DescribeSources(IReadOnlyList<string> sources)
+    {
+        return sources.Count == 0 ? "—" : string.Join(", ", sources);
+    }
+
+    private static IReadOnlyDictionary<string, object>? GetDetailsAttributes(bool open)
+    {
+        return open ? new Dictionary<string, object> { ["open"] = "open" } : null;
+    }
+
+    private static IEnumerable<OvertureDivisionCandidateDiagnostic> SortDivisionCandidates(
+        IEnumerable<OvertureDivisionCandidateDiagnostic> candidates)
+    {
+        return candidates
+            .OrderByDescending(c => c.Selected)
+            .ThenByDescending(c => c.GeometryContainsPoint)
+            .ThenByDescending(c => c.BoundingBoxContainsPoint)
+            .ThenBy(c => OvertureDivisionsLogic.GetSubtypeRank(c.SubType))
+            .ThenBy(c => c.AdminLevel ?? int.MaxValue)
+            .ThenByDescending(c => c.IsTerritorial)
+            .ThenBy(c => c.BoundingBoxArea);
+    }
+
+    private static IEnumerable<OvertureInfrastructureCandidateDiagnostic> SortInfrastructureCandidates(
+        IEnumerable<OvertureInfrastructureCandidateDiagnostic> candidates)
+    {
+        return candidates
+            .OrderByDescending(c => c.Selected)
+            .ThenBy(c => OverturePlacesLogic.GetInfrastructureClassRank(c.SubType, c.ClassName))
+            .ThenByDescending(c => c.GeometryContainsPoint)
+            .ThenByDescending(c => c.BoundingBoxContainsPoint)
+            .ThenBy(c => c.DistanceMetres);
+    }
+
+    private static IEnumerable<OvertureCandidateDiagnostic> SortPlaceCandidates(
+        IEnumerable<OvertureCandidateDiagnostic> candidates)
+    {
+        return candidates
+            .OrderByDescending(c => c.Selected)
+            .ThenByDescending(c => OverturePlacesLogic.IsPreferredStatus(c.OperatingStatus))
+            .ThenByDescending(c => c.BoundingBoxContainsPoint)
+            .ThenBy(c => c.DistanceMetres);
+    }
+}

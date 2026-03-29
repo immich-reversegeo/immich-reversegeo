@@ -1,0 +1,39 @@
+﻿<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <base href="/" />
+    <ResourcePreloader />
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <!--
+        Non-render-blocking font load: media="print" tells the browser this stylesheet
+        is not needed for the initial screen render, so it fetches it in the background.
+        onload switches it to apply to all media once downloaded.
+        This ensures blazor.web.js runs immediately and the circuit connects without
+        waiting for Google Fonts to respond.
+    -->
+    <link rel="stylesheet"
+          href="https://fonts.googleapis.com/css2?family=Syne:wght@500;600;700&family=Nunito:wght@300;400;500;600&display=swap"
+          media="print"
+          onload="this.media='all'" />
+    <noscript>
+        <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Syne:wght@500;600;700&family=Nunito:wght@300;400;500;600&display=swap" />
+    </noscript>
+    <link rel="stylesheet" href="@Assets["app.css"]" />
+    <link rel="stylesheet" href="@Assets["ImmichReverseGeo.Web.styles.css"]" />
+    <ImportMap />
+    <link rel="icon" type="image/svg+xml" href="favicon.svg" />
+    <HeadOutlet />
+</head>
+
+<body>
+    <Routes />
+    <ReconnectModal />
+    <script src="@Assets["_framework/blazor.web.js"]"></script>
+    <script src="app.js"></script>
+</body>
+
+</html>

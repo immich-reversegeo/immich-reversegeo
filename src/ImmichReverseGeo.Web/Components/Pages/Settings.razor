@@ -1,0 +1,248 @@
+@page "/settings"
+@rendermode InteractiveServer
+@inject ConfigService Config
+@inject ImmichDbRepository Db
+
+<h2>Settings</h2>
+
+@if (_saved)
+{
+    <div class="alert alert-success">Settings saved.</div>
+}
+@if (_saveError is not null)
+{
+    <div class="alert alert-error">@_saveError</div>
+}
+@if (_dbEnvironmentWarning is not null)
+{
+    <div class="alert alert-error">@_dbEnvironmentWarning</div>
+}
+
+<section class="settings-card">
+    <details class="settings-disclosure">
+        <summary>Database Connection Details</summary>
+        <p class="section-intro">Pre-populated from environment variables. These values come from the current running process, so if you change Windows or user environment variables after Visual Studio was already open, restart Visual Studio before running again.</p>
+        <div class="form-group">
+            <label>Host</label>
+            <input value="@_dbHost" class="form-control env-readonly" readonly aria-readonly="true" />
+            <div class="hint env-field-hint">Environment value</div>
+        </div>
+        <div class="form-group">
+            <label>Port</label>
+            <input type="number" value="@_dbPort" class="form-control env-readonly" readonly aria-readonly="true" />
+        </div>
+        <div class="form-group">
+            <label>Database</label>
+            <input value="@_dbName" class="form-control env-readonly" readonly aria-readonly="true" />
+        </div>
+        <div class="form-group">
+            <label>Username</label>
+            <input value="@_dbUser" class="form-control env-readonly" readonly aria-readonly="true" />
+        </div>
+        <div class="form-group">
+            <label>Password</label>
+            <input type="password" value="@_dbPassword" class="form-control env-readonly" readonly aria-readonly="true" />
+        </div>
+        <div class="btn-row">
+            <button @onclick="TestConnection" class="btn btn-secondary">Test Connection</button>
+            @if (_connResult.HasValue)
+            {
+                <span class="@(_connResult.Value ? "ok" : "fail")">
+                    @(_connResult.Value ? "✓ Connected" : "✗ Failed")
+                </span>
+            }
+        </div>
+    </details>
+</section>
+
+<section class="settings-card">
+    <h3>Schedule</h3>
+    <p class="section-intro">Choose when automatic processing should run. Manual runs from the dashboard still work at any time.</p>
+    <div class="form-group">
+        <label><input type="checkbox" @bind="_cfg.Schedule.Enabled" /> Run processing automatically on a schedule</label>
+    </div>
+
+    @if (_cfg.Schedule.Enabled)
+    {
+        <div class="schedule-builder">
+            <div class="form-group">
+                <label>How often?</label>
+                <select @bind="_schedule.Mode" class="form-control">
+                    <option value="@ScheduleEditorState.ModeHourly">Every hour</option>
+                    <option value="@ScheduleEditorState.ModeEveryMinutes">Every few minutes</option>
+                    <option value="@ScheduleEditorState.ModeEveryHours">Every few hours</option>
+                    <option value="@ScheduleEditorState.ModeDaily">Every day</option>
+                    <option value="@ScheduleEditorState.ModeWeekly">Once a week</option>
+                    <option value="@ScheduleEditorState.ModeCustom">Advanced custom schedule</option>
+                </select>
+            </div>
+
+            @if (_schedule.Mode == ScheduleEditorState.ModeHourly)
+            {
+                <div class="form-group">
+                    <label>Minute past the hour</label>
+                    <input type="number" min="0" max="59" @bind="_schedule.Minute" class="form-control" />
+                </div>
+            }
+
+            @if (_schedule.Mode == ScheduleEditorState.ModeEveryMinutes)
+            {
+                <div class="form-group">
+                    <label>Run every</label>
+                    <select @bind="_schedule.MinuteInterval" class="form-control">
+                        <option value="5">5 minutes</option>
+                        <option value="10">10 minutes</option>
+                        <option value="15">15 minutes</option>
+                        <option value="30">30 minutes</option>
+                    </select>
+                </div>
+            }
+
+            @if (_schedule.Mode == ScheduleEditorState.ModeEveryHours)
+            {
+                <div class="form-group">
+                    <label>Run every</label>
+                    <select @bind="_schedule.HourInterval" class="form-control">
+                        <option value="2">2 hours</option>
+                        <option value="3">3 hours</option>
+                        <option value="4">4 hours</option>
+                        <option value="6">6 hours</option>
+                        <option value="8">8 hours</option>
+                        <option value="12">12 hours</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Minute past the hour</label>
+                    <input type="number" min="0" max="59" @bind="_schedule.Minute" class="form-control" />
+                </div>
+            }
+
+            @if (_schedule.Mode == ScheduleEditorState.ModeDaily || _schedule.Mode == ScheduleEditorState.ModeWeekly)
+            {
+                <div class="form-group">
+                    <label>What time?</label>
+                    <input type="time" value="@_schedule.Time" @onchange="OnScheduleTimeChanged" class="form-control" />
+                </div>
+            }
+
+            @if (_schedule.Mode == ScheduleEditorState.ModeWeekly)
+            {
+                <div class="form-group">
+                    <label>Which day?</label>
+                    <select @bind="_schedule.WeeklyDay" class="form-control">
+                        <option value="MON">Monday</option>
+                        <option value="TUE">Tuesday</option>
+                        <option value="WED">Wednesday</option>
+                        <option value="THU">Thursday</option>
+                        <option value="FRI">Friday</option>
+                        <option value="SAT">Saturday</option>
+                        <option value="SUN">Sunday</option>
+                    </select>
+                </div>
+            }
+        </div>
+
+        @if (_schedule.Mode == ScheduleEditorState.ModeCustom)
+        {
+            <div class="form-group">
+                <label>Cron Expression</label>
+                <input @bind="_cfg.Schedule.Cron" class="form-control" />
+                <span class="hint">Use standard 5-part cron syntax. Example: <code>0 2 * * *</code> runs every day at 02:00.</span>
+            </div>
+        }
+        else
+        {
+            <div class="schedule-summary">
+                <div class="schedule-summary-label">Scheduled Run</div>
+                <div class="schedule-summary-value">@_schedule.Describe()</div>
+                <div class="schedule-summary-detail">Cron: <code>@_schedule.ToCron()</code></div>
+            </div>
+        }
+    }
+    else
+    {
+        <div class="schedule-summary schedule-summary-muted">
+            <div class="schedule-summary-label">Automatic Processing</div>
+            <div class="schedule-summary-value">Disabled</div>
+            <div class="schedule-summary-detail">Only manual runs from the dashboard will be available.</div>
+        </div>
+    }
+</section>
+
+<section class="settings-card">
+    <h3>Processing</h3>
+    <div class="form-group">
+        <label>Batch Size <input type="number" @bind="_cfg.Processing.BatchSize" /></label>
+    </div>
+    <div class="form-group">
+        <label>Batch Delay (ms) <input type="number" @bind="_cfg.Processing.BatchDelayMs" /></label>
+    </div>
+    <div class="form-group">
+        <label>Max Parallelism <input type="number" min="1" max="32" @bind="_cfg.Processing.MaxDegreeOfParallelism" /></label>
+        <span class="hint">How many assets can be resolved in parallel within a batch. Start with 4 and increase carefully.</span>
+    </div>
+    <div class="form-group">
+        <label><input type="checkbox" @bind="_cfg.Processing.VerboseLogging" /> Verbose logging (log every asset)</label>
+    </div>
+</section>
+
+<div class="btn-row">
+    <button @onclick="Save" class="btn btn-primary">Save All Settings</button>
+</div>
+
+@code {
+    private AppConfig _cfg = new();
+    private string _dbHost = "", _dbName = "", _dbUser = "", _dbPassword = "";
+    private int _dbPort = 5432;
+    private bool _saved;
+    private string? _saveError;
+    private string? _dbEnvironmentWarning;
+    private bool? _connResult;
+    private ScheduleEditorState _schedule = new();
+
+    protected override async Task OnInitializedAsync()
+    {
+        _cfg = await Config.GetConfigAsync();
+        var db = Config.GetDbSettings();
+        _dbHost = db.Host;
+        _dbPort = db.Port;
+        _dbName = db.Database;
+        _dbUser = db.Username;
+        _dbEnvironmentWarning = string.IsNullOrWhiteSpace(Environment.GetEnvironmentVariable("DB_HOST"))
+            ? "DB_HOST is not present in the current process environment, so the app is using the default host value 'database'. If you expected a different value from Visual Studio, restart Visual Studio after changing the environment variable."
+            : null;
+        _schedule = ScheduleEditorState.FromCron(_cfg.Schedule.Cron);
+    }
+
+    private async Task TestConnection()
+    {
+        _connResult = await Db.TestConnectionAsync();
+    }
+
+    private async Task Save()
+    {
+        _saved = false;
+        _saveError = null;
+        try
+        {
+            if (_schedule.Mode != ScheduleEditorState.ModeCustom)
+            {
+                _cfg.Schedule.Cron = _schedule.ToCron();
+            }
+
+            await Config.SaveConfigAsync(_cfg);
+            _saved = true;
+        }
+        catch (Exception ex)
+        {
+            _saveError = ex.Message;
+        }
+    }
+
+    private void OnScheduleTimeChanged(ChangeEventArgs e)
+    {
+        _schedule.Time = e.Value?.ToString() ?? "02:00";
+    }
+
+}

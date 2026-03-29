@@ -1,0 +1,15 @@
+**/bin/
+**/obj/
+*.user
+.env
+.vs/
+.vscode/
+.DS_Store
+/config/
+/src/ImmichReverseGeo.Web/localdata/
+**/.playwright-mcp/
+**/TestResults/
+**/superpowers/
+.claude/
+_out/
+reversegeo/

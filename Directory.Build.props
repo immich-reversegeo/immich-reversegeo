@@ -1,0 +1,20 @@
+<Project>
+  <PropertyGroup>
+    <!-- Enable all .NET SDK analyzers at the latest rule set -->
+    <EnableNETAnalyzers>true</EnableNETAnalyzers>
+    <AnalysisLevel>latest</AnalysisLevel>
+
+    <!-- Enforce .editorconfig code-style rules at build time (IDExxx diagnostics) -->
+    <EnforceCodeStyleInBuild>true</EnforceCodeStyleInBuild>
+
+    <!-- Treat compiler warnings as errors -->
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+
+    <!-- Treat analysis warnings as errors so CI fails on new violations -->
+    <AnalysisTreatWarningsAsErrors>true</AnalysisTreatWarningsAsErrors>
+  </PropertyGroup>
+  <PropertyGroup>
+    <ImplicitUsings>disable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+</Project>

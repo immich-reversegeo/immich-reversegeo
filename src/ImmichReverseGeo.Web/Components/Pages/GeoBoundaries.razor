@@ -1,0 +1,130 @@
+@page "/data/geoboundaries"
+@rendermode InteractiveServer
+@inject DataCacheService Cache
+
+<h2>Administrative Areas</h2>
+
+<section class="settings-card">
+    <h3>Overture Divisions Cache</h3>
+    <p class="section-intro">Per-country Overture <code>division_area</code> caches are downloaded on demand and reused for processing and lookup.</p>
+    <div class="btn-row">
+        <button @onclick="DeleteAllOvertureDivisions"
+                disabled="@_busy"
+                class="btn btn-danger">
+            Delete All Overture Divisions
+        </button>
+    </div>
+
+    @if (_overtureDivisionStatus.Count == 0)
+    {
+        <p>No Overture division data downloaded yet.</p>
+    }
+    else
+    {
+        <table class="data-table">
+            <thead>
+                <tr>
+                    <th>Country</th>
+                    <th>Area Count</th>
+                    <th>Release</th>
+                    <th>Downloaded At</th>
+                    <th></th>
+                </tr>
+            </thead>
+            <tbody>
+                @foreach (var (iso3, status) in _overtureDivisionStatus)
+                {
+                    <tr>
+                        <td><code>@iso3</code></td>
+                        <td>@status.RowCount.ToString("N0")</td>
+                        <td>@(status.Release ?? "—")</td>
+                        <td>@status.DownloadedAt?.ToString("u")</td>
+                        <td>
+                            <button @onclick="() => DeleteOvertureDivision(iso3)"
+                                    disabled="@_busy"
+                                    class="btn btn-danger">
+                                Delete
+                            </button>
+                            <button @onclick="() => RedownloadOvertureDivision(iso3)"
+                                    disabled="@_busy"
+                                    class="btn btn-secondary">
+                                Re-download
+                            </button>
+                        </td>
+                    </tr>
+                }
+            </tbody>
+        </table>
+    }
+</section>
+
+@code {
+    private Dictionary<string, OvertureDivisionStatus> _overtureDivisionStatus = [];
+    private bool _busy;
+    private string? _result;
+
+    protected override Task OnInitializedAsync()
+    {
+        RefreshState();
+        return Task.CompletedTask;
+    }
+
+    private void RefreshState()
+    {
+        _overtureDivisionStatus = Cache.GetOvertureDivisionStatus();
+    }
+
+    private async Task RedownloadOvertureDivision(string iso3)
+    {
+        _busy = true;
+        try
+        {
+            Cache.DeleteOvertureDivisionFile(iso3);
+            await Cache.EnsureOvertureDivisionDataAsync(iso3);
+            _result = $"Re-downloaded Overture divisions for {iso3}.";
+            RefreshState();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task DeleteOvertureDivision(string iso3)
+    {
+        _busy = true;
+        try
+        {
+            Cache.DeleteOvertureDivisionFile(iso3);
+            _result = $"Deleted Overture divisions cache for {iso3}.";
+            RefreshState();
+            return Task.CompletedTask;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task DeleteAllOvertureDivisions()
+    {
+        _busy = true;
+        try
+        {
+            var count = _overtureDivisionStatus.Count;
+            foreach (var iso3 in _overtureDivisionStatus.Keys.ToList())
+            {
+                Cache.DeleteOvertureDivisionFile(iso3);
+            }
+
+            _result = $"Deleted Overture division caches for {count:N0} countr{(count == 1 ? "y" : "ies")}.";
+            RefreshState();
+            return Task.CompletedTask;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+}

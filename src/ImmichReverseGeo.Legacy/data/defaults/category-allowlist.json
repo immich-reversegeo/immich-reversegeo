@@ -1,0 +1,16 @@
+[
+  { "id": "63be6904847c3692a84b9c29", "name": "International Airport", "tier": "MajorTransport" },
+  { "id": "5f2c1af1b6d05514c704319d", "name": "Marine Terminal", "tier": "MajorTransport" },
+  { "id": "4bf58dd8d48988d129951735", "name": "Rail Station", "tier": "LocalTransport" },
+  { "id": "4bf58dd8d48988d1fd931735", "name": "Metro Station", "tier": "LocalTransport" },
+  { "id": "4bf58dd8d48988d184941735", "name": "Stadium", "tier": "LargeVenues" },
+  { "id": "4bf58dd8d48988d1ff931735", "name": "Convention Center", "tier": "LargeVenues" },
+  { "id": "4bf58dd8d48988d181941735", "name": "Museum", "tier": "Culture" },
+  { "id": "4bf58dd8d48988d137941735", "name": "Theater", "tier": "Culture" },
+  { "id": "4bf58dd8d48988d12d941735", "name": "Monument", "tier": "Landmarks" },
+  { "id": "50aaa49e4b90af0d42d5de11", "name": "Castle", "tier": "Landmarks" },
+  { "id": "4bf58dd8d48988d1e2941735", "name": "Beach", "tier": "Nature" },
+  { "id": "4eb1d4d54b900d56c88a45fc", "name": "Mountain", "tier": "Nature" },
+  { "id": "50aaa4314b90af0d42d5de10", "name": "Island", "tier": "Nature" },
+  { "id": "52e81612bcbc57f1066b7a21", "name": "National Park", "tier": "Nature" }
+]

@@ -1,0 +1,25 @@
+<Solution>
+  <Folder Name="/src/">
+    <Project Path="src/ImmichReverseGeo.Core/ImmichReverseGeo.Core.csproj" />
+    <Project Path="src/ImmichReverseGeo.Legacy/ImmichReverseGeo.Legacy.csproj" />
+    <Project Path="src/ImmichReverseGeo.Overture/ImmichReverseGeo.Overture.csproj" />
+    <Project Path="src/ImmichReverseGeo.Web/ImmichReverseGeo.Web.csproj" />
+    <Project Path="src/ImmichReverseGeo.Tools.OvertureExport/ImmichReverseGeo.Tools.OvertureExport.csproj" />
+  </Folder>
+  <Folder Name="/tests/">
+    <Project Path="tests/ImmichReverseGeo.Legacy.Tests/ImmichReverseGeo.Legacy.Tests.csproj" />
+    <Project Path="tests/ImmichReverseGeo.Overture.Tests/ImmichReverseGeo.Overture.Tests.csproj" />
+    <Project Path="tests/ImmichReverseGeo.Tests/ImmichReverseGeo.Tests.csproj" />
+  </Folder>
+  <Folder Name="/Solution Items/">
+    <File Path=".dockerignore" />
+    <File Path=".editorconfig" />
+    <File Path=".env.example" />
+    <File Path=".gitattributes" />
+    <File Path=".gitignore" />
+    <File Path=".runsettings" />
+    <File Path="AGENTS.md" />
+    <File Path="Directory.Build.props" />
+    <File Path="docker-compose.yml" />
+  </Folder>
+</Solution>
