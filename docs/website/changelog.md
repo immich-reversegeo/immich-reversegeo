@@ -11,3 +11,4 @@ Technical implementation notes live in [CHANGELOG.md](https://github.com/immich-
 ## 2026-03-29
 
 - Initial Version.
+- PR workflow test note.
