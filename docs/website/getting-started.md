@@ -71,6 +71,8 @@ Default container URL:
 http://localhost:8080
 ```
 
+If port `8080` is already in use on your host, change the left side of the compose port mapping and open that port instead.
+
 ## 4. Test one coordinate
 
 Use the Lookup page to confirm the basics before a full run:

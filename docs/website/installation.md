@@ -38,6 +38,7 @@ This service expects:
 - to run in the same compose project and Docker network as Immich
 - a persistent `/config` volume for settings
 - a persistent `/data` volume for downloaded Overture data and runtime state
+- a free host port for the published web UI, with `8080` as the default example
 
 Typical variables come from the shared `.env` file:
 

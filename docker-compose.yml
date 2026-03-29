@@ -4,7 +4,7 @@ services:
   immich-reversegeo:
     image: ghcr.io/immich-reversegeo/immich-reversegeo:latest
     ports:
-      - "8080:8080"          # LAN/VPN access only — do NOT expose publicly
+      - "8080:8080"          # change the left side if 8080 is already in use; do NOT expose publicly
     volumes:
       - reversegeo-config:/config      # settings (no database secrets in settings.json)
       - reversegeo-data:/data          # Overture caches, skipped.db, runtime data
