@@ -3,6 +3,8 @@
 services:
   immich-reversegeo:
     image: ghcr.io/immich-reversegeo/immich-reversegeo:latest
+    container_name: immich-reversegeo
+    pull_policy: always
     ports:
       - "8080:8080"          # change the left side if 8080 is already in use; do NOT expose publicly
     volumes:
