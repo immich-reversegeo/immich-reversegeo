@@ -21,6 +21,7 @@
 - Put non-source local output under `_out/` or `localdata/` — both are gitignored. Do not commit them.
 - Keep `.planning/` local-only and gitignored. Do not commit planning or spec work.
 - Treat untracked local tooling folders such as `.claude/`, `.superpowers/`, `.playwright-mcp/`, `.vs/`, and `localdata/` carefully. Do not commit or clean them up unless explicitly requested.
+- Prefer [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) for commit messages. Common types in this repo include `feat`, `fix`, `docs`, `test`, `ci`, `chore`, and `cleanup`.
 
 ---
 

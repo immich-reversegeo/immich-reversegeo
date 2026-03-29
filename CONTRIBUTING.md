@@ -84,6 +84,12 @@ The app does not parse `.env` directly. In Docker setups, Compose is expected to
 - Include screenshots for UI changes when helpful.
 - Call out follow-up work or known limitations.
 
+## Commits
+
+- Prefer [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) where practical.
+- Common types in this repo include `feat`, `fix`, `docs`, `test`, `ci`, `chore`, and `cleanup`.
+- Keep commit subjects short and descriptive.
+
 ## Style Notes
 
 - Follow the existing structure and naming in each project.
