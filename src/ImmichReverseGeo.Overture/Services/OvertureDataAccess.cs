@@ -21,13 +21,25 @@ public static class OvertureDataAccess
     public static void LoadAzureAndSpatial(DuckDBConnection conn)
     {
         using var cmd = conn.CreateCommand();
-        cmd.CommandText = """
+        var commandText = """
             INSTALL azure;
             LOAD azure;
-            SET azure_transport_option_type='curl';
+            """;
+
+        if (OperatingSystem.IsLinux())
+        {
+            // Linux containers have been more reliable with DuckDB's curl transport.
+            commandText += """
+                SET azure_transport_option_type='curl';
+                """;
+        }
+
+        commandText += """
             INSTALL spatial;
             LOAD spatial;
             """;
+
+        cmd.CommandText = commandText;
         cmd.ExecuteNonQuery();
     }
 
