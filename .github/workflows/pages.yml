@@ -13,15 +13,13 @@ on:
 
 permissions:
   contents: read
-  pages: write
-  id-token: write
 
 concurrency:
   group: pages
   cancel-in-progress: true
 
 jobs:
-  build:
+  deploy:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -35,25 +33,14 @@ jobs:
       - name: Install docs dependencies
         run: pip install -r docs/website/requirements.txt
 
-      - name: Configure Pages
-        id: pages
-        uses: actions/configure-pages@v5
-
       - name: Build site
         run: zensical build --clean
 
-      - name: Upload artifact
-        uses: actions/upload-pages-artifact@v4
+      - name: Publish to root Pages repo
+        uses: peaceiris/actions-gh-pages@v4
         with:
-          path: _out/website
-
-  deploy:
-    environment:
-      name: github-pages
-      url: ${{ steps.deployment.outputs.page_url }}
-    runs-on: ubuntu-latest
-    needs: build
-    steps:
-      - name: Deploy to GitHub Pages
-        id: deployment
-        uses: actions/deploy-pages@v4
+          personal_token: ${{ secrets.PAGES_DEPLOY_TOKEN }}
+          external_repository: immich-reversegeo/immich-reversegeo.github.io
+          publish_branch: master
+          publish_dir: _out/website
+          force_orphan: true
