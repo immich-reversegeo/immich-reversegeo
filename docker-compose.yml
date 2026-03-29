@@ -1,22 +1,19 @@
 # docker-compose.yml
-# Add this service to your existing Immich docker-compose.yml,
-# or run separately with: docker compose up -d
+# Add this service to your existing Immich docker-compose.yml.
 services:
   immich-reversegeo:
     image: ghcr.io/immich-reversegeo/immich-reversegeo:latest
     ports:
       - "8080:8080"          # LAN/VPN access only — do NOT expose publicly
     volumes:
-      - ./reversegeo/config:/config    # settings (no database secrets in settings.json)
-      - ./reversegeo/data:/data        # Overture caches, skipped.db, runtime data
+      - reversegeo-config:/config      # settings (no database secrets in settings.json)
+      - reversegeo-data:/data          # Overture caches, skipped.db, runtime data
     env_file:
       - .env                 # reuse Immich's own .env (DB_USERNAME, DB_PASSWORD, etc.)
     environment:
       - ASPNETCORE_URLS=http://+:8080
-    networks:
-      - immich_default       # join Immich's docker network to reach the DB
     restart: unless-stopped
 
-networks:
-  immich_default:
-    external: true           # verify name with: docker network ls | grep immich
+volumes:
+  reversegeo-config:
+  reversegeo-data:

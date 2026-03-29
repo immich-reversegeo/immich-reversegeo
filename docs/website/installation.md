@@ -20,7 +20,8 @@ If you already run immich with Docker Compose, the simplest setup is to add one 
 
 - Add the service to your existing Immich `docker-compose.yml`.
 - Reuse the same `.env` file that already contains your Immich database settings.
-- Mount `/config` and `/data` so settings and downloaded country data persist.
+- Keep `/config` and `/data` persisted with Docker volumes.
+- No extra Docker network configuration is needed when the service lives in the same compose project as Immich.
 
 Reference file:
 [docker-compose.yml](https://github.com/immich-reversegeo/immich-reversegeo/blob/master/docker-compose.yml)
@@ -34,9 +35,9 @@ Copy/paste snippet:
 This service expects:
 
 - the same database connection values Immich already uses
-- access to the same Docker network as Immich
-- a persistent `/config` mount for settings
-- a persistent `/data` mount for downloaded Overture data and runtime state
+- to run in the same compose project and Docker network as Immich
+- a persistent `/config` volume for settings
+- a persistent `/data` volume for downloaded Overture data and runtime state
 
 Typical variables come from the shared `.env` file:
 
@@ -55,18 +56,6 @@ Then start the stack:
 ```bash
 docker compose up -d
 ```
-
-## Separate compose file
-
-If you prefer, you can also run Immich ReverseGeo from a separate compose file instead of editing the main Immich one.
-
-In that case, make sure it still:
-
-- joins the same Docker network as Immich
-- uses the same database environment values
-- mounts persistent `/config` and `/data` volumes
-
-The same reference file above can also be used as a starting point for that setup.
 
 ## Runtime notes
 

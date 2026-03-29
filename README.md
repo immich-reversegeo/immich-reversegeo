@@ -45,7 +45,7 @@ End users should be able to start the published image with:
 docker compose up -d
 ```
 
-using the provided `docker-compose.yml` and the environment values required for their immich setup.
+using the provided `docker-compose.yml` as a service block inside their existing Immich compose file and the environment values already used for their Immich setup.
 
 See the official installation guide: [immich-reversegeo.github.io/installation](https://immich-reversegeo.github.io/installation/).
 

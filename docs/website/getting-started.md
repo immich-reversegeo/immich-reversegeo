@@ -57,8 +57,7 @@ Use Docker with persistent mounts for:
 
 You can either:
 
-- add the `immich-reversegeo` service to your existing Immich compose file, or
-- run it from a separate compose file that joins the same Docker network and reuses the same database environment values
+- add the `immich-reversegeo` service to your existing Immich compose file
 
 ```bash
 docker compose up -d

@@ -7,10 +7,14 @@ services:
     ports:
       - "8080:8080"
     volumes:
-      - ./reversegeo/config:/config
-      - ./reversegeo/data:/data
+      - reversegeo-config:/config
+      - reversegeo-data:/data
     env_file:
       - .env
     environment:
       - ASPNETCORE_URLS=http://+:8080
     restart: unless-stopped
+
+volumes:
+  reversegeo-config:
+  reversegeo-data:
