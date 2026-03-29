@@ -19,6 +19,7 @@ FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra AS runtime
 WORKDIR /app
 
 COPY --from=build --chown=1654:1654 /app/publish ./
+COPY --from=build --chown=1654:1654 /src/src/ImmichReverseGeo.Web/bundled-data/ /app/bundled-data/
 COPY --from=build --chown=1654:1654 /volume-seed/config/ /config/
 COPY --from=build --chown=1654:1654 /volume-seed/data/ /data/
 
