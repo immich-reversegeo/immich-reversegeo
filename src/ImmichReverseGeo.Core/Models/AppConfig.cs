@@ -10,7 +10,7 @@ public class AppConfig
 
 public class ScheduleConfig
 {
-    public string Cron { get; set; } = "0 2 * * *";
+    public string Cron { get; set; } = "0 * * * *";
     public bool Enabled { get; set; } = true;
 }
 
