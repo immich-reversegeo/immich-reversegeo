@@ -33,7 +33,7 @@ The background processor:
 2. resolves bundled country
 3. ensures per-country Overture divisions cache exists
 4. resolves administrative areas from cached divisions
-5. queries bundled airport infrastructure
+5. optionally queries bundled airport infrastructure
 6. writes city/state/country back to immich when a complete result is available
 
 ### Active data sources

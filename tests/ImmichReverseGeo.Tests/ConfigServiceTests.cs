@@ -33,6 +33,7 @@ public class ConfigServiceTests
         var cfg = await svc.GetConfigAsync();
         Assert.AreEqual("0 * * * *", cfg.Schedule.Cron);
         Assert.AreEqual(50, cfg.Processing.BatchSize);
+        Assert.IsTrue(cfg.Processing.UseAirportInfrastructure);
     }
 
     [TestMethod]
@@ -41,11 +42,13 @@ public class ConfigServiceTests
         var svc = new ConfigService(NullLogger<ConfigService>.Instance, configDir: _tempDir);
         var cfg = await svc.GetConfigAsync();
         cfg.Processing.BatchSize = 99;
+        cfg.Processing.UseAirportInfrastructure = false;
         await svc.SaveConfigAsync(cfg);
 
         var svc2 = new ConfigService(NullLogger<ConfigService>.Instance, configDir: _tempDir);
         var loaded = await svc2.GetConfigAsync();
         Assert.AreEqual(99, loaded.Processing.BatchSize);
+        Assert.IsFalse(loaded.Processing.UseAirportInfrastructure);
     }
 
     [TestMethod]

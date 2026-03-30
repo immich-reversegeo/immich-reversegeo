@@ -183,6 +183,10 @@
         <span class="hint">How many assets can be resolved in parallel within a batch. Start with 4 and increase carefully.</span>
     </div>
     <div class="form-group">
+        <label><input type="checkbox" @bind="_cfg.Processing.UseAirportInfrastructure" /> Use bundled airport infrastructure to improve city matching when it fits</label>
+        <span class="hint">Turn this off if you prefer commune or city names over airport names for photos taken on airport grounds.</span>
+    </div>
+    <div class="form-group">
         <label><input type="checkbox" @bind="_cfg.Processing.VerboseLogging" /> Verbose logging (log every asset)</label>
     </div>
 </section>

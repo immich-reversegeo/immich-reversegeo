@@ -3,6 +3,7 @@
 @inject OverturePlacesService Overture
 @inject OvertureDivisionsService OvertureDivisions
 @inject DataCacheService Cache
+@inject ConfigService Config
 
 <h2>Coordinate Lookup</h2>
 <p class="page-desc">Enter coordinates to inspect how the Overture-backed resolver behaves.</p>
@@ -34,6 +35,10 @@
         </button>
     </div>
     <div class="lookup-options-row">
+        <label class="checkbox-label">
+            <input type="checkbox" @bind="_includeAirportInfrastructure" />
+            <span>Include bundled airport infrastructure lookup</span>
+        </label>
         <label class="checkbox-label">
             <input type="checkbox" @bind="_includeLivePlaces" />
             <span>Include live Overture Places lookup (slower)</span>
@@ -94,11 +99,15 @@
         <div class="result-card @(_result.OvertureInfrastructure is not null ? "found" : "not-found")">
             <div class="result-header">
                 <span class="result-source">Airport Infrastructure — Bundled Overture</span>
-                <span class="result-badge @(_result.Iso3 is null ? "badge-miss" : _result.OvertureInfrastructure is not null ? "badge-found" : "badge-miss")">
-                    @(_result.Iso3 is null ? "skipped" : _result.OvertureInfrastructure is not null ? "found" : "no match")
+                <span class="result-badge @(_result.Iso3 is null || !_result.AirportInfrastructureEnabled ? "badge-miss" : _result.OvertureInfrastructure is not null ? "badge-found" : "badge-miss")">
+                    @(_result.Iso3 is null ? "skipped" : !_result.AirportInfrastructureEnabled ? "disabled" : _result.OvertureInfrastructure is not null ? "found" : "no match")
                 </span>
             </div>
-            @if (_result.OvertureInfrastructure is not null)
+            @if (!_result.AirportInfrastructureEnabled)
+            {
+                <div class="result-note">Bundled airport infrastructure lookup is disabled for this run.</div>
+            }
+            else if (_result.OvertureInfrastructure is not null)
             {
                 <div class="result-row"><span class="result-key">Name</span><span class="result-val">@_result.OvertureInfrastructure.Name</span></div>
                 <div class="result-row"><span class="result-key">Subtype</span><span class="result-val">@(_result.OvertureInfrastructure.SubType ?? "—")</span></div>
@@ -111,7 +120,7 @@
             {
                 <div class="result-note">No cached Overture airport infrastructure feature matched this point.</div>
             }
-            @if (_result.Iso3 is not null)
+            @if (_result.Iso3 is not null && _result.AirportInfrastructureEnabled)
             {
                 <div class="result-note">Ranking prefers better airport class, then real geometry matches, then bbox matches, then distance.</div>
             }
@@ -303,9 +312,16 @@
     private string? _parseError;
     private bool _running;
     private bool _expandTrace = true;
+    private bool _includeAirportInfrastructure = true;
     private bool _includeLivePlaces;
     private string? _error;
     private LookupResult? _result;
+
+    protected override async Task OnInitializedAsync()
+    {
+        var cfg = await Config.GetConfigAsync();
+        _includeAirportInfrastructure = cfg.Processing.UseAirportInfrastructure;
+    }
 
     private void OnPasteInput(ChangeEventArgs e)
     {
@@ -421,6 +437,7 @@
     {
         var r = new LookupResult
         {
+            AirportInfrastructureEnabled = _includeAirportInfrastructure,
             LivePlacesEnabled = _includeLivePlaces
         };
 
@@ -436,7 +453,11 @@
         r.Trace.Add($"Country matched from bundled Overture divisions: {r.CountryName} ({r.Iso3}, {r.Alpha2 ?? "no alpha-2"})");
 
         var ensureDivisionTask = EnsureDivisionCacheAsync(r);
-        var infrastructureTask = Overture.FindNearestInfrastructureWithDiagnosticsAsync(_lat, _lon, r.Iso3);
+        Task<OvertureInfrastructureLookupDiagnostics>? infrastructureTask = null;
+        if (_includeAirportInfrastructure)
+        {
+            infrastructureTask = Overture.FindNearestInfrastructureWithDiagnosticsAsync(_lat, _lon, r.Iso3);
+        }
         Task<OvertureLookupDiagnostics>? livePlacesTask = null;
         if (_includeLivePlaces)
         {
@@ -452,13 +473,20 @@
             ? $"Overture division lookup failed: {r.OvertureDivisionDiagnostics.Error}"
             : $"Overture division admin resolution: state={r.OvertureDivisionState ?? "—"}, city={r.OvertureDivisionCity ?? "—"}");
 
-        r.OvertureInfrastructureDiagnostics = await infrastructureTask;
-        r.OvertureInfrastructure = r.OvertureInfrastructureDiagnostics.BestMatch;
-        r.Trace.Add(r.OvertureInfrastructureDiagnostics.Error is not null
-            ? $"Overture infrastructure lookup failed: {r.OvertureInfrastructureDiagnostics.Error}"
-            : r.OvertureInfrastructure is not null
-                ? $"Overture infrastructure winner: {r.OvertureInfrastructure.Name} at {(int)r.OvertureInfrastructure.DistanceMetres} m (bbox={(r.OvertureInfrastructure.BoundingBoxContainsPoint ? "yes" : "no")}, geom={(r.OvertureInfrastructure.GeometryContainsPoint ? "yes" : "no")})"
-                : "Overture infrastructure lookup: no in-range match");
+        if (infrastructureTask is not null)
+        {
+            r.OvertureInfrastructureDiagnostics = await infrastructureTask;
+            r.OvertureInfrastructure = r.OvertureInfrastructureDiagnostics.BestMatch;
+            r.Trace.Add(r.OvertureInfrastructureDiagnostics.Error is not null
+                ? $"Overture infrastructure lookup failed: {r.OvertureInfrastructureDiagnostics.Error}"
+                : r.OvertureInfrastructure is not null
+                    ? $"Overture infrastructure winner: {r.OvertureInfrastructure.Name} at {(int)r.OvertureInfrastructure.DistanceMetres} m (bbox={(r.OvertureInfrastructure.BoundingBoxContainsPoint ? "yes" : "no")}, geom={(r.OvertureInfrastructure.GeometryContainsPoint ? "yes" : "no")})"
+                    : "Overture infrastructure lookup: no in-range match");
+        }
+        else
+        {
+            r.Trace.Add("Overture infrastructure lookup skipped.");
+        }
 
         if (livePlacesTask is not null)
         {
@@ -520,6 +548,7 @@
         public string? Iso3 { get; set; }
         public string? CountryName { get; set; }
         public string? Alpha2 { get; set; }
+        public bool AirportInfrastructureEnabled { get; set; }
         public bool LivePlacesEnabled { get; set; }
         public bool OvertureDivisionCacheReady { get; set; }
         public OvertureDivisionResult? OvertureDivision { get; set; }

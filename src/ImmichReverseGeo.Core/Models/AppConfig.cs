@@ -19,6 +19,7 @@ public class ProcessingConfig
     public int BatchSize { get; set; } = 50;
     public int BatchDelayMs { get; set; } = 100;
     public int MaxDegreeOfParallelism { get; set; } = 4;
+    public bool UseAirportInfrastructure { get; set; } = true;
     public bool VerboseLogging { get; set; } = false;
 }
 

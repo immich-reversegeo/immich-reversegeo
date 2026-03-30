@@ -219,21 +219,24 @@ public class ProcessingBackgroundService(
                                 ct);
             var geoResult = new GeoResult(countryName!, adminResult?.State, adminResult?.City);
 
-            // 4. Transport lookup — bundled Overture airport infrastructure.
-            step = "FindNearestInfrastructure";
-            var infrastructure = await overturePlaces.FindNearestInfrastructureWithDiagnosticsAsync(
-                asset.Latitude,
-                asset.Longitude,
-                iso3,
-                ct);
+            if (cfg.Processing.UseAirportInfrastructure)
+            {
+                // 4. Transport lookup — bundled Overture airport infrastructure.
+                step = "FindNearestInfrastructure";
+                var infrastructure = await overturePlaces.FindNearestInfrastructureWithDiagnosticsAsync(
+                    asset.Latitude,
+                    asset.Longitude,
+                    iso3,
+                    ct);
 
-            if (infrastructure.BestMatch?.GeometryContainsPoint == true)
-            {
-                geoResult = geoResult with { City = infrastructure.BestMatch.Name };
-            }
-            else if (geoResult.City is null && infrastructure.BestMatch is not null)
-            {
-                geoResult = geoResult with { City = infrastructure.BestMatch.Name };
+                if (infrastructure.BestMatch?.GeometryContainsPoint == true)
+                {
+                    geoResult = geoResult with { City = infrastructure.BestMatch.Name };
+                }
+                else if (geoResult.City is null && infrastructure.BestMatch is not null)
+                {
+                    geoResult = geoResult with { City = infrastructure.BestMatch.Name };
+                }
             }
 
             // 5. City fallback — promote state → city when divisions resolve only a broad area.

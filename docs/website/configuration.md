@@ -48,6 +48,7 @@ The Settings page lets you control:
 - batch size
 - batch delay
 - max parallelism
+- whether airport infrastructure can override the city name
 - verbose logging
 
 The UI shows a human-readable summary of the selected schedule and the resulting cron expression.
@@ -70,6 +71,10 @@ Important behavior:
   <div class="card">
     <h3>Parallelism</h3>
     <p>Controls how much work the app does at once. Higher values can be faster, but they also put more load on the system and database.</p>
+  </div>
+  <div class="card">
+    <h3>Airport matching</h3>
+    <p>Leave it on if airport names are useful to you. Turn it off if you prefer commune or city names for photos taken on airport grounds.</p>
   </div>
 </div>
 
