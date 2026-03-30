@@ -51,7 +51,7 @@ builder.Services.AddSingleton(sp =>
 builder.Services.AddSingleton(sp =>
 {
     var db = sp.GetRequiredService<ConfigService>().GetDbSettings();
-    var connectionString = $"Host={db.Host};Port={db.Port};Username={db.Username};Password={db.Password};Database={db.Database}";
+    var connectionString = $"Host={db.Host};Port={db.Port};Username={db.Username};Password={db.Password};Database={db.Database};GSS Encryption Mode=Disable";
     var builder = new NpgsqlDataSourceBuilder(connectionString);
     return builder.Build();
 });
