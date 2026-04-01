@@ -24,6 +24,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v6
+        with:
+          persist-credentials: false
 
       - name: Setup Python
         uses: actions/setup-python@v6
@@ -37,10 +39,10 @@ jobs:
         run: zensical build --clean
 
       - name: Publish to root Pages repo
-        uses: peaceiris/actions-gh-pages@v4
+        uses: JamesIves/github-pages-deploy-action@v4
         with:
-          personal_token: ${{ secrets.PAGES_DEPLOY_TOKEN }}
-          external_repository: immich-reversegeo/immich-reversegeo.github.io
-          publish_branch: master
-          publish_dir: _out/website
-          force_orphan: true
+          token: ${{ secrets.PAGES_DEPLOY_TOKEN }}
+          repository-name: immich-reversegeo/immich-reversegeo.github.io
+          branch: master
+          folder: _out/website
+          single-commit: true
