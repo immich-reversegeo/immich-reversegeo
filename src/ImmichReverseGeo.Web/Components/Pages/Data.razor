@@ -2,44 +2,22 @@
 @rendermode InteractiveServer
 @inject DataCacheService Cache
 @inject SkippedAssetsRepository Skipped
-@inject ImmichDbRepository Db
 
 <h2>Data Management</h2>
 
 <section class="settings-card">
     <h3>Management Sections</h3>
-    <p class="section-intro">Use this page to manage on-demand Overture administrative data. Bundled airport infrastructure is used automatically and does not need separate management.</p>
+    <p class="section-intro">Use this page to manage on-demand Overture administrative data and reverse geo maintenance tools.</p>
     <div class="data-grid">
+        <a class="data-link-card" href="/data/reset-geo-data">
+            <span class="data-card-title">Reset Geo Data</span>
+            <span class="data-card-meta">Clear only reverse geo city, state, and country fields</span>
+        </a>
         <a class="data-link-card" href="/data/geoboundaries">
             <span class="data-card-title">Administrative Areas</span>
             <span class="data-card-meta">@_overtureDivisionCountryCount country cache(s)</span>
         </a>
     </div>
-</section>
-
-<section class="settings-card">
-    <h3>Reset Immich Location Data</h3>
-    <p class="section-intro">Clears <code>city</code>, <code>state</code>, and <code>country</code> from every row in
-       <code>asset_exif</code> that has location data. Use this to start fresh — all assets will be re-queued for
-       processing on the next run. This also clears the skip list so previously unresolvable assets are retried.</p>
-    @if (_resetConfirm)
-    {
-        <p class="alert alert-error">This will wipe all location data from Immich. Are you sure?</p>
-        <div class="btn-row">
-            <button @onclick="ResetConfirmed" class="btn btn-primary">Yes, clear everything</button>
-            <button @onclick="() => _resetConfirm = false" class="btn btn-secondary">Cancel</button>
-        </div>
-    }
-    else
-    {
-        <div class="btn-row">
-            <button @onclick="() => _resetConfirm = true" class="btn btn-secondary">Reset All Location Data…</button>
-        </div>
-    }
-    @if (_resetResult is not null)
-    {
-        <p class="alert alert-success">@_resetResult</p>
-    }
 </section>
 
 <section class="settings-card">
@@ -61,23 +39,12 @@
 
 @code {
     private long _skippedCount;
-    private bool _resetConfirm;
-    private string? _resetResult;
     private string? _skipClearResult;
     private int _overtureDivisionCountryCount;
 
     protected override async Task OnInitializedAsync()
     {
         await RefreshPageState();
-    }
-
-    private async Task ResetConfirmed()
-    {
-        _resetConfirm = false;
-        var rows = await Db.ClearAllLocationDataAsync();
-        await Skipped.ClearAllAsync();
-        _skippedCount = 0;
-        _resetResult = $"Cleared location data from {rows:N0} assets. Skip list also cleared. Ready to reprocess.";
     }
 
     private async Task ClearSkipped()
@@ -100,5 +67,4 @@
             /* SQLite not yet initialised — ignore */
         }
     }
-
 }

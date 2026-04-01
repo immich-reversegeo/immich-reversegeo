@@ -1,6 +1,7 @@
 using System;
 using System.Collections.Generic;
 using System.IO;
+using System.Linq;
 using System.Threading.Tasks;
 using ImmichReverseGeo.Core.Models;
 using Microsoft.Data.Sqlite;
@@ -89,5 +90,41 @@ public class SkippedAssetsRepository(ILogger<SkippedAssetsRepository> logger, st
         cmd.CommandText = "DELETE FROM skipped_assets";
         var rows = await cmd.ExecuteNonQueryAsync();
         logger.LogInformation("Cleared {Count} skipped assets", rows);
+    }
+
+    public async Task<long> RemoveAsync(IEnumerable<Guid> assetIds)
+    {
+        if (!File.Exists(_dbPath))
+        {
+            return 0;
+        }
+
+        var ids = assetIds
+            .Distinct()
+            .Select(id => id.ToString())
+            .ToArray();
+
+        if (ids.Length == 0)
+        {
+            return 0;
+        }
+
+        await using var conn = new SqliteConnection(ConnectionString);
+        await conn.OpenAsync();
+        using var tx = conn.BeginTransaction();
+
+        long removed = 0;
+        foreach (var id in ids)
+        {
+            await using var cmd = conn.CreateCommand();
+            cmd.Transaction = tx;
+            cmd.CommandText = "DELETE FROM skipped_assets WHERE asset_id = $id";
+            cmd.Parameters.AddWithValue("$id", id);
+            removed += await cmd.ExecuteNonQueryAsync();
+        }
+
+        await tx.CommitAsync();
+        logger.LogInformation("Removed {Count} skipped assets by id", removed);
+        return removed;
     }
 }

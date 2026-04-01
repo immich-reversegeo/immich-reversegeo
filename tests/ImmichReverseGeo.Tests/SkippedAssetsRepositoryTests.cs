@@ -70,4 +70,27 @@ public class SkippedAssetsRepositoryTests
 
         Assert.IsTrue(all.Contains(id), "GUID added by instance A should be returned by instance B");
     }
+
+    [TestMethod]
+    public async Task RemoveAsync_RemovesOnlyMatchingIds()
+    {
+        var repo = new SkippedAssetsRepository(NullLogger<SkippedAssetsRepository>.Instance, _tempDir);
+        await repo.InitialiseAsync();
+
+        var first = Guid.NewGuid();
+        var second = Guid.NewGuid();
+        var third = Guid.NewGuid();
+
+        await repo.AddAsync(first);
+        await repo.AddAsync(second);
+        await repo.AddAsync(third);
+
+        var removed = await repo.RemoveAsync([first, third]);
+        var remaining = await repo.GetAllAsync();
+
+        Assert.AreEqual(2L, removed);
+        Assert.IsFalse(remaining.Contains(first));
+        Assert.IsTrue(remaining.Contains(second));
+        Assert.IsFalse(remaining.Contains(third));
+    }
 }

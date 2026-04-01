@@ -1,0 +1,367 @@
+@page "/data/reset-geo-data"
+@rendermode InteractiveServer
+@using System.Linq
+@inject ImmichDbRepository Db
+@inject SkippedAssetsRepository Skipped
+
+<h2>Reset Geo Data</h2>
+
+<section class="settings-card">
+    <h3>Reset Reverse Geo Fields</h3>
+    <p class="section-intro">Clear reverse geo location fields in Immich and let those assets be processed again on the next run.</p>
+    <div class="alert alert-info">
+        This ONLY resets the reverse geo location in <code>asset_exif</code> by clearing <code>city</code>, <code>state</code>, and <code>country</code>. It does not touch any other Immich metadata.
+    </div>
+
+    <div class="reset-grid">
+        <div class="reset-option-card">
+            <h4>Reset All Data</h4>
+            <p>Clear all reverse geo values from Immich and wipe the skip list so everything can be retried from scratch.</p>
+            @if (_resetAllConfirm)
+            {
+                <p class="alert alert-error">This will clear reverse geo location data for every matching asset. It does not touch any other metadata. Continue?</p>
+                <div class="btn-row">
+                    <button @onclick="ResetAllConfirmed" class="btn btn-primary">Yes, reset all geo data</button>
+                    <button @onclick="CancelResetAll" class="btn btn-secondary">Cancel</button>
+                </div>
+            }
+            else
+            {
+                <div class="btn-row">
+                    <button @onclick="BeginResetAll" class="btn btn-secondary">Reset All Data…</button>
+                </div>
+            }
+            @if (_resetAllResult is not null)
+            {
+                <p class="alert alert-success">@_resetAllResult</p>
+            }
+        </div>
+
+        <div class="reset-option-card">
+            <h4>Reset Single Item(s)</h4>
+            <p>Paste one or more asset GUIDs to clear only those assets. Matching assets are also removed from the skip list so they can be retried.</p>
+            <div class="form-group">
+                <label for="asset-reset-ids">Asset GUIDs</label>
+                <textarea id="asset-reset-ids"
+                          class="form-control reset-textarea"
+                          @bind="_assetIdsInput"
+                          placeholder="Paste one or more asset GUIDs, separated by commas, spaces, or new lines"></textarea>
+                <div class="hint">Example: <code>f3f2d7e3-0e29-4e11-9d2a-7cb0dc7d97f1</code></div>
+            </div>
+            <div class="btn-row">
+                <button @onclick="ResetSelectedAssetsAsync"
+                        class="btn btn-secondary"
+                        disabled="@string.IsNullOrWhiteSpace(_assetIdsInput)">
+                    Reset Selected Items
+                </button>
+            </div>
+            @if (_singleResetError is not null)
+            {
+                <p class="alert alert-error">@_singleResetError</p>
+            }
+            @if (_singleResetResult is not null)
+            {
+                <p class="alert alert-success">@_singleResetResult</p>
+            }
+        </div>
+
+        <div class="reset-option-card">
+            <h4>Reset Specific Locations</h4>
+            <p>Select an existing city, state, or country from Immich and clear reverse geo data for every matching asset.</p>
+            <div class="alert alert-info">
+                Matching is based on the selected city, state, or country value, but the reset clears ALL reverse geo fields for those assets: <code>city</code>, <code>state</code>, and <code>country</code>.
+            </div>
+            <div class="reset-select-grid">
+                <div class="form-group">
+                    <label for="reset-scope">Reset By</label>
+                    <select id="reset-scope" class="form-control" value="@_selectedLocationScope" @onchange="OnLocationScopeChanged">
+                        @foreach (var scope in Enum.GetValues<LocationResetScope>())
+                        {
+                            <option value="@scope">@GetScopeDisplayName(scope)</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="reset-location-sort">Sort Locations</label>
+                    <select id="reset-location-sort" class="form-control" value="@_locationSortMode" @onchange="OnLocationSortChanged">
+                        @foreach (var sortMode in Enum.GetValues<LocationValueSortMode>())
+                        {
+                            <option value="@sortMode">@GetSortModeDisplayName(sortMode)</option>
+                        }
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label for="reset-location-value">Existing Value</label>
+                    <select id="reset-location-value"
+                            class="form-control"
+                            @bind="_selectedLocationValue"
+                            disabled="@(CurrentLocationOptions.Count == 0)">
+                        @if (CurrentLocationOptions.Count == 0)
+                        {
+                            <option value="">No @(GetScopeDisplayName(_selectedLocationScope).ToLowerInvariant()) values found</option>
+                        }
+                        else
+                        {
+                            @foreach (var option in CurrentLocationOptions)
+                            {
+                                <option value="@option.Value">@($"{option.Value} ({option.AssetCount:N0})")</option>
+                            }
+                        }
+                    </select>
+                    <div class="hint">This list comes from current reverse geo values stored in Immich.</div>
+                </div>
+            </div>
+            <div class="btn-row">
+                <button @onclick="ResetSelectedLocationAsync"
+                        class="btn btn-secondary"
+                        disabled="@string.IsNullOrWhiteSpace(_selectedLocationValue)">
+                    Reset Matching @GetScopeDisplayName(_selectedLocationScope)
+                </button>
+            </div>
+            @if (_locationResetError is not null)
+            {
+                <p class="alert alert-error">@_locationResetError</p>
+            }
+            @if (_locationResetResult is not null)
+            {
+                <p class="alert alert-success">@_locationResetResult</p>
+            }
+        </div>
+    </div>
+</section>
+
+@code {
+    private bool _resetAllConfirm;
+    private string? _resetAllResult;
+    private string? _singleResetResult;
+    private string? _singleResetError;
+    private string? _locationResetResult;
+    private string? _locationResetError;
+    private string? _assetIdsInput;
+    private LocationResetScope _selectedLocationScope = LocationResetScope.City;
+    private LocationValueSortMode _locationSortMode = LocationValueSortMode.AssetCount;
+    private string? _selectedLocationValue;
+    private IReadOnlyList<LocationValueOption> _cityOptions = Array.Empty<LocationValueOption>();
+    private IReadOnlyList<LocationValueOption> _stateOptions = Array.Empty<LocationValueOption>();
+    private IReadOnlyList<LocationValueOption> _countryOptions = Array.Empty<LocationValueOption>();
+
+    private IReadOnlyList<LocationValueOption> CurrentLocationOptions =>
+        SortLocationOptions(_selectedLocationScope switch
+        {
+            LocationResetScope.City => _cityOptions,
+            LocationResetScope.State => _stateOptions,
+            LocationResetScope.Country => _countryOptions,
+            _ => Array.Empty<LocationValueOption>()
+        });
+
+    protected override async Task OnInitializedAsync()
+    {
+        await LoadLocationOptionsAsync();
+    }
+
+    private void BeginResetAll()
+    {
+        _resetAllConfirm = true;
+        _resetAllResult = null;
+    }
+
+    private void CancelResetAll()
+    {
+        _resetAllConfirm = false;
+    }
+
+    private async Task ResetAllConfirmed()
+    {
+        _resetAllConfirm = false;
+        _singleResetResult = null;
+        _singleResetError = null;
+        _locationResetResult = null;
+        _locationResetError = null;
+
+        var rows = await Db.ClearAllLocationDataAsync();
+        await Skipped.ClearAllAsync();
+        await LoadLocationOptionsAsync();
+
+        _resetAllResult = $"Cleared reverse geo data from {rows:N0} asset(s). Skip list also cleared. Ready to reprocess.";
+    }
+
+    private async Task ResetSelectedAssetsAsync()
+    {
+        _resetAllResult = null;
+        _singleResetResult = null;
+        _singleResetError = null;
+        _locationResetResult = null;
+        _locationResetError = null;
+
+        var (assetIds, invalidTokens) = ParseAssetIds(_assetIdsInput);
+        if (assetIds.Count == 0)
+        {
+            _singleResetError = invalidTokens.Count > 0
+                ? $"No valid asset GUIDs were found. Invalid token(s): {FormatInvalidTokens(invalidTokens)}"
+                : "Paste at least one asset GUID to reset.";
+            return;
+        }
+
+        var clearedIds = await Db.ClearLocationDataForAssetsAsync(assetIds);
+        var removedSkipped = await Skipped.RemoveAsync(assetIds);
+        await LoadLocationOptionsAsync();
+
+        var invalidSuffix = invalidTokens.Count > 0
+            ? $" Ignored {invalidTokens.Count:N0} invalid token(s): {FormatInvalidTokens(invalidTokens)}."
+            : string.Empty;
+
+        _singleResetResult = clearedIds.Count > 0
+            ? $"Cleared reverse geo data for {clearedIds.Count:N0} asset(s). Removed {removedSkipped:N0} matching asset(s) from the skip list.{invalidSuffix}"
+            : $"No reverse geo fields were set for the selected asset IDs. Removed {removedSkipped:N0} matching asset(s) from the skip list.{invalidSuffix}";
+    }
+
+    private async Task ResetSelectedLocationAsync()
+    {
+        _resetAllResult = null;
+        _singleResetResult = null;
+        _singleResetError = null;
+        _locationResetResult = null;
+        _locationResetError = null;
+
+        if (string.IsNullOrWhiteSpace(_selectedLocationValue))
+        {
+            _locationResetError = $"Select a {GetScopeDisplayName(_selectedLocationScope).ToLowerInvariant()} value to reset.";
+            return;
+        }
+
+        var selectedValue = _selectedLocationValue;
+        var clearedIds = await Db.ClearLocationDataByValueAsync(_selectedLocationScope, selectedValue);
+        var removedSkipped = await Skipped.RemoveAsync(clearedIds);
+        await LoadLocationOptionsAsync();
+
+        _locationResetResult = clearedIds.Count > 0
+            ? $"Cleared reverse geo data for {clearedIds.Count:N0} asset(s) matching {GetScopeDisplayName(_selectedLocationScope).ToLowerInvariant()} \"{selectedValue}\". Removed {removedSkipped:N0} matching asset(s) from the skip list."
+            : $"No reverse geo fields were set for assets matching {GetScopeDisplayName(_selectedLocationScope).ToLowerInvariant()} \"{selectedValue}\".";
+    }
+
+    private async Task LoadLocationOptionsAsync()
+    {
+        var cityTask = Db.GetLocationValueOptionsAsync(LocationResetScope.City);
+        var stateTask = Db.GetLocationValueOptionsAsync(LocationResetScope.State);
+        var countryTask = Db.GetLocationValueOptionsAsync(LocationResetScope.Country);
+
+        await Task.WhenAll(cityTask, stateTask, countryTask);
+
+        _cityOptions = cityTask.Result;
+        _stateOptions = stateTask.Result;
+        _countryOptions = countryTask.Result;
+
+        RefreshSelectedLocationValue();
+    }
+
+    private void OnLocationScopeChanged(ChangeEventArgs args)
+    {
+        if (Enum.TryParse<LocationResetScope>(args.Value?.ToString(), out var scope))
+        {
+            _selectedLocationScope = scope;
+            RefreshSelectedLocationValue();
+        }
+    }
+
+    private void OnLocationSortChanged(ChangeEventArgs args)
+    {
+        if (Enum.TryParse<LocationValueSortMode>(args.Value?.ToString(), out var sortMode))
+        {
+            _locationSortMode = sortMode;
+            RefreshSelectedLocationValue();
+        }
+    }
+
+    private void RefreshSelectedLocationValue()
+    {
+        if (CurrentLocationOptions.Count == 0)
+        {
+            _selectedLocationValue = null;
+            return;
+        }
+
+        if (string.IsNullOrWhiteSpace(_selectedLocationValue)
+            || !CurrentLocationOptions.Any(option => option.Value == _selectedLocationValue))
+        {
+            _selectedLocationValue = CurrentLocationOptions[0].Value;
+        }
+    }
+
+    private static (List<Guid> AssetIds, List<string> InvalidTokens) ParseAssetIds(string? input)
+    {
+        var assetIds = new List<Guid>();
+        var invalidTokens = new List<string>();
+        var seen = new HashSet<Guid>();
+
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return (assetIds, invalidTokens);
+        }
+
+        var tokens = input.Split(
+            ['\r', '\n', ',', ';', ' ', '\t'],
+            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
+
+        foreach (var token in tokens)
+        {
+            if (Guid.TryParse(token, out var assetId))
+            {
+                if (seen.Add(assetId))
+                {
+                    assetIds.Add(assetId);
+                }
+            }
+            else
+            {
+                invalidTokens.Add(token);
+            }
+        }
+
+        return (assetIds, invalidTokens);
+    }
+
+    private static string FormatInvalidTokens(IReadOnlyList<string> invalidTokens)
+    {
+        const int maxPreview = 5;
+        var preview = invalidTokens.Take(maxPreview);
+        return invalidTokens.Count > maxPreview
+            ? $"{string.Join(", ", preview)}, ..."
+            : string.Join(", ", preview);
+    }
+
+    private static string GetScopeDisplayName(LocationResetScope scope) =>
+        scope switch
+        {
+            LocationResetScope.City => "City",
+            LocationResetScope.State => "State",
+            LocationResetScope.Country => "Country",
+            _ => "Location"
+        };
+
+    private IReadOnlyList<LocationValueOption> SortLocationOptions(IReadOnlyList<LocationValueOption> options) =>
+        _locationSortMode switch
+        {
+            LocationValueSortMode.Name => options
+                .OrderBy(option => option.Value, StringComparer.OrdinalIgnoreCase)
+                .ThenByDescending(option => option.AssetCount)
+                .ToArray(),
+            _ => options
+                .OrderByDescending(option => option.AssetCount)
+                .ThenBy(option => option.Value, StringComparer.OrdinalIgnoreCase)
+                .ToArray()
+        };
+
+    private static string GetSortModeDisplayName(LocationValueSortMode sortMode) =>
+        sortMode switch
+        {
+            LocationValueSortMode.AssetCount => "Number Of Assets",
+            LocationValueSortMode.Name => "Name",
+            _ => "Number Of Assets"
+        };
+
+    private enum LocationValueSortMode
+    {
+        AssetCount,
+        Name
+    }
+}

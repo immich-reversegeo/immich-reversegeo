@@ -99,8 +99,8 @@ Config goes under `/config` in production.
     <p>Only one tool should be updating location names. See immich’s <a href="https://docs.immich.app/administration/system-settings/#reverse-geocoding-settings">Reverse Geocoding Settings</a>.</p>
   </div>
   <div class="card">
-    <h3>Bulk clear is a real change</h3>
-    <p>The Data page can clear existing country, state, and city values before a rerun, so a database backup is strongly recommended first.</p>
+    <h3>Geo resets are a real change</h3>
+    <p>The Reset Geo Data page under Data can reset reverse geo country, state, and city values for all assets, pasted asset GUIDs, or a selected location value before a rerun, so a database backup is strongly recommended first.</p>
   </div>
   <div class="card">
     <h3>Country downloads take space</h3>
@@ -118,7 +118,9 @@ Config goes under `/config` in production.
     [Reverse Geocoding Settings](https://docs.immich.app/administration/system-settings/#reverse-geocoding-settings).
 
 !!! warning "Clearing location data is a real metadata change"
-    The Data page does not just reset this app's local state. It can clear existing immich location fields in the database.
+    The Reset Geo Data page does not just reset this app's local state. It can clear existing immich reverse geo `city`, `state`, and `country` fields in the database.
+
+    It does not touch any other immich metadata.
 
     Take a database backup before using it:
     [Backup and Restore | Immich](https://docs.immich.app/administration/backup-and-restore/)

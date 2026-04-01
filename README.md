@@ -21,7 +21,7 @@ Immich ReverseGeo is an independent project and is not affiliated with immich. i
   [Reverse Geocoding](https://docs.immich.app/features/reverse-geocoding/) and
   [Reverse Geocoding Settings](https://docs.immich.app/administration/system-settings/#reverse-geocoding-settings).
 - It writes location fields back into immich, so you should take a database backup first.
-- The Data page includes an option to clear existing `city`, `state`, and `country` values in immich before reprocessing.
+- The Reset Geo Data page under Data can reset reverse geo `city`, `state`, and `country` values for all assets, specific asset GUIDs, or a selected city, state, or country before reprocessing. It only clears those reverse geo fields.
 - The app needs internet access the first time it downloads extra location data for a country.
 - Large downloaded country data can take a lot of disk space. Bigger countries can approach `~500 MB` each, and multiple countries can grow into many gigabytes on disk.
 - If you rebuild or switch containers and see antiforgery or key-ring errors in the browser, restart with the same persisted `/config` volume and reload the page. You may need to clear old browser cookies once after changing setups.

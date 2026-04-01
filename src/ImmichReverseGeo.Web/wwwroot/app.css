@@ -931,6 +931,40 @@ input[type="text"].env-readonly {
     color: var(--text-primary);
 }
 
+.reset-grid {
+    display: grid;
+    gap: 1rem;
+}
+
+.reset-option-card {
+    background: rgba(255, 255, 255, 0.015);
+    border: 1px solid rgba(124, 135, 255, 0.14);
+    border-radius: var(--radius-lg);
+    padding: 1rem 1.1rem;
+}
+
+.reset-option-card h4 {
+    margin: 0 0 0.45rem;
+    font-size: 0.96rem;
+    color: var(--text-primary);
+}
+
+.reset-option-card p:last-child {
+    margin-bottom: 0;
+}
+
+.reset-textarea {
+    min-height: 110px;
+    resize: vertical;
+    font-family: ui-monospace, SFMono-Regular, Consolas, monospace;
+}
+
+.reset-select-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    gap: 0.9rem 1rem;
+}
+
 /* ── Table ────────────────────────────────────────────── */
 .data-table {
     width: 100%;
