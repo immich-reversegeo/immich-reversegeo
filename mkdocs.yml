@@ -42,6 +42,9 @@ theme:
 extra_css:
   - assets/stylesheets/extra.css
 
+extra_javascript:
+  - assets/javascripts/external-links.js
+
 markdown_extensions:
   - admonition
   - attr_list
