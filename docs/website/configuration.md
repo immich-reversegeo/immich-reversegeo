@@ -8,6 +8,8 @@ icon: material/tune-variant
 The Settings page is intentionally small. Most users only need to check the database connection, pick a schedule, and tune how aggressively processing should run.
 </div>
 
+For manual runs, coordinate testing, and reset tools, see [Using the App](./using-the-app.md).
+
 ## Database settings
 
 Database values are environment-backed and shown as read-only in the UI.
@@ -37,27 +39,13 @@ These values are required because the app reads and updates immich data directly
 
 The Settings page lets you control:
 
-- automatic processing on or off
-- a user-friendly schedule preset:
-  - every hour
-  - every few minutes
-  - every few hours
-  - every day
-  - once a week
-  - advanced custom cron when needed
-- batch size
-- batch delay
-- max parallelism
+- whether processing runs automatically
+- when it runs, using simple presets or a custom cron expression
+- batch size, delay, and parallelism
 - whether airport infrastructure can override the city name
-- verbose logging
+- whether every asset is written to the log
 
-The UI shows a human-readable summary of the selected schedule and the resulting cron expression.
-
-Important behavior:
-
-- scheduled runs do not start a second pass if one is already in progress
-- manual runs from the dashboard still work independently of the automatic schedule
-- custom cron is only needed for advanced cases; most users should stay on the preset schedule options
+Most users should stay on the preset schedule options. Manual runs from the dashboard still work even when automatic scheduling is disabled.
 
 <div class="feature-grid">
   <div class="card">
@@ -87,7 +75,7 @@ The database section in Settings is read-only and mainly there as a sanity check
 
 ## Data layout
 
-Runtime data goes under `/data` in production or `./localdata` in development.
+Runtime data goes under `/data`.
 
 Config goes under `/config` in production.
 

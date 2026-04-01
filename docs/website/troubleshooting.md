@@ -61,6 +61,8 @@ Things that affect throughput:
 
 The Data page can clear existing `city`, `state`, and `country` values in immich.
 
+See [Using the App](./using-the-app.md) for the reset options and what each one does.
+
 Because this is a destructive write operation against immich metadata, back up your database first:
 
 - [Backup and Restore | Immich](https://docs.immich.app/administration/backup-and-restore/)

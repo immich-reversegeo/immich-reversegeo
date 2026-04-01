@@ -64,3 +64,8 @@ docker compose up -d
 - More detailed country data is downloaded only when needed.
 - The app needs internet access the first time it downloads data for a new country.
 - Large countries can use hundreds of megabytes each under `/data`.
+
+## After install
+
+- Use [Configuration](./configuration.md) for database and processing settings.
+- Use [Using the App](./using-the-app.md) for manual runs, coordinate testing, and reset tools.
