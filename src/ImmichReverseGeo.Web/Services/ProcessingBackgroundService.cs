@@ -239,11 +239,8 @@ public class ProcessingBackgroundService(
                 }
             }
 
-            // 5. City fallback — promote state → city when divisions resolve only a broad area.
-            if (geoResult.City is null && geoResult.State is not null)
-            {
-                geoResult = geoResult with { City = geoResult.State };
-            }
+            // 5. City fallback — prefer city, then state, then country for country-only microstates.
+            geoResult = geoResult.WithFallbackCity();
 
             // 6. Write back (only if we have country AND city)
             step = "WriteLocation";

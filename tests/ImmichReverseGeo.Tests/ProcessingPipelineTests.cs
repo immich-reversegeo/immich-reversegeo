@@ -21,6 +21,26 @@ public class ProcessingPipelineTests
     }
 
     [TestMethod]
+    public void GeoResult_WithFallbackCity_UsesStateBeforeCountry()
+    {
+        var result = new GeoResult(Country: "Switzerland", State: "Zurich", City: null);
+
+        var finalized = result.WithFallbackCity();
+
+        Assert.AreEqual("Zurich", finalized.City);
+    }
+
+    [TestMethod]
+    public void GeoResult_WithFallbackCity_UsesCountryWhenNoStateOrCity()
+    {
+        var result = new GeoResult(Country: "Vatican City", State: null, City: null);
+
+        var finalized = result.WithFallbackCity();
+
+        Assert.AreEqual("Vatican City", finalized.City);
+    }
+
+    [TestMethod]
     public void ProcessingState_IncrementProcessed_UpdatesCounter()
     {
         var s = new ProcessingState();

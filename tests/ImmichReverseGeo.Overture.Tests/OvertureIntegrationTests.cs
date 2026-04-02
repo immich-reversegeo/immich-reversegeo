@@ -166,6 +166,61 @@ public class OvertureIntegrationTests
     }
 
     [TestMethod]
+    public async Task OvertureDivisions_BundledCountryLookup_VaticanCity_ReturnsVaticanCity()
+    {
+        var sourceDb = Path.GetFullPath(Path.Combine(
+            AppContext.BaseDirectory,
+            "..", "..", "..", "..",
+            "src", "ImmichReverseGeo.Web", "bundled-data", "defaults", "overture-country-divisions.db"));
+
+        if (!File.Exists(sourceDb))
+        {
+            Assert.Inconclusive($"Bundled country divisions DB not found at {sourceDb}");
+            return;
+        }
+
+        var tempRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(tempRoot, "defaults"));
+        File.Copy(sourceDb, Path.Combine(tempRoot, "defaults", "overture-country-divisions.db"), overwrite: true);
+
+        try
+        {
+            var places = new OverturePlacesService(
+                NullLogger<OverturePlacesService>.Instance,
+                tempRoot,
+                tempRoot);
+            var service = new OvertureDivisionsService(
+                NullLogger<OvertureDivisionsService>.Instance,
+                places,
+                tempRoot,
+                tempRoot,
+                alpha2 => alpha2.ToUpperInvariant() switch
+                {
+                    "VA" => "VAT",
+                    _ => null
+                });
+
+            var result = await service.FindBundledCountryAsync(
+                41.9060875,
+                12.454566944444444);
+
+            Assert.AreEqual("VAT", result.Iso3);
+            Assert.AreEqual("Vatican City", result.CountryName);
+            Assert.AreEqual("VA", result.Alpha2);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [TestMethod]
     [TestCategory("Integration")]
     public async Task OvertureInfrastructure_FullAirportExport_ReportsSize()
     {

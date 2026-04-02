@@ -521,6 +521,11 @@
             city = r.FinalState;
             r.FinalCitySource = r.FinalStateSource;
         }
+        else if (city is null && r.CountryName is not null)
+        {
+            city = r.CountryName;
+            r.FinalCitySource = r.FinalCountrySource;
+        }
 
         r.FinalCity = city;
         r.Trace.Add($"Final city decision: {r.FinalCity ?? "no result"}");
