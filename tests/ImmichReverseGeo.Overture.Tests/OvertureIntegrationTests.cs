@@ -63,10 +63,7 @@ public class OvertureIntegrationTests
     [TestMethod]
     public async Task OvertureInfrastructure_BundledLookup_ZurichAirportGateArea_ReturnsZurichAirport()
     {
-        var sourceDb = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory,
-            "..", "..", "..", "..",
-            "src", "ImmichReverseGeo.Web", "bundled-data", "defaults", "overture-airports.db"));
+        var sourceDb = GetBundledTestDataPath("overture-airports.db");
 
         if (!File.Exists(sourceDb))
         {
@@ -113,10 +110,7 @@ public class OvertureIntegrationTests
     [TestMethod]
     public async Task OvertureDivisions_BundledCountryLookup_ZurichAirportGateArea_ReturnsSwitzerland()
     {
-        var sourceDb = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory,
-            "..", "..", "..", "..",
-            "src", "ImmichReverseGeo.Web", "bundled-data", "defaults", "overture-country-divisions.db"));
+        var sourceDb = GetBundledTestDataPath("overture-country-divisions.db");
 
         if (!File.Exists(sourceDb))
         {
@@ -400,5 +394,10 @@ public class OvertureIntegrationTests
         }
 
         throw new InvalidCastException($"Unsupported blob value type '{value.GetType().FullName}'.");
+    }
+
+    private static string GetBundledTestDataPath(string fileName)
+    {
+        return Path.Combine(AppContext.BaseDirectory, "data", fileName);
     }
 }

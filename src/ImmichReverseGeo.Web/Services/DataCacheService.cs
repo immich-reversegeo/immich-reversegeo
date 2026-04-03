@@ -2,6 +2,7 @@ using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
 using System.Diagnostics;
+using System.Globalization;
 using System.IO;
 using System.Linq;
 using System.Text.Json;
@@ -72,6 +73,36 @@ public class DataCacheService
     public string? Alpha2ToIso3(string alpha2)
     {
         return _alpha2ToIso3.TryGetValue(alpha2.ToUpperInvariant(), out var iso3) ? iso3 : null;
+    }
+
+    public IReadOnlyList<string> GetKnownIso3Codes()
+    {
+        return _iso3ToAlpha2.Keys
+            .OrderBy(code => code, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+    }
+
+    public IReadOnlyList<KnownCountryOption> GetKnownCountries()
+    {
+        return _iso3ToAlpha2
+            .Select(kvp =>
+            {
+                var iso3 = kvp.Key.ToUpperInvariant();
+                var alpha2 = kvp.Value.ToUpperInvariant();
+                var displayName = alpha2;
+
+                try
+                {
+                    displayName = new RegionInfo(alpha2).EnglishName;
+                }
+                catch
+                {
+                }
+
+                return new KnownCountryOption(iso3, alpha2, displayName);
+            })
+            .OrderBy(country => country.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
     }
 
     public Dictionary<string, OvertureDivisionStatus> GetOvertureDivisionStatus()
@@ -523,4 +554,9 @@ public enum OvertureDivisionEnsureResult
     AlreadyReady,
     AwaitedExistingDownload,
     StartedDownload
+}
+
+public record KnownCountryOption(string Iso3, string Alpha2, string DisplayName)
+{
+    public string Label => $"{DisplayName} ({Iso3})";
 }

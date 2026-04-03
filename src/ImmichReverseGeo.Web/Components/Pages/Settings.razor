@@ -191,6 +191,14 @@
     </div>
 </section>
 
+<section class="settings-card">
+    <h3>City Resolver</h3>
+    <p class="section-intro">Country-specific city matching now has its own dedicated page so the main settings stay focused.</p>
+    <div class="btn-row">
+        <a class="btn btn-secondary" href="/city-resolver">Open City Resolver</a>
+    </div>
+</section>
+
 <div class="btn-row">
     <button @onclick="Save" class="btn btn-primary">Save All Settings</button>
 </div>
@@ -248,5 +256,4 @@
     {
         _schedule.Time = e.Value?.ToString() ?? "02:00";
     }
-
 }

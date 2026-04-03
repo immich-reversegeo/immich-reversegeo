@@ -27,7 +27,8 @@ public class ConfigService(ILogger<ConfigService> logger, string? configDir = nu
         }
 
         await using var fs = File.OpenRead(_configPath);
-        return await JsonSerializer.DeserializeAsync<AppConfig>(fs, _json) ?? new AppConfig();
+        var config = await JsonSerializer.DeserializeAsync<AppConfig>(fs, _json) ?? new AppConfig();
+        return EnsureDefaults(config);
     }
 
     public async Task SaveConfigAsync(AppConfig config)
@@ -44,4 +45,14 @@ public class ConfigService(ILogger<ConfigService> logger, string? configDir = nu
         Username: Environment.GetEnvironmentVariable("DB_USERNAME") ?? "postgres",
         Password: Environment.GetEnvironmentVariable("DB_PASSWORD") ?? "",
         Database: Environment.GetEnvironmentVariable("DB_DATABASE_NAME") ?? "immich");
+
+    private static AppConfig EnsureDefaults(AppConfig config)
+    {
+        config.Schedule ??= new ScheduleConfig();
+        config.Processing ??= new ProcessingConfig();
+        config.Processing.CityResolver ??= new CityResolverConfig();
+        config.Processing.CityResolver.DefaultProfile ??= CityResolverProfile.CreateEmpty();
+        config.Processing.CityResolver.CountryOverrides ??= new(StringComparer.OrdinalIgnoreCase);
+        return config;
+    }
 }

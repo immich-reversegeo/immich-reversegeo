@@ -34,6 +34,7 @@ public class ConfigServiceTests
         Assert.AreEqual("0 * * * *", cfg.Schedule.Cron);
         Assert.AreEqual(50, cfg.Processing.BatchSize);
         Assert.IsTrue(cfg.Processing.UseAirportInfrastructure);
+        Assert.AreEqual(0, cfg.Processing.CityResolver.CountryOverrides.Count);
     }
 
     [TestMethod]
@@ -49,6 +50,42 @@ public class ConfigServiceTests
         var loaded = await svc2.GetConfigAsync();
         Assert.AreEqual(99, loaded.Processing.BatchSize);
         Assert.IsFalse(loaded.Processing.UseAirportInfrastructure);
+    }
+
+    [TestMethod]
+    public async Task GetConfig_LegacySettingsWithoutCityResolver_AddsCompatibleDefaults()
+    {
+        Directory.CreateDirectory(_tempDir);
+        var settingsPath = Path.Combine(_tempDir, "settings.json");
+        await File.WriteAllTextAsync(
+            settingsPath,
+            """
+            {
+              "schedule": {
+                "cron": "0 * * * *",
+                "enabled": true
+              },
+              "processing": {
+                "batchSize": 25,
+                "batchDelayMs": 250,
+                "maxDegreeOfParallelism": 2,
+                "useAirportInfrastructure": false,
+                "verboseLogging": true
+              }
+            }
+            """);
+
+        var svc = new ConfigService(NullLogger<ConfigService>.Instance, configDir: _tempDir);
+
+        var loaded = await svc.GetConfigAsync();
+
+        Assert.IsNotNull(loaded.Processing.CityResolver);
+        Assert.IsNotNull(loaded.Processing.CityResolver.DefaultProfile);
+        Assert.IsNotNull(loaded.Processing.CityResolver.CountryOverrides);
+        Assert.AreEqual(0, loaded.Processing.CityResolver.CountryOverrides.Count);
+        Assert.AreEqual(25, loaded.Processing.BatchSize);
+        Assert.IsFalse(loaded.Processing.UseAirportInfrastructure);
+        Assert.IsTrue(loaded.Processing.VerboseLogging);
     }
 
     [TestMethod]

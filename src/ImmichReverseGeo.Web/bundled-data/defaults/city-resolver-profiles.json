@@ -1,0 +1,20 @@
+{
+  "defaultProfile": {
+    "preferredSubtypes": ["locality", "borough", "localadmin", "macrohood", "neighborhood", "microhood"],
+    "tieBreakMode": "smallest-area"
+  },
+  "countryOverrides": {
+    "DEU": {
+      "preferredSubtypes": ["county", "locality", "localadmin", "borough", "macrohood", "neighborhood", "microhood"],
+      "tieBreakMode": "largest-area"
+    },
+    "FIN": {
+      "preferredSubtypes": ["locality", "localadmin", "borough", "macrohood", "neighborhood", "microhood"],
+      "tieBreakMode": "largest-area"
+    },
+    "FRA": {
+      "preferredSubtypes": ["localadmin", "locality", "county", "borough", "macrohood", "neighborhood", "microhood"],
+      "tieBreakMode": "largest-area"
+    }
+  }
+}

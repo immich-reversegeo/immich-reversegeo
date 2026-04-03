@@ -1,5 +1,6 @@
 using ImmichReverseGeo.Overture.Models;
 using ImmichReverseGeo.Overture.Services;
+using ImmichReverseGeo.Core.Models;
 
 namespace ImmichReverseGeo.Overture.Tests;
 
@@ -128,6 +129,57 @@ public class OvertureDivisionsLogicTests
         ]);
 
         Assert.AreEqual("Real Administrative Area", result);
+    }
+
+    [TestMethod]
+    public void SelectCityName_UsesConfiguredSubtypeOrder()
+    {
+        var result = OvertureDivisionsLogic.SelectCityName(
+        [
+            CreateDiagnostic("locality", "Chassieu", bboxArea: 0.00217),
+            CreateDiagnostic("localadmin", "Lyon", bboxArea: 0.39414)
+        ],
+        new CityResolverProfile
+        {
+            PreferredSubtypes = ["localadmin", "locality"],
+            TieBreakMode = CityResolverTieBreakModes.LargestArea
+        });
+
+        Assert.AreEqual("Lyon", result);
+    }
+
+    [TestMethod]
+    public void SelectCityName_UsesLargestAreaTieBreakWithinSubtypePool()
+    {
+        var result = OvertureDivisionsLogic.SelectCityName(
+        [
+            CreateDiagnostic("locality", "Armfelt", bboxArea: 0.000239),
+            CreateDiagnostic("locality", "Salo", bboxArea: 0.60364)
+        ],
+        new CityResolverProfile
+        {
+            PreferredSubtypes = ["locality", "localadmin"],
+            TieBreakMode = CityResolverTieBreakModes.LargestArea
+        });
+
+        Assert.AreEqual("Salo", result);
+    }
+
+    [TestMethod]
+    public void SelectCityName_UsesConfiguredCountyPreference()
+    {
+        var result = OvertureDivisionsLogic.SelectCityName(
+        [
+            CreateDiagnostic("locality", "Altstadt-Lehel", bboxArea: 0.000856),
+            CreateDiagnostic("county", "Munich", bboxArea: 0.067538, adminLevel: 2)
+        ],
+        new CityResolverProfile
+        {
+            PreferredSubtypes = ["county", "locality", "localadmin"],
+            TieBreakMode = CityResolverTieBreakModes.LargestArea
+        });
+
+        Assert.AreEqual("Munich", result);
     }
 
     [TestMethod]
