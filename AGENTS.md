@@ -10,6 +10,11 @@
 - The service defaults to port `8080` in Docker and `5122` for local dev.
 - The Docker image name is `immich-reversegeo` (or `ghcr.io/immich-reversegeo/immich-reversegeo`).
 - Keep public docs and README copy concise and plain. Avoid hype, filler, and over-marketing language.
+- Write public docs for end users and self-hosters, not for contributors or maintainers.
+- Prefer plain-language explanations over internal data-model terms. Introduce terms like `division_area`, `subtype`, or `admin_level` only when they are necessary, and explain them in user-facing language.
+- Public docs should explain user goals, limits, and recommended workflow first. Technical implementation detail should only appear when it helps the reader make a decision.
+- When documenting advanced features, include what the feature can fix, what it cannot fix, and how to validate behavior with the app before changing settings.
+- Prefer concrete troubleshooting steps over abstract descriptions. If the recommended workflow is “use Lookup first, inspect the result, then decide,” say that directly.
 - Public docs use **Zensical** with the existing `mkdocs.yml` compatibility path, not a separate static-site generator setup. Main public routes should live under the website docs.
 - Public website content lives under `docs/website/`. Maintainer-only docs live under `docs/maintainer/`.
 - Keep the README product-first. Public setup and product documentation should usually live in `docs/website/` or `CONTRIBUTING.md`, not in the README.

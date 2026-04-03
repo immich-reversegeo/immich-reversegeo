@@ -57,6 +57,7 @@ builder.Services.AddSingleton(sp =>
 });
 
 builder.Services.AddSingleton<DataCacheService>();
+builder.Services.AddSingleton<CityResolverProfileCatalogService>();
 builder.Services.AddSingleton(sp =>
     new OverturePlacesService(
         sp.GetRequiredService<ILogger<OverturePlacesService>>(),

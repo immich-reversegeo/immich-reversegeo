@@ -19,4 +19,9 @@
     <ProjectReference Include="..\..\src\ImmichReverseGeo.Overture\ImmichReverseGeo.Overture.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <Content Include="..\..\src\ImmichReverseGeo.Web\bundled-data\defaults\overture-airports.db" Link="data\overture-airports.db" CopyToOutputDirectory="PreserveNewest" />
+    <Content Include="..\..\src\ImmichReverseGeo.Web\bundled-data\defaults\overture-country-divisions.db" Link="data\overture-country-divisions.db" CopyToOutputDirectory="PreserveNewest" />
+  </ItemGroup>
+
 </Project>

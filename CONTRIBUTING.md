@@ -84,6 +84,32 @@ The app does not parse `.env` directly. In Docker setups, Compose is expected to
 - Include screenshots for UI changes when helpful.
 - Call out follow-up work or known limitations.
 
+### City Resolver defaults
+
+If you want to improve the bundled city resolver defaults for everyone, please keep the change evidence-driven.
+
+The bundled catalog lives in:
+
+- [`src/ImmichReverseGeo.Web/bundled-data/defaults/city-resolver-profiles.json`](./src/ImmichReverseGeo.Web/bundled-data/defaults/city-resolver-profiles.json)
+
+Recommended workflow:
+
+1. Reproduce the problem in the Lookup page with real coordinates.
+2. Confirm which division candidates are actually present.
+3. Verify that the desired result is achievable by subtype order or broader-vs-tighter tie-break behavior.
+4. Update the bundled profile only after that is clear.
+
+Please include in the PR description:
+
+- the country ISO3 code
+- one or more example coordinates
+- current result
+- expected result
+- why the new profile is a better default
+- any limits or known tradeoffs you noticed
+
+If the desired place is not in the candidate list, that usually means the fix belongs in upstream data or a different resolver step, not in the bundled city resolver profile.
+
 ## Commits
 
 - Prefer [Conventional Commits](https://www.conventionalcommits.org/en/v1.0.0/) where practical.

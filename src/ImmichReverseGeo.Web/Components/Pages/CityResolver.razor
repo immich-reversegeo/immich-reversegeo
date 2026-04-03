@@ -1,0 +1,605 @@
+@page "/city-resolver"
+@rendermode InteractiveServer
+@using ImmichReverseGeo.Core.Models
+@inject ConfigService Config
+@inject DataCacheService Cache
+@inject CityResolverProfileCatalogService CityResolverCatalog
+
+<h2>City Resolver</h2>
+<p class="page-desc">Choose how Immich ReverseGeo should prefer broader or tighter city-like divisions, with curated bundled defaults and optional country overrides.</p>
+
+<section class="settings-card">
+    <h3>How To Use This</h3>
+    <p class="section-intro">Start with Lookup first. Check which country matched, which cached division candidates came back, and whether the wrong result is actually fixable with subtype order or tie-break rules.</p>
+    <div class="btn-row">
+        <a class="btn btn-secondary" href="/lookup">Open Lookup</a>
+        <a class="btn btn-secondary" href="https://immich-reversegeo.github.io/configuration/#city-resolver" target="_blank" rel="noopener">Open Docs</a>
+        <a class="btn btn-secondary" href="https://github.com/immich-reversegeo/immich-reversegeo/blob/master/CONTRIBUTING.md#city-resolver-defaults" target="_blank" rel="noopener">PR Guide</a>
+    </div>
+    <p class="hint">`admin_level` is shown in Lookup, but it is not a user-facing control here. The current resolver mainly uses subtype order and broader-vs-tighter tie-breaks, with admin level only as a secondary internal signal when present.</p>
+</section>
+
+@if (_saved)
+{
+    <div class="alert alert-success">City resolver settings saved.</div>
+}
+@if (_saveError is not null)
+{
+    <div class="alert alert-error">@_saveError</div>
+}
+
+<section class="settings-card">
+    <h3>Bundled Defaults</h3>
+    <p class="section-intro">These curated defaults ship with the app and can improve over time without forcing you to hand-tune every country.</p>
+
+    <div class="schedule-summary">
+        <div class="schedule-summary-label">Global Profile</div>
+        @RenderProfileSummary(_bundledDefaultProfile, "Resolver behavior")
+        <div class="schedule-summary-detail">User overrides are layered on top of this profile.</div>
+    </div>
+</section>
+
+<section class="settings-card">
+    <h3>Global Override</h3>
+    <p class="section-intro">Only turn this on if you want to change the default behavior for countries without a specific override.</p>
+
+    <div class="form-group">
+        <label><input type="checkbox" @bind="_useDefaultOverride" /> Customize the global default profile</label>
+    </div>
+
+    @if (_useDefaultOverride)
+    {
+        <div class="resolver-card">
+            <div class="resolver-card-header">
+                <div>
+                    <div class="resolver-country-name">Global override</div>
+                    <div class="resolver-country-meta">Applies before any country-specific override.</div>
+                </div>
+            </div>
+
+            <div class="form-group">
+                <label>Tie-break mode</label>
+                <select class="form-control" @bind="_defaultTieBreakMode">
+                    <option value="@CityResolverTieBreakModes.SmallestArea">Prefer tighter area</option>
+                    <option value="@CityResolverTieBreakModes.LargestArea">Prefer broader area</option>
+                </select>
+            </div>
+
+            <div class="form-group">
+                <label>Preferred subtype order</label>
+                <div class="resolver-subtype-list">
+                    @if (_defaultSubtypeOrder.Count == 0)
+                    {
+                        <div class="resolver-subtype-item resolver-subtype-empty">No subtype override set.</div>
+                    }
+                    else
+                    {
+                        @foreach (var subtype in _defaultSubtypeOrder.ToList())
+                        {
+                            var index = _defaultSubtypeOrder.IndexOf(subtype);
+                            <div class="resolver-subtype-item">
+                                <span class="resolver-subtype-rank">@(index + 1)</span>
+                                <span class="resolver-subtype-name">@SubtypeLabel(subtype)</span>
+                                <div class="resolver-subtype-actions">
+                                    <button type="button" class="btn btn-secondary" @onclick="() => MoveSubtype(_defaultSubtypeOrder, subtype, -1)" disabled="@(index == 0)">Up</button>
+                                    <button type="button" class="btn btn-secondary" @onclick="() => MoveSubtype(_defaultSubtypeOrder, subtype, 1)" disabled="@(index == _defaultSubtypeOrder.Count - 1)">Down</button>
+                                    <button type="button" class="btn btn-danger" @onclick="() => RemoveSubtype(_defaultSubtypeOrder, subtype)">Remove</button>
+                                </div>
+                            </div>
+                        }
+                    }
+                </div>
+
+                <div class="resolver-add-row">
+                    <select class="form-control" @bind="_defaultPendingSubtype">
+                        <option value="">Add subtype...</option>
+                        @foreach (var subtype in GetAvailableSubtypeOptions(_defaultSubtypeOrder))
+                        {
+                            <option value="@subtype">@SubtypeLabel(subtype)</option>
+                        }
+                    </select>
+                    <button type="button" class="btn btn-secondary" @onclick="AddDefaultSubtype" disabled="@string.IsNullOrWhiteSpace(_defaultPendingSubtype)">Add</button>
+                </div>
+            </div>
+
+            <div class="schedule-summary">
+                <div class="schedule-summary-label">Effective Global Profile</div>
+                @RenderProfileSummary(GetEffectiveGlobalProfile(), "Resolver behavior")
+            </div>
+        </div>
+    }
+</section>
+
+<section class="settings-card">
+    <h3>Country Overrides</h3>
+    <p class="section-intro">Add a country when the curated default is too broad, too narrow, or just picks the wrong kind of administrative area.</p>
+
+    <div class="resolver-add-country">
+        <div class="form-group">
+            <label>Country</label>
+            <div class="resolver-add-country-controls">
+                <input class="form-control"
+                       list="city-resolver-country-options"
+                       @bind="_newCountryInput"
+                       placeholder="Search by country or ISO3, for example Germany or DEU" />
+                <button type="button" class="btn btn-primary" @onclick="AddCountryOverride">Add Country Override</button>
+            </div>
+            <datalist id="city-resolver-country-options">
+                @foreach (var country in _knownCountries)
+                {
+                    <option value="@country.Label"></option>
+                }
+            </datalist>
+            <span class="hint">Pick a country by name, then add an override row for it.</span>
+        </div>
+    </div>
+
+    @if (_countryInputError is not null)
+    {
+        <div class="error">@_countryInputError</div>
+    }
+
+    @if (_countryEditors.Count == 0)
+    {
+        <div class="schedule-summary schedule-summary-muted">
+            <div class="schedule-summary-label">Country Overrides</div>
+            <div class="schedule-summary-value">None configured</div>
+            <div class="schedule-summary-detail">Bundled defaults will be used for all countries.</div>
+        </div>
+    }
+    else
+    {
+        @foreach (var editor in _countryEditors)
+        {
+            var effectiveProfile = GetEffectiveCountryProfile(editor);
+            <details class="resolver-card resolver-disclosure">
+                <summary class="resolver-card-header resolver-card-summary">
+                    <div>
+                        <div class="resolver-country-name">@editor.Country.DisplayName</div>
+                        <div class="resolver-country-meta">@editor.Country.Iso3 · @editor.Country.Alpha2</div>
+                        <div class="resolver-country-summary">@DescribeProfileInline(effectiveProfile)</div>
+                    </div>
+                </summary>
+
+                <div class="resolver-card-header">
+                    <div>
+                        <div class="resolver-country-name">@editor.Country.DisplayName override</div>
+                        <div class="resolver-country-meta">Adjust this country without changing the global defaults.</div>
+                    </div>
+                    <button type="button" class="btn btn-danger" @onclick="() => RemoveCountryOverride(editor)">Remove</button>
+                </div>
+
+                <div class="form-group">
+                    <label>Tie-break mode</label>
+                    <select class="form-control" @bind="editor.TieBreakMode">
+                        <option value="@CityResolverTieBreakModes.SmallestArea">Prefer tighter area</option>
+                        <option value="@CityResolverTieBreakModes.LargestArea">Prefer broader area</option>
+                    </select>
+                </div>
+
+                <div class="form-group">
+                    <label>Preferred subtype order</label>
+                    <div class="resolver-subtype-list">
+                        @if (editor.PreferredSubtypes.Count == 0)
+                        {
+                            <div class="resolver-subtype-item resolver-subtype-empty">No subtype override set.</div>
+                        }
+                        else
+                        {
+                            @foreach (var subtype in editor.PreferredSubtypes.ToList())
+                            {
+                                var index = editor.PreferredSubtypes.IndexOf(subtype);
+                                <div class="resolver-subtype-item">
+                                    <span class="resolver-subtype-rank">@(index + 1)</span>
+                                    <span class="resolver-subtype-name">@SubtypeLabel(subtype)</span>
+                                    <div class="resolver-subtype-actions">
+                                        <button type="button" class="btn btn-secondary" @onclick="() => MoveSubtype(editor.PreferredSubtypes, subtype, -1)" disabled="@(index == 0)">Up</button>
+                                        <button type="button" class="btn btn-secondary" @onclick="() => MoveSubtype(editor.PreferredSubtypes, subtype, 1)" disabled="@(index == editor.PreferredSubtypes.Count - 1)">Down</button>
+                                        <button type="button" class="btn btn-danger" @onclick="() => RemoveSubtype(editor.PreferredSubtypes, subtype)">Remove</button>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+
+                    <div class="resolver-add-row">
+                        <select class="form-control" @bind="editor.PendingSubtype">
+                            <option value="">Add subtype...</option>
+                            @foreach (var subtype in GetAvailableSubtypeOptions(editor.PreferredSubtypes))
+                            {
+                                <option value="@subtype">@SubtypeLabel(subtype)</option>
+                            }
+                        </select>
+                        <button type="button" class="btn btn-secondary" @onclick="() => AddCountrySubtype(editor)" disabled="@string.IsNullOrWhiteSpace(editor.PendingSubtype)">Add</button>
+                    </div>
+                </div>
+
+                <div class="schedule-summary">
+                    <div class="schedule-summary-label">Effective Profile</div>
+                    @RenderProfileSummary(effectiveProfile, "Resolver behavior")
+                    <div class="schedule-summary-detail">This includes the bundled global profile, bundled country profile, and your override for @editor.Country.Iso3.</div>
+                </div>
+            </details>
+        }
+    }
+</section>
+
+<div class="btn-row">
+    <button @onclick="Save" class="btn btn-primary">Save City Resolver Settings</button>
+</div>
+
+@code {
+    private static readonly IReadOnlyList<string> SupportedSubtypes =
+    [
+        "country",
+        "dependency",
+        "macroregion",
+        "region",
+        "macrocounty",
+        "county",
+        "localadmin",
+        "locality",
+        "borough",
+        "macrohood",
+        "neighborhood",
+        "microhood"
+    ];
+
+    private AppConfig _cfg = new();
+    private CityResolverProfile _bundledDefaultProfile = new();
+    private List<KnownCountryOption> _knownCountries = [];
+    private bool _useDefaultOverride;
+    private List<string> _defaultSubtypeOrder = [];
+    private string _defaultTieBreakMode = CityResolverTieBreakModes.SmallestArea;
+    private string _defaultPendingSubtype = string.Empty;
+    private string _newCountryInput = string.Empty;
+    private string? _countryInputError;
+    private List<CountryOverrideEditor> _countryEditors = [];
+    private bool _saved;
+    private string? _saveError;
+
+    protected override async Task OnInitializedAsync()
+    {
+        _cfg = await Config.GetConfigAsync();
+        _knownCountries = Cache.GetKnownCountries().ToList();
+        _bundledDefaultProfile = CityResolverCatalog.GetProfile(null, null);
+
+        var defaultOverride = _cfg.Processing.CityResolver.DefaultProfile;
+        _useDefaultOverride = defaultOverride.PreferredSubtypes.Count > 0 || !string.IsNullOrWhiteSpace(defaultOverride.TieBreakMode);
+        _defaultSubtypeOrder = _useDefaultOverride ? [.. NormalizeEditableSubtypes(defaultOverride.PreferredSubtypes)] : [];
+        _defaultTieBreakMode = _useDefaultOverride
+            ? NormalizeEditableTieBreak(defaultOverride.TieBreakMode)
+            : CityResolverTieBreakModes.SmallestArea;
+
+        _countryEditors = _cfg.Processing.CityResolver.CountryOverrides
+            .OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase)
+            .Select(kvp => CreateCountryEditor(kvp.Key, kvp.Value))
+            .Where(editor => editor is not null)
+            .Select(editor => editor!)
+            .ToList();
+    }
+
+    private void AddDefaultSubtype()
+    {
+        AddSubtype(_defaultSubtypeOrder, _defaultPendingSubtype, () => _defaultPendingSubtype = string.Empty);
+    }
+
+    private void AddCountrySubtype(CountryOverrideEditor editor)
+    {
+        AddSubtype(editor.PreferredSubtypes, editor.PendingSubtype, () => editor.PendingSubtype = string.Empty);
+    }
+
+    private static void AddSubtype(List<string> orderedSubtypes, string pendingSubtype, Action clearPending)
+    {
+        if (string.IsNullOrWhiteSpace(pendingSubtype)
+            || orderedSubtypes.Contains(pendingSubtype, StringComparer.OrdinalIgnoreCase))
+        {
+            clearPending();
+            return;
+        }
+
+        orderedSubtypes.Add(pendingSubtype);
+        clearPending();
+    }
+
+    private static void MoveSubtype(List<string> orderedSubtypes, string subtype, int delta)
+    {
+        var index = orderedSubtypes.FindIndex(item => string.Equals(item, subtype, StringComparison.OrdinalIgnoreCase));
+        if (index < 0)
+        {
+            return;
+        }
+
+        var target = index + delta;
+        if (target < 0 || target >= orderedSubtypes.Count)
+        {
+            return;
+        }
+
+        (orderedSubtypes[index], orderedSubtypes[target]) = (orderedSubtypes[target], orderedSubtypes[index]);
+    }
+
+    private static void RemoveSubtype(List<string> orderedSubtypes, string subtype)
+    {
+        orderedSubtypes.RemoveAll(item => string.Equals(item, subtype, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private void AddCountryOverride()
+    {
+        _countryInputError = null;
+        var country = FindCountry(_newCountryInput);
+        if (country is null)
+        {
+            _countryInputError = "Choose a country from the list or enter a valid ISO3 code.";
+            return;
+        }
+
+        if (_countryEditors.Any(editor => string.Equals(editor.Country.Iso3, country.Iso3, StringComparison.OrdinalIgnoreCase)))
+        {
+            _countryInputError = $"{country.DisplayName} already has an override row.";
+            return;
+        }
+
+        var startingProfile = CityResolverCatalog.GetProfile(BuildCityResolverConfig(), country.Iso3);
+        _countryEditors.Add(new CountryOverrideEditor
+        {
+            Country = country,
+            PreferredSubtypes = [.. startingProfile.PreferredSubtypes],
+            TieBreakMode = startingProfile.TieBreakMode
+        });
+        _countryEditors = _countryEditors
+            .OrderBy(editor => editor.Country.DisplayName, StringComparer.OrdinalIgnoreCase)
+            .ToList();
+        _newCountryInput = string.Empty;
+    }
+
+    private void RemoveCountryOverride(CountryOverrideEditor editor)
+    {
+        _countryEditors.Remove(editor);
+    }
+
+    private KnownCountryOption? FindCountry(string? input)
+    {
+        if (string.IsNullOrWhiteSpace(input))
+        {
+            return null;
+        }
+
+        var trimmed = input.Trim();
+        return _knownCountries.FirstOrDefault(country =>
+                   string.Equals(country.Iso3, trimmed, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(country.DisplayName, trimmed, StringComparison.OrdinalIgnoreCase)
+                || string.Equals(country.Label, trimmed, StringComparison.OrdinalIgnoreCase));
+    }
+
+    private CityResolverProfile GetEffectiveGlobalProfile()
+    {
+        if (!_useDefaultOverride)
+        {
+            return _bundledDefaultProfile;
+        }
+
+        var profileOverride = BuildProfile(_defaultSubtypeOrder, _defaultTieBreakMode, allowEmpty: true);
+        return _bundledDefaultProfile.ApplyOverride(profileOverride).Normalize();
+    }
+
+    private CityResolverProfile GetEffectiveCountryProfile(CountryOverrideEditor editor)
+    {
+        return CityResolverCatalog.GetProfile(BuildCityResolverConfig(), editor.Country.Iso3);
+    }
+
+    private async Task Save()
+    {
+        _saved = false;
+        _saveError = null;
+
+        try
+        {
+            _cfg.Processing.CityResolver = BuildCityResolverConfig();
+            await Config.SaveConfigAsync(_cfg);
+            _saved = true;
+        }
+        catch (Exception ex)
+        {
+            _saveError = ex.Message;
+        }
+    }
+
+    private CityResolverConfig BuildCityResolverConfig()
+    {
+        var config = new CityResolverConfig
+        {
+            DefaultProfile = _useDefaultOverride
+                ? BuildProfile(_defaultSubtypeOrder, _defaultTieBreakMode, allowEmpty: true)
+                : CityResolverProfile.CreateEmpty()
+        };
+
+        foreach (var editor in _countryEditors)
+        {
+            config.CountryOverrides[editor.Country.Iso3] = BuildProfile(editor.PreferredSubtypes, editor.TieBreakMode, allowEmpty: true);
+        }
+
+        return config;
+    }
+
+    private static CityResolverProfile BuildProfile(List<string> orderedSubtypes, string tieBreakMode, bool allowEmpty)
+    {
+        if (allowEmpty && orderedSubtypes.Count == 0 && string.IsNullOrWhiteSpace(tieBreakMode))
+        {
+            return CityResolverProfile.CreateEmpty();
+        }
+
+        if (allowEmpty && orderedSubtypes.Count == 0)
+        {
+            return new CityResolverProfile
+            {
+                PreferredSubtypes = [],
+                TieBreakMode = string.Equals(tieBreakMode, CityResolverTieBreakModes.LargestArea, StringComparison.OrdinalIgnoreCase)
+                    ? CityResolverTieBreakModes.LargestArea
+                    : string.Empty
+            };
+        }
+
+        return new CityResolverProfile
+        {
+            PreferredSubtypes = [.. orderedSubtypes],
+            TieBreakMode = tieBreakMode
+        };
+    }
+
+    private static RenderFragment RenderProfileSummary(CityResolverProfile profile, string heading) => builder =>
+    {
+        var normalizedProfile = profile.Clone().Normalize();
+        var sequence = normalizedProfile.PreferredSubtypes.Select(SubtypeLabel).ToList();
+        var tieBreakHeadline = GetTieBreakHeadline(normalizedProfile.TieBreakMode);
+        var tieBreakDetail = GetTieBreakDetail(normalizedProfile.TieBreakMode);
+
+        var seq = 0;
+
+        builder.OpenElement(seq++, "div");
+        builder.AddAttribute(seq++, "class", "profile-summary");
+
+        builder.OpenElement(seq++, "div");
+        builder.AddAttribute(seq++, "class", "profile-summary-heading");
+        builder.AddContent(seq++, heading);
+        builder.CloseElement();
+
+        builder.OpenElement(seq++, "div");
+        builder.AddAttribute(seq++, "class", "profile-summary-copy");
+        builder.AddContent(seq++, $"Try city-like divisions in this order, then use the tie-break rule if more than one still fits.");
+        builder.CloseElement();
+
+        builder.OpenElement(seq++, "div");
+        builder.AddAttribute(seq++, "class", "profile-summary-section");
+
+        builder.OpenElement(seq++, "div");
+        builder.AddAttribute(seq++, "class", "profile-summary-section-label");
+        builder.AddContent(seq++, "Priority order");
+        builder.CloseElement();
+
+        builder.OpenElement(seq++, "ol");
+        builder.AddAttribute(seq++, "class", "profile-order-list");
+        foreach (var subtype in sequence)
+        {
+            builder.OpenElement(seq++, "li");
+            builder.AddAttribute(seq++, "class", "profile-order-item");
+            builder.AddContent(seq++, subtype);
+            builder.CloseElement();
+        }
+        builder.CloseElement();
+
+        builder.CloseElement();
+
+        builder.OpenElement(seq++, "div");
+        builder.AddAttribute(seq++, "class", "profile-summary-section");
+
+        builder.OpenElement(seq++, "div");
+        builder.AddAttribute(seq++, "class", "profile-summary-section-label");
+        builder.AddContent(seq++, "Tie-break rule");
+        builder.CloseElement();
+
+        builder.OpenElement(seq++, "div");
+        builder.AddAttribute(seq++, "class", "profile-tie-break");
+
+        builder.OpenElement(seq++, "span");
+        builder.AddAttribute(seq++, "class", "profile-tie-break-badge");
+        builder.AddContent(seq++, tieBreakHeadline);
+        builder.CloseElement();
+
+        builder.OpenElement(seq++, "span");
+        builder.AddAttribute(seq++, "class", "profile-tie-break-copy");
+        builder.AddContent(seq++, tieBreakDetail);
+        builder.CloseElement();
+
+        builder.CloseElement();
+
+        builder.CloseElement();
+
+        builder.CloseElement();
+    };
+
+    private static string GetTieBreakHeadline(string tieBreakMode)
+    {
+        return string.Equals(tieBreakMode, CityResolverTieBreakModes.LargestArea, StringComparison.OrdinalIgnoreCase)
+            ? "Prefer broader area"
+            : "Prefer tighter area";
+    }
+
+    private static string GetTieBreakDetail(string tieBreakMode)
+    {
+        return string.Equals(tieBreakMode, CityResolverTieBreakModes.LargestArea, StringComparison.OrdinalIgnoreCase)
+            ? "When the same kind of place still competes, keep the broader match."
+            : "When the same kind of place still competes, keep the tighter match.";
+    }
+
+    private static string DescribeProfileInline(CityResolverProfile profile)
+    {
+        var normalizedProfile = profile.Clone().Normalize();
+        var priority = string.Join(" -> ", normalizedProfile.PreferredSubtypes.Select(SubtypeLabel));
+        return $"Priority: {priority}. Tie-break: {GetTieBreakHeadline(normalizedProfile.TieBreakMode)}.";
+    }
+
+    private static string SubtypeLabel(string subtype)
+    {
+        return subtype switch
+        {
+            "country" => "Country",
+            "dependency" => "Dependency",
+            "macroregion" => "Macroregion",
+            "region" => "Region",
+            "macrocounty" => "Macrocounty",
+            "county" => "County",
+            "localadmin" => "Local admin",
+            "locality" => "Locality",
+            "borough" => "Borough",
+            "macrohood" => "Macrohood",
+            "neighborhood" => "Neighborhood",
+            "microhood" => "Microhood",
+            _ => subtype
+        };
+    }
+
+    private static IEnumerable<string> GetAvailableSubtypeOptions(List<string> orderedSubtypes)
+    {
+        return SupportedSubtypes.Where(subtype => !orderedSubtypes.Contains(subtype, StringComparer.OrdinalIgnoreCase));
+    }
+
+    private CountryOverrideEditor? CreateCountryEditor(string iso3, CityResolverProfile profile)
+    {
+        var country = _knownCountries.FirstOrDefault(option => string.Equals(option.Iso3, iso3, StringComparison.OrdinalIgnoreCase));
+        if (country is null)
+        {
+            return null;
+        }
+
+        return new CountryOverrideEditor
+        {
+            Country = country,
+            PreferredSubtypes = [.. NormalizeEditableSubtypes(profile.PreferredSubtypes)],
+            TieBreakMode = NormalizeEditableTieBreak(profile.TieBreakMode)
+        };
+    }
+
+    private static IEnumerable<string> NormalizeEditableSubtypes(IEnumerable<string> subtypes)
+    {
+        return subtypes
+            .Where(subtype => !string.IsNullOrWhiteSpace(subtype))
+            .Select(subtype => subtype.Trim().ToLowerInvariant())
+            .Distinct(StringComparer.OrdinalIgnoreCase);
+    }
+
+    private static string NormalizeEditableTieBreak(string? tieBreakMode)
+    {
+        return string.Equals(tieBreakMode, CityResolverTieBreakModes.LargestArea, StringComparison.OrdinalIgnoreCase)
+            ? CityResolverTieBreakModes.LargestArea
+            : CityResolverTieBreakModes.SmallestArea;
+    }
+
+    private sealed class CountryOverrideEditor
+    {
+        public required KnownCountryOption Country { get; init; }
+        public List<string> PreferredSubtypes { get; set; } = [];
+        public string TieBreakMode { get; set; } = CityResolverTieBreakModes.SmallestArea;
+        public string PendingSubtype { get; set; } = string.Empty;
+    }
+}

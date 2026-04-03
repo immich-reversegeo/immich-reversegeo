@@ -4,6 +4,7 @@
 @inject OvertureDivisionsService OvertureDivisions
 @inject DataCacheService Cache
 @inject ConfigService Config
+@inject CityResolverProfileCatalogService CityResolverCatalog
 
 <h2>Coordinate Lookup</h2>
 <p class="page-desc">Enter coordinates to inspect how the Overture-backed resolver behaves.</p>
@@ -87,12 +88,13 @@
             else
             {
                 <div class="result-row"><span class="result-key">State</span><span class="result-val">@(_result.OvertureDivisionState ?? "—")</span></div>
-                <div class="result-row"><span class="result-key">City</span><span class="result-val">@(_result.OvertureDivisionCity ?? "—")</span></div>
-                <div class="result-row"><span class="result-key">Winning Area</span><span class="result-val">@(_result.OvertureDivision?.Name ?? "—")</span></div>
-                <div class="result-row"><span class="result-key">Winning Subtype</span><span class="result-val">@(_result.OvertureDivision?.SubType ?? "—")</span></div>
-                <div class="result-row"><span class="result-key">Winning Admin Level</span><span class="result-val">@(_result.OvertureDivision?.AdminLevel?.ToString() ?? "—")</span></div>
+                <div class="result-row"><span class="result-key">Resolved City</span><span class="result-val">@(_result.OvertureDivisionCity ?? "—")</span></div>
+                <div class="result-row"><span class="result-key">City Resolver Profile</span><span class="result-val">@(_result.CityResolverSummary ?? "—")</span></div>
+                <div class="result-row"><span class="result-key">Raw Best Area</span><span class="result-val">@(_result.OvertureDivision?.Name ?? "—")</span></div>
+                <div class="result-row"><span class="result-key">Raw Best Subtype</span><span class="result-val">@(_result.OvertureDivision?.SubType ?? "—")</span></div>
+                <div class="result-row"><span class="result-key">Raw Best Admin Level</span><span class="result-val">@(_result.OvertureDivision?.AdminLevel?.ToString() ?? "—")</span></div>
                 <div class="result-row"><span class="result-key">Cache</span><span class="result-val">@(_result.OvertureDivisionCacheReady ? "ready" : "missing")</span></div>
-                <div class="result-note">Ranking prefers real geometry matches first, then the most specific subtype, then lower admin level, then territorial areas, then tighter bounds.</div>
+                <div class="result-note">Resolved City uses the configured country-aware profile. Raw Best Area shows the strongest single cached division candidate before that policy is applied.</div>
             }
         </div>
 
@@ -452,6 +454,11 @@
 
         r.Trace.Add($"Country matched from bundled Overture divisions: {r.CountryName} ({r.Iso3}, {r.Alpha2 ?? "no alpha-2"})");
 
+        var cfg = await Config.GetConfigAsync();
+        var cityResolverProfile = CityResolverCatalog.GetProfile(cfg.Processing.CityResolver, r.Iso3);
+        r.CityResolverSummary = $"{string.Join(" > ", cityResolverProfile.PreferredSubtypes)} ({cityResolverProfile.TieBreakMode})";
+        r.Trace.Add($"City resolver profile: {r.CityResolverSummary}");
+
         var ensureDivisionTask = EnsureDivisionCacheAsync(r);
         Task<OvertureInfrastructureLookupDiagnostics>? infrastructureTask = null;
         if (_includeAirportInfrastructure)
@@ -468,7 +475,7 @@
         r.OvertureDivisionDiagnostics = await OvertureDivisions.FindContainingDivisionAreasAsync(_lat, _lon, r.Alpha2, r.Iso3);
         r.OvertureDivision = r.OvertureDivisionDiagnostics.BestMatch;
         r.OvertureDivisionState = OvertureDivisionsLogic.SelectStateName(r.OvertureDivisionDiagnostics.Candidates);
-        r.OvertureDivisionCity = OvertureDivisionsLogic.SelectCityName(r.OvertureDivisionDiagnostics.Candidates);
+        r.OvertureDivisionCity = OvertureDivisionsLogic.SelectCityName(r.OvertureDivisionDiagnostics.Candidates, cityResolverProfile);
         r.Trace.Add(r.OvertureDivisionDiagnostics.Error is not null
             ? $"Overture division lookup failed: {r.OvertureDivisionDiagnostics.Error}"
             : $"Overture division admin resolution: state={r.OvertureDivisionState ?? "—"}, city={r.OvertureDivisionCity ?? "—"}");
@@ -564,6 +571,7 @@
         public string? FinalCity { get; set; }
         public string? FinalCitySource { get; set; }
         public string? FinalCountrySource { get; set; }
+        public string? CityResolverSummary { get; set; }
         public List<string> Trace { get; } = [];
     }
 

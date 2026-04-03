@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using DuckDB.NET.Data;
+using ImmichReverseGeo.Core.Models;
 using ImmichReverseGeo.Overture.Models;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
@@ -190,6 +191,7 @@ public class OvertureDivisionsService
         double lon,
         string? alpha2,
         string? iso3,
+        CityResolverProfile? cityResolverProfile = null,
         CancellationToken ct = default)
     {
         var diagnostics = await FindContainingDivisionAreasAsync(lat, lon, alpha2, iso3, ct);
@@ -199,7 +201,7 @@ public class OvertureDivisionsService
         }
 
         var state = OvertureDivisionsLogic.SelectStateName(diagnostics.Candidates);
-        var city = OvertureDivisionsLogic.SelectCityName(diagnostics.Candidates);
+        var city = OvertureDivisionsLogic.SelectCityName(diagnostics.Candidates, cityResolverProfile);
         return new OvertureAdministrativeResult(state, city);
     }
 

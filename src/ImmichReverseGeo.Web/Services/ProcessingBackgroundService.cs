@@ -14,6 +14,7 @@ namespace ImmichReverseGeo.Web.Services;
 public class ProcessingBackgroundService(
     ILogger<ProcessingBackgroundService> logger,
     ConfigService config,
+    CityResolverProfileCatalogService cityResolverCatalog,
     ProcessingState state,
     ImmichDbRepository db,
     OverturePlacesService overturePlaces,
@@ -211,11 +212,13 @@ public class ProcessingBackgroundService(
 
             // 3. Admin lookup — Overture divisions only.
             step = "FindAdminLevels";
+            var cityResolverProfile = cityResolverCatalog.GetProfile(cfg.Processing.CityResolver, iso3);
             var adminResult = await overtureDivisions.ResolveAdministrativeGeoAsync(
                                 asset.Latitude,
                                 asset.Longitude,
                                 alpha2,
                                 iso3,
+                                cityResolverProfile,
                                 ct);
             var geoResult = new GeoResult(countryName!, adminResult?.State, adminResult?.City);
 

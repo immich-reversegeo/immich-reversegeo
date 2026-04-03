@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.Linq;
+using ImmichReverseGeo.Core.Models;
 using ImmichReverseGeo.Overture.Models;
 
 namespace ImmichReverseGeo.Overture.Services;
@@ -123,14 +124,18 @@ public static class OvertureDivisionsLogic
         return SelectPreferredName(candidates, ["region", "macroregion", "county", "macrocounty", "dependency"]);
     }
 
-    public static string? SelectCityName(IEnumerable<OvertureDivisionCandidateDiagnostic> candidates)
+    public static string? SelectCityName(
+        IEnumerable<OvertureDivisionCandidateDiagnostic> candidates,
+        CityResolverProfile? resolverProfile = null)
     {
-        return SelectPreferredName(candidates, ["locality", "borough", "localadmin", "macrohood", "neighborhood", "microhood"]);
+        var profile = (resolverProfile ?? new CityResolverProfile()).Normalize();
+        return SelectPreferredName(candidates, profile.PreferredSubtypes, profile.TieBreakMode);
     }
 
     private static string? SelectPreferredName(
         IEnumerable<OvertureDivisionCandidateDiagnostic> candidates,
-        IReadOnlyList<string> preferredSubtypes)
+        IReadOnlyList<string> preferredSubtypes,
+        string tieBreakMode = CityResolverTieBreakModes.SmallestArea)
     {
         var applicable = candidates
             .Where(c => c.BoundingBoxContainsPoint)
@@ -144,13 +149,16 @@ public static class OvertureDivisionsLogic
         var geometries = applicable.Where(c => c.GeometryContainsPoint).ToList();
         var pool = geometries.Count > 0 ? geometries : applicable;
 
-        return pool
+        var ordered = pool
             .OrderBy(c => GetPreferredSubtypeOrder(c.SubType, preferredSubtypes))
             .ThenBy(c => c.AdminLevel ?? int.MaxValue)
-            .ThenByDescending(c => c.IsTerritorial)
-            .ThenBy(c => c.BoundingBoxArea)
-            .Select(c => c.Name)
-            .FirstOrDefault();
+            .ThenByDescending(c => c.IsTerritorial);
+
+        ordered = string.Equals(tieBreakMode, CityResolverTieBreakModes.LargestArea, StringComparison.OrdinalIgnoreCase)
+            ? ordered.ThenByDescending(c => c.BoundingBoxArea)
+            : ordered.ThenBy(c => c.BoundingBoxArea);
+
+        return ordered.Select(c => c.Name).FirstOrDefault();
     }
 
     private static int GetPreferredSubtypeOrder(string? subtype, IReadOnlyList<string> preferredSubtypes)
