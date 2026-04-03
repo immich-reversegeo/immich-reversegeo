@@ -24,21 +24,21 @@ RUN case "$TARGETARCH" in \
         -c Release -o /app/publish --no-restore -r "$RID" --self-contained false /p:UseAppHost=false
 RUN mkdir -p /volume-seed/config/dataprotection-keys /volume-seed/data \
     && touch /volume-seed/config/.volume-init /volume-seed/data/.volume-init \
-    && chown -R 1654:1654 /volume-seed
+    && chown -R "$APP_UID":"$APP_UID" /volume-seed
 
 FROM mcr.microsoft.com/dotnet/aspnet:10.0-noble-chiseled-extra AS runtime
 WORKDIR /app
 
-COPY --from=build --chown=1654:1654 /app/publish ./
-COPY --from=build --chown=1654:1654 /src/src/ImmichReverseGeo.Web/bundled-data/ /app/bundled-data/
-COPY --from=build --chown=1654:1654 /volume-seed/config/ /config/
-COPY --from=build --chown=1654:1654 /volume-seed/data/ /data/
+COPY --from=build --chown=$APP_UID:$APP_UID /app/publish ./
+COPY --from=build --chown=$APP_UID:$APP_UID /src/src/ImmichReverseGeo.Web/bundled-data/ /app/bundled-data/
+COPY --from=build --chown=$APP_UID:$APP_UID /volume-seed/config/ /config/
+COPY --from=build --chown=$APP_UID:$APP_UID /volume-seed/data/ /data/
 
 ENV ASPNETCORE_URLS=http://+:8080
 ENV DATA_DIR=/data
 ENV CONFIG_DIR=/config
 
-USER 1654
+USER $APP_UID
 
 EXPOSE 8080
 
