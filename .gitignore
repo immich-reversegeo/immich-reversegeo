@@ -13,3 +13,4 @@
 .claude/
 _out/
 reversegeo/
+.playwright-cli/
