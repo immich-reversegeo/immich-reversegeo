@@ -73,6 +73,12 @@ http://localhost:8080
 
 If port `8080` is already in use on your host, change the left side of the compose port mapping and open that port instead.
 
+If the container runs on a remote server, do not expose the UI publicly. Docker-published ports can bypass host firewall rules such as UFW. For a VPS, bind the published port to localhost and use SSH local port forwarding, a VPN, or a trusted reverse proxy with authentication:
+
+```bash
+ssh -N -L 8080:localhost:8080 user@host
+```
+
 ## 4. Test one coordinate
 
 Use the Lookup page to confirm the basics before a full run:

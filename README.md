@@ -25,6 +25,7 @@ Immich ReverseGeo is an independent project and is not affiliated with immich. i
 - The app needs internet access the first time it downloads extra location data for a country.
 - Large downloaded country data can take a lot of disk space. Bigger countries can approach `~500 MB` each, and multiple countries can grow into many gigabytes on disk.
 - If you rebuild or switch containers and see antiforgery or key-ring errors in the browser, restart with the same persisted `/config` volume and reload the page. You may need to clear old browser cookies once after changing setups.
+- Do not expose the web UI publicly. On a VPS or other internet-facing host, bind the published port to localhost or use SSH forwarding, a VPN, or a trusted reverse proxy with authentication.
 
 ## Documentation
 

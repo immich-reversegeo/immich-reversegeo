@@ -38,7 +38,7 @@ This service expects:
 - to run in the same compose project and Docker network as Immich
 - a persistent `/config` volume for settings
 - a persistent `/data` volume for downloaded Overture data and runtime state
-- a free host port for the published web UI, with `8080` as the default example
+- a free host port for the web UI, with `8080` as the default example
 
 Typical variables come from the shared `.env` file:
 
@@ -56,6 +56,30 @@ Then start the stack:
 
 ```bash
 docker compose up -d
+```
+
+## VPS and firewall notes
+
+Do not expose the web UI publicly. Docker-published ports can bypass host firewall rules such as UFW, so do not rely on the host firewall alone to hide a broadly published `8080:8080` mapping on an internet-facing server.
+
+If you run Immich ReverseGeo on a VPS and only need local or SSH-forwarded access, bind the published port to localhost:
+
+```yaml
+ports:
+  - "127.0.0.1:8080:8080"
+  # - "[::1]:8080:8080"
+```
+
+Then use a private path such as SSH local port forwarding, a VPN, or a trusted reverse proxy with authentication:
+
+```bash
+ssh -N -L 8080:localhost:8080 user@host
+```
+
+Then open:
+
+```text
+http://localhost:8080
 ```
 
 ## Runtime notes
