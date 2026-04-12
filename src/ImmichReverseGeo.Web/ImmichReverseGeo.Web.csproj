@@ -18,6 +18,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\\ImmichReverseGeo.Core\\ImmichReverseGeo.Core.csproj" />
+    <ProjectReference Include="..\\ImmichReverseGeo.Gadm\\ImmichReverseGeo.Gadm.csproj" />
     <ProjectReference Include="..\\ImmichReverseGeo.Overture\\ImmichReverseGeo.Overture.csproj" />
   </ItemGroup>
 

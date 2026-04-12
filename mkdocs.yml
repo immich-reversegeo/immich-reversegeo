@@ -68,6 +68,7 @@ nav:
       - Configuration: configuration.md
   - Guide / App:
       - Using the App: using-the-app.md
+      - Data Sources: data-sources.md
       - Architecture: architecture.md
       - Changelog: changelog.md
   - Help:

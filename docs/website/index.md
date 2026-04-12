@@ -137,6 +137,7 @@ Immich ReverseGeo is a strong fit if your photos already have GPS coordinates an
   <a class="quick-link" href="./installation">Installation</a>
   <a class="quick-link" href="./configuration">Configuration</a>
   <a class="quick-link" href="./using-the-app">Using the App</a>
+  <a class="quick-link" href="./data-sources">Data Sources</a>
   <a class="quick-link" href="./architecture">Architecture</a>
   <a class="quick-link" href="./changelog">Changelog</a>
   <a class="quick-link" href="./troubleshooting">Troubleshooting</a>

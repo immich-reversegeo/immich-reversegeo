@@ -96,7 +96,7 @@ Use the Lookup page to confirm the basics before a full run:
 
 Use `Run Now` from the Dashboard for your first manual pass. Start with a conservative batch size first and confirm the resulting location names look right in immich before scaling up.
 
-If you want to start from a clean slate, the Reset Geo Data page under Data can clear existing reverse geo `city`, `state`, and `country` values in immich before reprocessing.
+If you want to start from a clean slate, the Reset Immich Geo Data page under Data can clear existing reverse geo `city`, `state`, and `country` values in immich before reprocessing.
 
 You can reset all reverse geo data, paste specific asset GUIDs to reset only those items, or reset everything that currently matches a selected city, state, or country.
 

@@ -187,6 +187,21 @@
         <span class="hint">Turn this off if you prefer commune or city names over airport names for photos taken on airport grounds.</span>
     </div>
     <div class="form-group">
+        <label><input type="checkbox" @bind="_cfg.Processing.UseGadmAdministrativeAreas" /> Enable GADM administrative areas as an optional source</label>
+        <span class="hint">Uses on-demand GADM country caches for state and city matching when enabled.</span>
+    </div>
+    @if (_cfg.Processing.UseGadmAdministrativeAreas)
+    {
+        <div class="form-group">
+            <label><input type="checkbox" @bind="_cfg.Processing.PreferGadmAdministrativeAreas" /> Prefer GADM administrative results over cached Overture divisions</label>
+            <span class="hint">Turn this on if GADM gives you better state or city names for your library. Leave it off to keep Overture primary and use GADM only as fallback.</span>
+        </div>
+        <div class="form-group">
+            <label><input type="checkbox" @bind="_cfg.Processing.UseGadmTerritoryFallbacks" /> Try related GADM territory packages for split-country families</label>
+            <span class="hint">Useful for places such as Denmark/Greenland/Faroe Islands or United Kingdom/Jersey/Guernsey/Isle of Man when country detection is too coarse.</span>
+        </div>
+    }
+    <div class="form-group">
         <label><input type="checkbox" @bind="_cfg.Processing.VerboseLogging" /> Verbose logging (log every asset)</label>
     </div>
 </section>

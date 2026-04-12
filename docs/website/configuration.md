@@ -43,6 +43,9 @@ The Settings page lets you control:
 - when it runs, using simple presets or a custom cron expression
 - batch size, delay, and parallelism
 - whether airport infrastructure can override the city name
+- whether GADM administrative areas are enabled as an optional source
+- whether GADM should be preferred over cached Overture divisions
+- whether split-territory GADM fallback families should be tried
 - whether every asset is written to the log
 
 Most users should stay on the preset schedule options. Manual runs from the dashboard still work even when automatic scheduling is disabled.
@@ -64,7 +67,43 @@ Most users should stay on the preset schedule options. Manual runs from the dash
     <h3>Airport matching</h3>
     <p>Leave it on if airport names are useful to you. Turn it off if you prefer commune or city names for photos taken on airport grounds.</p>
   </div>
+  <div class="card">
+    <h3>Optional GADM source</h3>
+    <p>You can enable GADM as an extra administrative boundary source, either as a fallback behind Overture or as the preferred admin source.</p>
+  </div>
 </div>
+
+### GADM administrative areas
+
+When enabled, GADM adds another country-level administrative boundary source for `state` and `city` matching.
+
+Recommended starting point:
+
+- turn `Enable GADM administrative areas` on
+- leave `Prefer GADM administrative results` off at first
+- use Lookup to compare results before making GADM the primary admin source
+
+What it can help with:
+
+- countries where Overture admin divisions are sparse or pick the wrong city-like name
+- places where a more traditional admin-boundary dataset gives better municipality or state names
+
+What it does not fix by itself:
+
+- wrong bundled country detection
+- airport names winning when airport matching is still enabled
+- missing places that are not present in either source
+
+### Split-territory fallback families
+
+The optional GADM territory fallback setting lets the app try a small related country family when a sovereign or mainland code may be too coarse.
+
+Examples include:
+
+- Denmark, Greenland, and the Faroe Islands
+- United Kingdom, Jersey, Guernsey, and the Isle of Man
+
+This is a targeted fallback, not a global scan of every possible territory.
 
 ## City Resolver
 
@@ -183,7 +222,7 @@ Config goes under `/config` in production.
   </div>
   <div class="card">
     <h3>Geo resets are a real change</h3>
-    <p>The Reset Geo Data page under Data can reset reverse geo country, state, and city values for all assets, pasted asset GUIDs, or a selected location value before a rerun, so a database backup is strongly recommended first.</p>
+    <p>The Reset Immich Geo Data page under Data can reset reverse geo country, state, and city values for all assets, pasted asset GUIDs, or a selected location value before a rerun, so a database backup is strongly recommended first.</p>
   </div>
   <div class="card">
     <h3>Country downloads take space</h3>
@@ -201,7 +240,7 @@ Config goes under `/config` in production.
     [Reverse Geocoding Settings](https://docs.immich.app/administration/system-settings/#reverse-geocoding-settings).
 
 !!! warning "Clearing location data is a real metadata change"
-    The Reset Geo Data page does not just reset this app's local state. It can clear existing immich reverse geo `city`, `state`, and `country` fields in the database.
+    The Reset Immich Geo Data page does not just reset this app's local state. It can clear existing immich reverse geo `city`, `state`, and `country` fields in the database.
 
     It does not touch any other immich metadata.
 

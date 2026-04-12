@@ -67,6 +67,12 @@ docker build -t immich-reversegeo .
 docker compose up -d
 ```
 
+Test notes:
+- This repo uses MSTest SDK on Microsoft.Testing.Platform v2 via `global.json`.
+- Prefer `npm run test` / `npm run test:integration` for normal runs.
+- If you call `dotnet test` directly, use `--project <path-to-csproj>` with this repo's MTP setup.
+- The root `.runsettings` excludes `Integration` and `Performance` by default; use `integration.runsettings` for explicit integration runs while still excluding `Performance`.
+
 ---
 
 ## Key Architecture
@@ -78,7 +84,8 @@ src/ImmichReverseGeo.Web/
     Pages/           Dashboard.razor, Settings.razor, Data.razor, Logs.razor
   Services/
     ConfigService              Load/save AppConfig; read DB credentials from env vars
-    DataCacheService           On-demand Overture per-country division cache download and ISO mapping
+    AdministrativeAreaResolverService Shared source-ordering policy for Overture and optional GADM admin results
+    CountryCodeService         ISO country mapping and country list helpers
     ImmichDbRepository         Npgsql queries against Immich PostgreSQL (tables: asset, asset_exif)
     ProcessingBackgroundService Hosted service; runs scheduled and on-demand processing
     ProcessingState            Singleton in-memory run state (counts, log ring buffer, OnChanged event)
@@ -90,12 +97,16 @@ src/ImmichReverseGeo.Web/
 src/ImmichReverseGeo.Overture/
   Services/          Overture divisions/places/infrastructure logic and lookup services
   Models/            Overture result/diagnostic records
+src/ImmichReverseGeo.Gadm/
+  Services/          GADM download/cache/export/lookup logic and country fallback catalog
+  Models/            GADM result/diagnostic records
 src/ImmichReverseGeo.Legacy/
   Services/          Legacy reference implementations retained out of the active runtime
   data/              Legacy reference data kept out of the active runtime
                      Do not treat this project as part of the active production path unless explicitly reintroduced.
 tests/ImmichReverseGeo.Tests/            Web/app tests
 tests/ImmichReverseGeo.Overture.Tests/   Overture-specific tests
+tests/ImmichReverseGeo.Gadm.Tests/       GADM-specific tests
 docs/website/                         Public end-user docs
 docs/maintainer/                      Maintainer-only docs
 src/ImmichReverseGeo.Web/Dockerfile
@@ -115,11 +126,13 @@ docker-compose.yml   Reference snippet; joins immich_default network
 
 **On-demand Overture caches:** Per-country `division_area` SQLite caches are downloaded on demand under `/data/overture-divisions/{ISO3}.db`.
 
+**Optional GADM caches:** Per-country GADM SQLite caches are downloaded on demand under `/data/gadm-divisions/{ISO3}.db` when GADM administrative areas are enabled or used from Lookup. GADM is non-commercial; keep that license constraint visible in public docs and settings copy.
+
 **DuckDB Azure on Linux:** For Overture Azure blob access in Linux containers, DuckDB's Azure extension should explicitly run `SET azure_transport_option_type='curl'` after `LOAD azure`. This was the real fix for the `Problem with the SSL CA cert (path? access rights?)` error in the local Docker image. Keep that bootstrap centralized and do not remove it casually during refactors.
 
 **Bundled country resolver:** `OvertureDivisionsService` keeps an in-memory spatial index and prepared geometries for bundled country polygons. If country behavior looks inconsistent, suspect stale app process state or stale bundled DB output first.
 
-**Cache download synchronization:** `DataCacheService` uses a shared per-country in-flight task map so concurrent requests for the same country await the same download/export instead of racing ahead.
+**Cache download synchronization:** Source-specific Overture and GADM cache services each use shared per-country in-flight task maps so concurrent requests for the same country await the same download/export instead of racing ahead.
 
 **City fallback:** Processing and Lookup should stay aligned. Airport infrastructure should override the administrative city only when the airport geometry actually matches the point; otherwise the admin city stays preferred and the airport remains only a fallback when no city was resolved.
 
@@ -139,7 +152,7 @@ docker-compose.yml   Reference snippet; joins immich_default network
 
 **Config persistence:** `AppConfig` is stored at `/config/settings.json` (or `./localdata/settings.json` in dev). DB credentials are always read from environment variables, never from `settings.json`.
 
-**Test framework:** MSTest SDK on Microsoft.Testing.Platform. This repo uses the `MSTest.Sdk` project SDK plus `global.json` with `test.runner = Microsoft.Testing.Platform` for the .NET 10 test path. The repo also includes a root `.runsettings` that excludes `Integration` and `Performance` tests from normal default runs. Regular CI-style test runs should skip those categories unless the task explicitly needs them.
+**Test framework:** MSTest SDK on Microsoft.Testing.Platform v2. This repo uses the `MSTest.Sdk` project SDK plus `global.json` with `test.runner = Microsoft.Testing.Platform` for the .NET 10 test path. The repo includes a root `.runsettings` that excludes `Integration` and `Performance` tests from normal default runs, plus `integration.runsettings` for explicit integration runs while still excluding `Performance`. When invoking `dotnet test` directly, prefer `dotnet test --project <csproj>`. Regular CI-style test runs should skip those categories unless the task explicitly needs them.
 
 ---
 
@@ -149,6 +162,8 @@ docker-compose.yml   Reference snippet; joins immich_default network
 /data/                         (DATA_DIR env var, defaults to /data in prod or ./localdata in dev)
   overture-divisions/
     {ISO3}.db                  Overture per-country division cache (downloaded on demand)
+  gadm-divisions/
+    {ISO3}.db                  Optional GADM per-country division cache (downloaded on demand)
   skipped.db                   SQLite: asset IDs with no resolvable location
 
 /config/                       (CONFIG_DIR env var, defaults to /config)

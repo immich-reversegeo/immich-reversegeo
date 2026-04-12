@@ -1,111 +1,42 @@
 using System;
 using System.Collections.Concurrent;
 using System.Collections.Generic;
-using System.Diagnostics;
-using System.Globalization;
 using System.IO;
-using System.Linq;
-using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
 using DuckDB.NET.Data;
 using ImmichReverseGeo.Core.Models;
-using ImmichReverseGeo.Overture.Services;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 
-namespace ImmichReverseGeo.Web.Services;
+namespace ImmichReverseGeo.Overture.Services;
 
-public class DataCacheService
+public class OvertureDivisionCacheService
 {
-    private readonly ILogger<DataCacheService> _logger;
+    private readonly ILogger<OvertureDivisionCacheService> _logger;
     private readonly string _dataDir;
-    private readonly string _bundledDataDir;
-    private readonly IReadOnlyDictionary<string, string> _iso3ToAlpha2;
-    private readonly IReadOnlyDictionary<string, string> _alpha2ToIso3;
-    private readonly ConcurrentDictionary<string, Lazy<Task>> _inflightOvertureDivisionDownloads = new();
-    private readonly ConcurrentDictionary<string, byte> _readyOvertureDivisionCaches = new();
+    private readonly Func<string, string?> _iso3ToAlpha2;
+    private readonly ConcurrentDictionary<string, Lazy<Task>> _inflightDownloads = new();
+    private readonly ConcurrentDictionary<string, byte> _readyCaches = new();
 
-    public DataCacheService(ILogger<DataCacheService> logger, StorageOptions dirs)
+    public OvertureDivisionCacheService(
+        ILogger<OvertureDivisionCacheService> logger,
+        StorageOptions dirs,
+        Func<string, string?> iso3ToAlpha2)
     {
         _logger = logger;
         _dataDir = dirs.DataDir;
-        _bundledDataDir = dirs.BundledDataDir;
-
-        var sw = Stopwatch.StartNew();
-        logger.LogInformation("DataCacheService: loading ISO 3166 mappings");
-        _iso3ToAlpha2 = LoadIso3166(dirs.BundledDataDir);
-        _alpha2ToIso3 = BuildReverseIsoMap(_iso3ToAlpha2);
-        logger.LogInformation(
-            "DataCacheService: ISO 3166 mappings loaded ({Count} entries) in {Elapsed}ms",
-            _iso3ToAlpha2.Count,
-            sw.ElapsedMilliseconds);
+        _iso3ToAlpha2 = iso3ToAlpha2;
     }
 
-    public static DataCacheService CreateForTest(ILogger<DataCacheService> logger, string bundledDataDir = "data")
-    {
-        return new DataCacheService(logger, bundledDataDir);
-    }
-
-    private DataCacheService(ILogger<DataCacheService> logger, string bundledDataDir)
-    {
-        _logger = logger;
-        _dataDir = Path.GetTempPath();
-        _bundledDataDir = bundledDataDir;
-        _iso3ToAlpha2 = LoadIso3166(bundledDataDir);
-        _alpha2ToIso3 = BuildReverseIsoMap(_iso3ToAlpha2);
-    }
-
-    public DataCacheService(ILogger<DataCacheService> logger, string dataDir, string bundledDataDir = "data")
+    public OvertureDivisionCacheService(ILogger<OvertureDivisionCacheService> logger, string dataDir, Func<string, string?> iso3ToAlpha2)
     {
         _logger = logger;
         _dataDir = dataDir;
-        _bundledDataDir = bundledDataDir;
-        _iso3ToAlpha2 = LoadIso3166(bundledDataDir);
-        _alpha2ToIso3 = BuildReverseIsoMap(_iso3ToAlpha2);
+        _iso3ToAlpha2 = iso3ToAlpha2;
     }
 
-    public string? Iso3ToAlpha2(string iso3)
-    {
-        return _iso3ToAlpha2.TryGetValue(iso3, out var alpha2) ? alpha2 : null;
-    }
-
-    public string? Alpha2ToIso3(string alpha2)
-    {
-        return _alpha2ToIso3.TryGetValue(alpha2.ToUpperInvariant(), out var iso3) ? iso3 : null;
-    }
-
-    public IReadOnlyList<string> GetKnownIso3Codes()
-    {
-        return _iso3ToAlpha2.Keys
-            .OrderBy(code => code, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-    }
-
-    public IReadOnlyList<KnownCountryOption> GetKnownCountries()
-    {
-        return _iso3ToAlpha2
-            .Select(kvp =>
-            {
-                var iso3 = kvp.Key.ToUpperInvariant();
-                var alpha2 = kvp.Value.ToUpperInvariant();
-                var displayName = alpha2;
-
-                try
-                {
-                    displayName = new RegionInfo(alpha2).EnglishName;
-                }
-                catch
-                {
-                }
-
-                return new KnownCountryOption(iso3, alpha2, displayName);
-            })
-            .OrderBy(country => country.DisplayName, StringComparer.OrdinalIgnoreCase)
-            .ToList();
-    }
-
-    public Dictionary<string, OvertureDivisionStatus> GetOvertureDivisionStatus()
+    public Dictionary<string, OvertureDivisionStatus> GetStatus()
     {
         var result = new Dictionary<string, OvertureDivisionStatus>();
         var root = Path.Combine(_dataDir, "overture-divisions");
@@ -126,65 +57,65 @@ public class DataCacheService
                 var count = (long)cmd.ExecuteScalar()!;
                 var downloadedAt = ReadMetaTimestamp(conn, "downloadedAt");
                 var release = ReadMetaValue(conn, "release");
-                result[iso3] = new OvertureDivisionStatus(count, downloadedAt, release);
+                var fileSizeBytes = new FileInfo(file).Length;
+                result[iso3] = new OvertureDivisionStatus(count, downloadedAt, release, fileSizeBytes);
                 if (count > 0)
                 {
-                    _readyOvertureDivisionCaches[iso3] = 0;
+                    _readyCaches[iso3] = 0;
                 }
             }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Failed to read Overture division database for {ISO3}", iso3);
-                result[iso3] = new OvertureDivisionStatus(0, null, null);
+                result[iso3] = new OvertureDivisionStatus(0, null, null, null);
             }
         }
 
         return result;
     }
 
-    public bool HasOvertureDivisionData(string iso3)
+    public bool HasData(string iso3)
     {
         if (string.IsNullOrWhiteSpace(iso3))
         {
             return false;
         }
 
-        var readyCaches = _readyOvertureDivisionCaches;
-        if (readyCaches is not null && readyCaches.ContainsKey(iso3))
+        if (_readyCaches.ContainsKey(iso3))
         {
             return true;
         }
 
-        var hasRows = HasRows(GetOvertureDivisionDbPath(iso3), "division_area");
+        var hasRows = HasRows(GetDbPath(iso3), "division_area");
         if (hasRows)
         {
-            readyCaches?[iso3] = 0;
+            _readyCaches[iso3] = 0;
         }
 
         return hasRows;
     }
 
-    public void DeleteOvertureDivisionFile(string iso3)
+    public void DeleteFile(string iso3)
     {
-        _readyOvertureDivisionCaches.TryRemove(iso3, out _);
-        DeleteFileAndTemps(GetOvertureDivisionDbPath(iso3), iso3);
+        _readyCaches.TryRemove(iso3, out _);
+        DeleteFileAndTemps(GetDbPath(iso3), iso3);
     }
 
-    public (Task Task, OvertureDivisionEnsureResult Result) GetOrStartOvertureDivisionDownload(string iso3, CancellationToken ct = default)
+    public (Task Task, OvertureDivisionEnsureResult Result) GetOrStartDownload(string iso3, CancellationToken ct = default)
     {
-        if (HasOvertureDivisionData(iso3))
+        if (HasData(iso3))
         {
             return (Task.CompletedTask, OvertureDivisionEnsureResult.AlreadyReady);
         }
 
         var startedNew = false;
-        var lazyDownload = _inflightOvertureDivisionDownloads.GetOrAdd(
+        var lazyDownload = _inflightDownloads.GetOrAdd(
             iso3,
             key =>
             {
                 startedNew = true;
                 return new Lazy<Task>(
-                    () => DownloadOvertureDivisionDataInternalAsync(key, ct),
+                    () => DownloadDataInternalAsync(key, ct),
                     LazyThreadSafetyMode.ExecutionAndPublication);
             });
 
@@ -195,9 +126,9 @@ public class DataCacheService
         return (lazyDownload.Value, result);
     }
 
-    public async Task<OvertureDivisionEnsureResult> EnsureOvertureDivisionDataAsync(string iso3, CancellationToken ct = default)
+    public async Task<OvertureDivisionEnsureResult> EnsureDataAsync(string iso3, CancellationToken ct = default)
     {
-        var (downloadTask, result) = GetOrStartOvertureDivisionDownload(iso3, ct);
+        var (downloadTask, result) = GetOrStartDownload(iso3, ct);
 
         try
         {
@@ -208,25 +139,20 @@ public class DataCacheService
         {
             if (downloadTask.IsCompleted)
             {
-                _inflightOvertureDivisionDownloads.TryRemove(iso3, out _);
+                _inflightDownloads.TryRemove(iso3, out _);
             }
         }
     }
 
-    public bool HasOvertureDivisionDownloadInFlight(string iso3)
+    private async Task DownloadDataInternalAsync(string iso3, CancellationToken ct)
     {
-        return _inflightOvertureDivisionDownloads.ContainsKey(iso3);
-    }
-
-    private async Task DownloadOvertureDivisionDataInternalAsync(string iso3, CancellationToken ct)
-    {
-        var dbPath = GetOvertureDivisionDbPath(iso3);
-        if (HasOvertureDivisionData(iso3))
+        var dbPath = GetDbPath(iso3);
+        if (HasData(iso3))
         {
             return;
         }
 
-        var alpha2 = Iso3ToAlpha2(iso3);
+        var alpha2 = _iso3ToAlpha2(iso3);
         if (alpha2 is null)
         {
             throw new InvalidOperationException($"Could not determine alpha-2 code for {iso3}.");
@@ -256,7 +182,7 @@ public class DataCacheService
             }
 
             File.Move(tmpPath, dbPath, overwrite: true);
-            _readyOvertureDivisionCaches[iso3] = 0;
+            _readyCaches[iso3] = 0;
             _logger.LogInformation("Overture division download complete for {ISO3}: {Rows} areas", iso3, rowCount);
         }
         catch
@@ -266,7 +192,7 @@ public class DataCacheService
         }
         finally
         {
-            _inflightOvertureDivisionDownloads.TryRemove(iso3, out _);
+            _inflightDownloads.TryRemove(iso3, out _);
         }
     }
 
@@ -396,7 +322,29 @@ public class DataCacheService
         return rows;
     }
 
-    private bool HasRows(string path, string tableName)
+    private static string GetLatestOvertureReleaseForCache()
+    {
+        try
+        {
+            using var conn = new DuckDBConnection("Data Source=:memory:");
+            conn.Open();
+            OvertureDataAccess.LoadHttpfs(conn);
+            using var query = conn.CreateCommand();
+            query.CommandText = $"SELECT latest FROM '{OverturePlacesLogic.LatestCatalogUrl}'";
+            return query.ExecuteScalar()?.ToString() ?? OverturePlacesLogic.DocumentedFallbackRelease;
+        }
+        catch
+        {
+            return OverturePlacesLogic.DocumentedFallbackRelease;
+        }
+    }
+
+    private string GetDbPath(string iso3)
+    {
+        return Path.Combine(_dataDir, "overture-divisions", $"{iso3}.db");
+    }
+
+    private static bool HasRows(string path, string tableName)
     {
         if (!File.Exists(path))
         {
@@ -457,7 +405,7 @@ public class DataCacheService
         return null;
     }
 
-    private void DeleteFileAndTemps(string path, string iso3)
+    private static void DeleteFileAndTemps(string path, string iso3)
     {
         TryDelete(path);
         var dir = Path.GetDirectoryName(path);
@@ -486,28 +434,6 @@ public class DataCacheService
         }
     }
 
-    private static string GetLatestOvertureReleaseForCache()
-    {
-        try
-        {
-            using var conn = new DuckDBConnection("Data Source=:memory:");
-            conn.Open();
-            OvertureDataAccess.LoadHttpfs(conn);
-            using var query = conn.CreateCommand();
-            query.CommandText = $"SELECT latest FROM '{OverturePlacesLogic.LatestCatalogUrl}'";
-            return query.ExecuteScalar()?.ToString() ?? OverturePlacesLogic.DocumentedFallbackRelease;
-        }
-        catch
-        {
-            return OverturePlacesLogic.DocumentedFallbackRelease;
-        }
-    }
-
-    private string GetOvertureDivisionDbPath(string iso3)
-    {
-        return Path.Combine(_dataDir, "overture-divisions", $"{iso3}.db");
-    }
-
     private static byte[] ReadBlobValue(System.Data.Common.DbDataReader reader, int ordinal)
     {
         var value = reader.GetValue(ordinal);
@@ -525,38 +451,13 @@ public class DataCacheService
 
         throw new InvalidCastException($"Unsupported blob value type '{value.GetType().FullName}' at ordinal {ordinal}.");
     }
-
-    private static IReadOnlyDictionary<string, string> LoadIso3166(string bundledDataDir)
-    {
-        var path = Path.Combine(bundledDataDir, "iso3166.json");
-        if (!File.Exists(path))
-        {
-            return new Dictionary<string, string>();
-        }
-
-        var json = File.ReadAllText(path);
-        return JsonSerializer.Deserialize<Dictionary<string, string>>(json) ?? new Dictionary<string, string>();
-    }
-
-    private static IReadOnlyDictionary<string, string> BuildReverseIsoMap(IReadOnlyDictionary<string, string> iso3ToAlpha2)
-    {
-        return iso3ToAlpha2
-            .Where(kvp => !string.IsNullOrWhiteSpace(kvp.Value))
-            .GroupBy(kvp => kvp.Value.ToUpperInvariant(), kvp => kvp.Key.ToUpperInvariant(), StringComparer.OrdinalIgnoreCase)
-            .ToDictionary(g => g.Key, g => g.First(), StringComparer.OrdinalIgnoreCase);
-    }
 }
 
-public record OvertureDivisionStatus(long RowCount, DateTime? DownloadedAt, string? Release);
+public record OvertureDivisionStatus(long RowCount, DateTime? DownloadedAt, string? Release, long? FileSizeBytes);
 
 public enum OvertureDivisionEnsureResult
 {
     AlreadyReady,
     AwaitedExistingDownload,
     StartedDownload
-}
-
-public record KnownCountryOption(string Iso3, string Alpha2, string DisplayName)
-{
-    public string Label => $"{DisplayName} ({Iso3})";
 }

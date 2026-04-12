@@ -1,6 +1,7 @@
 using System;
 using System.IO;
 using ImmichReverseGeo.Core.Models;
+using ImmichReverseGeo.Gadm.Services;
 using ImmichReverseGeo.Overture.Services;
 using ImmichReverseGeo.Web.Services;
 using Microsoft.AspNetCore.Builder;
@@ -48,6 +49,7 @@ builder.Services.AddSingleton(sp =>
     new ConfigService(
         sp.GetRequiredService<ILogger<ConfigService>>(),
         configDir));
+builder.Services.AddSingleton<CountryCodeService>();
 builder.Services.AddSingleton(sp =>
 {
     var db = sp.GetRequiredService<ConfigService>().GetDbSettings();
@@ -55,9 +57,13 @@ builder.Services.AddSingleton(sp =>
     var builder = new NpgsqlDataSourceBuilder(connectionString);
     return builder.Build();
 });
-
-builder.Services.AddSingleton<DataCacheService>();
 builder.Services.AddSingleton<CityResolverProfileCatalogService>();
+builder.Services.AddSingleton<AdministrativeAreaResolverService>();
+builder.Services.AddSingleton(sp =>
+    new OvertureDivisionCacheService(
+        sp.GetRequiredService<ILogger<OvertureDivisionCacheService>>(),
+        sp.GetRequiredService<StorageOptions>(),
+        sp.GetRequiredService<CountryCodeService>().Iso3ToAlpha2));
 builder.Services.AddSingleton(sp =>
     new OverturePlacesService(
         sp.GetRequiredService<ILogger<OverturePlacesService>>(),
@@ -69,7 +75,15 @@ builder.Services.AddSingleton(sp =>
         sp.GetRequiredService<OverturePlacesService>(),
         sp.GetRequiredService<StorageOptions>().DataDir,
         sp.GetRequiredService<StorageOptions>().BundledDataDir,
-        alpha2 => sp.GetRequiredService<DataCacheService>().Alpha2ToIso3(alpha2)));
+        alpha2 => sp.GetRequiredService<CountryCodeService>().Alpha2ToIso3(alpha2)));
+builder.Services.AddSingleton(sp =>
+    new GadmDivisionCacheService(
+        sp.GetRequiredService<ILogger<GadmDivisionCacheService>>(),
+        sp.GetRequiredService<StorageOptions>()));
+builder.Services.AddSingleton(sp =>
+    new GadmDivisionsService(
+        sp.GetRequiredService<ILogger<GadmDivisionsService>>(),
+        sp.GetRequiredService<StorageOptions>().DataDir));
 builder.Services.AddSingleton<SkippedAssetsRepository>();
 builder.Services.AddSingleton<ImmichDbRepository>();
 builder.Services.AddSingleton<ProcessingState>();

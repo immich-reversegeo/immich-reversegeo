@@ -506,6 +506,9 @@ button:disabled, .btn:disabled {
     max-width: 720px;
     margin-bottom: 1.25rem;
 }
+.settings-card.wide-card {
+    max-width: none;
+}
 .settings-card h3 { margin-top: 0; }
 
 .section-intro {
@@ -1141,6 +1144,10 @@ input[type="text"].env-readonly {
 }
 
 /* ── Data page ────────────────────────────────────────── */
+.content-shell:has(.administrative-cache-page) {
+    width: min(100%, 1320px);
+}
+
 .data-grid {
     display: grid;
     grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
@@ -1247,6 +1254,123 @@ input[type="text"].env-readonly {
 }
 .data-table tbody tr:last-child td { border-bottom: none; }
 .data-table tbody tr:hover td { background: var(--bg-elevated); }
+.cache-filters {
+    display: flex;
+    gap: 1rem;
+    flex-wrap: wrap;
+    align-items: end;
+    margin: 1rem 0 0.75rem;
+}
+.cache-filters .input-group {
+    min-width: 220px;
+}
+.table-scroll {
+    overflow-x: auto;
+    border: 1px solid rgba(124, 135, 255, 0.16);
+    border-radius: var(--radius);
+}
+.cache-table th,
+.cache-table td {
+    white-space: nowrap;
+}
+.cache-table {
+    margin-top: 0;
+    min-width: 980px;
+    table-layout: fixed;
+}
+.cache-table th:nth-child(1),
+.cache-table td:nth-child(1) {
+    width: 7rem;
+}
+.cache-table th:nth-child(2),
+.cache-table td:nth-child(2) {
+    width: 6rem;
+}
+.cache-table th:nth-child(3),
+.cache-table td:nth-child(3) {
+    width: 7.5rem;
+}
+.cache-table th:nth-child(4),
+.cache-table td:nth-child(4) {
+    width: 10rem;
+}
+.cache-table th:nth-child(5),
+.cache-table td:nth-child(5) {
+    width: 7rem;
+}
+.cache-table th:nth-child(6),
+.cache-table td:nth-child(6) {
+    width: 12rem;
+}
+.cache-table th:nth-child(7),
+.cache-table td:nth-child(7) {
+    width: 12rem;
+}
+.cache-table .btn {
+    padding: 0.35rem 0.7rem;
+    font-size: 0.78rem;
+}
+.cache-table thead th {
+    background: var(--bg-surface);
+    position: sticky;
+    top: 0;
+    z-index: 1;
+}
+.table-sort-btn {
+    display: inline-flex;
+    gap: 0.35rem;
+    align-items: center;
+    background: transparent;
+    border: 0;
+    padding: 0;
+    color: inherit;
+    font: inherit;
+    text-transform: inherit;
+    letter-spacing: inherit;
+    cursor: pointer;
+    line-height: inherit;
+}
+.table-sort-btn:hover {
+    color: var(--text-primary);
+}
+.sort-indicator {
+    min-width: 0.7rem;
+    color: var(--accent);
+}
+.source-badge {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    min-width: 5.2rem;
+    padding: 0.18rem 0.55rem;
+    border-radius: 999px;
+    font-size: 0.72rem;
+    font-weight: 800;
+    text-transform: uppercase;
+    letter-spacing: 0.06em;
+    border: 1px solid rgba(124, 135, 255, 0.22);
+    background: rgba(124, 135, 255, 0.08);
+    color: #d7d9ff;
+}
+.source-badge.source-gadm {
+    border-color: rgba(124, 255, 178, 0.24);
+    background: rgba(124, 255, 178, 0.08);
+    color: #b9ffd9;
+}
+.source-badge.source-overture {
+    border-color: rgba(124, 135, 255, 0.26);
+    background: rgba(124, 135, 255, 0.1);
+    color: #d7d9ff;
+}
+.table-actions-cell {
+    white-space: nowrap;
+}
+.table-actions-cell .btn {
+    margin-right: 0.4rem;
+}
+.table-actions-cell .btn:last-child {
+    margin-right: 0;
+}
 
 /* ── Log page ─────────────────────────────────────────── */
 .log-controls {

@@ -215,6 +215,145 @@ public class OvertureIntegrationTests
     }
 
     [TestMethod]
+    [DataRow(51.5074, -0.1278, "GBR", "United Kingdom", "GB", DisplayName = "Mainland Great Britain resolves to GBR")]
+    [DataRow(55.6761, 12.5683, "DNK", "Denmark", "DK", DisplayName = "Mainland Denmark resolves to DNK")]
+    public async Task OvertureDivisions_BundledCountryLookup_MainlandExamples_ReturnExpectedIso3(
+        double lat,
+        double lon,
+        string expectedIso3,
+        string expectedCountryName,
+        string expectedAlpha2)
+    {
+        var sourceDb = GetBundledTestDataPath("overture-country-divisions.db");
+
+        if (!File.Exists(sourceDb))
+        {
+            Assert.Inconclusive($"Bundled country divisions DB not found at {sourceDb}");
+            return;
+        }
+
+        var tempRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(tempRoot, "defaults"));
+        File.Copy(sourceDb, Path.Combine(tempRoot, "defaults", "overture-country-divisions.db"), overwrite: true);
+
+        try
+        {
+            var service = CreateBundledCountryService(tempRoot);
+
+            var result = await service.FindBundledCountryAsync(lat, lon);
+
+            Assert.AreEqual(expectedIso3, result.Iso3);
+            Assert.AreEqual(expectedCountryName, result.CountryName);
+            Assert.AreEqual(expectedAlpha2, result.Alpha2);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [TestMethod]
+    public async Task OvertureDivisions_BundledCountryLookup_TerritoryEdges_ReportCurrentCoverage()
+    {
+        var sourceDb = GetBundledTestDataPath("overture-country-divisions.db");
+
+        if (!File.Exists(sourceDb))
+        {
+            Assert.Inconclusive($"Bundled country divisions DB not found at {sourceDb}");
+            return;
+        }
+
+        var cases = new[]
+        {
+            new { Name = "Greenland", Lat = 64.1814, Lon = -51.6941, ExpectedIso3 = "GRL" },
+            new { Name = "Faroe Islands", Lat = 62.0079, Lon = -6.7900, ExpectedIso3 = "FRO" },
+            new { Name = "Jersey", Lat = 49.1868, Lon = -2.1066, ExpectedIso3 = "JEY" },
+            new { Name = "Guernsey", Lat = 49.4566, Lon = -2.5815, ExpectedIso3 = "GGY" },
+            new { Name = "Isle of Man", Lat = 54.1523, Lon = -4.4861, ExpectedIso3 = "IMN" }
+        };
+
+        var tempRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(tempRoot, "defaults"));
+        File.Copy(sourceDb, Path.Combine(tempRoot, "defaults", "overture-country-divisions.db"), overwrite: true);
+
+        try
+        {
+            var service = CreateBundledCountryService(tempRoot);
+
+            foreach (var testCase in cases)
+            {
+                var result = await service.FindBundledCountryAsync(testCase.Lat, testCase.Lon);
+                TestContext.WriteLine(
+                    $"{testCase.Name}: expected {testCase.ExpectedIso3}, actual {result.Iso3 ?? "<no match>"} ({result.CountryName ?? "no country"})");
+            }
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [TestMethod]
+    [Ignore("Known bundled country lookup gaps for split territories. Enable when country resolver coverage is improved.")]
+    [DataRow(64.1814, -51.6941, "GRL", "Greenland", "GL", DisplayName = "Greenland resolves to GRL")]
+    [DataRow(62.0079, -6.7900, "FRO", "Faroe Islands", "FO", DisplayName = "Faroe Islands resolves to FRO")]
+    [DataRow(49.1868, -2.1066, "JEY", "Jersey", "JE", DisplayName = "Jersey resolves to JEY")]
+    [DataRow(49.4566, -2.5815, "GGY", "Guernsey", "GG", DisplayName = "Guernsey resolves to GGY")]
+    [DataRow(54.1523, -4.4861, "IMN", "Isle of Man", "IM", DisplayName = "Isle of Man resolves to IMN")]
+    public async Task OvertureDivisions_BundledCountryLookup_TerritoryEdges_ShouldReturnExpectedIso3(
+        double lat,
+        double lon,
+        string expectedIso3,
+        string expectedCountryName,
+        string expectedAlpha2)
+    {
+        var sourceDb = GetBundledTestDataPath("overture-country-divisions.db");
+
+        if (!File.Exists(sourceDb))
+        {
+            Assert.Inconclusive($"Bundled country divisions DB not found at {sourceDb}");
+            return;
+        }
+
+        var tempRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(tempRoot, "defaults"));
+        File.Copy(sourceDb, Path.Combine(tempRoot, "defaults", "overture-country-divisions.db"), overwrite: true);
+
+        try
+        {
+            var service = CreateBundledCountryService(tempRoot);
+
+            var result = await service.FindBundledCountryAsync(lat, lon);
+
+            Assert.AreEqual(expectedIso3, result.Iso3);
+            Assert.AreEqual(expectedCountryName, result.CountryName);
+            Assert.AreEqual(expectedAlpha2, result.Alpha2);
+        }
+        finally
+        {
+            try
+            {
+                Directory.Delete(tempRoot, recursive: true);
+            }
+            catch
+            {
+            }
+        }
+    }
+
+    [TestMethod]
     [TestCategory("Integration")]
     public async Task OvertureInfrastructure_FullAirportExport_ReportsSize()
     {
@@ -399,5 +538,32 @@ public class OvertureIntegrationTests
     private static string GetBundledTestDataPath(string fileName)
     {
         return Path.Combine(AppContext.BaseDirectory, "data", fileName);
+    }
+
+    private static OvertureDivisionsService CreateBundledCountryService(string tempRoot)
+    {
+        var places = new OverturePlacesService(
+            NullLogger<OverturePlacesService>.Instance,
+            tempRoot,
+            tempRoot);
+
+        return new OvertureDivisionsService(
+            NullLogger<OvertureDivisionsService>.Instance,
+            places,
+            tempRoot,
+            tempRoot,
+            alpha2 => alpha2.ToUpperInvariant() switch
+            {
+                "CH" => "CHE",
+                "VA" => "VAT",
+                "GB" => "GBR",
+                "DK" => "DNK",
+                "GL" => "GRL",
+                "FO" => "FRO",
+                "JE" => "JEY",
+                "GG" => "GGY",
+                "IM" => "IMN",
+                _ => null
+            });
     }
 }

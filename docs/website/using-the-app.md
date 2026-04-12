@@ -7,6 +7,7 @@ icon: material/application-outline
 This page covers the day-to-day UI for Immich ReverseGeo after setup is complete.
 
 For install-time settings such as database values, schedules, and processing limits, see [Configuration](./configuration.md).
+For a source-by-source explanation of the geographic data behind the app, see [Data Sources](./data-sources.md).
 
 ## Dashboard
 
@@ -25,6 +26,7 @@ Use the Lookup page when you want to test a coordinate before running a full pro
 - it shows the country match, cached administrative area match, optional airport match, and final values that would be written
 - `Include bundled airport infrastructure lookup` lets you test with or without airport matching for that lookup
 - `Include live Overture Places lookup` adds an extra live place search for debugging, but it is slower and not needed for normal use
+- `Prefer cached GADM administrative areas` switches the administrative area part of the lookup to an experimental on-demand GADM cache for that country; country detection still starts with the bundled Overture country data
 
 ## Data tools
 
@@ -36,11 +38,14 @@ The Data area contains maintenance tools that change downloaded caches or Immich
 | `Reset All Data` | Clears Immich reverse geo `city`, `state`, and `country` values for all matching assets and clears the skip list. |
 | `Reset Single Item(s)` | Clears reverse geo values only for the pasted asset GUIDs and removes those assets from the skip list. |
 | `Reset Specific Locations` | Finds assets by an existing city, state, or country value and clears all three reverse geo fields for those matching assets. |
-| `Delete` | Removes one downloaded Overture country cache file. |
-| `Re-download` | Replaces one downloaded Overture country cache with a fresh copy. |
+| `Delete Overture cache` | Removes one downloaded Overture country cache file. |
+| `Re-download Overture cache` | Replaces one downloaded Overture country cache with a fresh copy. |
 | `Delete All Overture Divisions` | Removes every downloaded country cache so they will be fetched again on demand later. |
+| `Delete GADM cache` | Removes one downloaded GADM country cache file. |
+| `Re-download GADM cache` | Replaces one downloaded GADM country cache with a fresh copy. |
+| `Delete All GADM Caches` | Removes every downloaded GADM cache so they will be fetched again on demand later. |
 
-The Reset Geo Data page only clears reverse geo values in `asset_exif`. It does not touch any other Immich metadata.
+The Reset Immich Geo Data page only clears reverse geo values in `asset_exif`. It does not touch any other Immich metadata.
 
 ## Logs
 

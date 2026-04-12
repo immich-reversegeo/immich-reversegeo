@@ -8,6 +8,8 @@ icon: material/compass-outline
 You do not need to understand the internals to use Immich ReverseGeo, but the overall shape is simple: the app reads coordinates from immich, matches them against built-in and downloaded location data, and writes the final place names back.
 </div>
 
+For a plain-language explanation of the active geographic data sources, see [Data Sources](./data-sources.md).
+
 ## Main components
 
 <div class="feature-grid">
@@ -31,10 +33,9 @@ The background processor:
 
 1. reads unprocessed assets from immich
 2. resolves bundled country
-3. ensures per-country Overture divisions cache exists
-4. resolves administrative areas from cached divisions using country-aware city selection rules
-5. optionally queries bundled airport infrastructure
-6. writes city/state/country back to immich when a complete result is available
+3. resolves administrative areas from cached Overture divisions and optionally cached GADM country packages
+4. optionally queries bundled airport infrastructure
+5. writes city/state/country back to immich when a complete result is available
 
 ### Active data sources
 
@@ -45,7 +46,7 @@ The background processor:
   </div>
   <div class="card">
     <h3>Downloaded on demand</h3>
-    <p>Country-specific data is downloaded locally when needed for better state and city matching.</p>
+    <p>Country-specific Overture and optional GADM data is downloaded locally when needed for better state and city matching.</p>
   </div>
   <div class="card">
     <h3>Optional live lookup help</h3>

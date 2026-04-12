@@ -2,7 +2,7 @@
 @rendermode InteractiveServer
 @using ImmichReverseGeo.Core.Models
 @inject ConfigService Config
-@inject DataCacheService Cache
+@inject CountryCodeService CountryCodes
 @inject CityResolverProfileCatalogService CityResolverCatalog
 
 <h2>City Resolver</h2>
@@ -261,7 +261,7 @@
     protected override async Task OnInitializedAsync()
     {
         _cfg = await Config.GetConfigAsync();
-        _knownCountries = Cache.GetKnownCountries().ToList();
+        _knownCountries = CountryCodes.GetKnownCountries().ToList();
         _bundledDefaultProfile = CityResolverCatalog.GetProfile(null, null);
 
         var defaultOverride = _cfg.Processing.CityResolver.DefaultProfile;

@@ -17,13 +17,7 @@
 
   <ItemGroup>
     <ProjectReference Include="..\..\src\ImmichReverseGeo.Core\ImmichReverseGeo.Core.csproj" />
-    <ProjectReference Include="..\..\src\ImmichReverseGeo.Overture\ImmichReverseGeo.Overture.csproj" />
-    <ProjectReference Include="..\..\src\ImmichReverseGeo.Web\ImmichReverseGeo.Web.csproj" />
-  </ItemGroup>
-
-  <ItemGroup>
-    <Content Include="..\..\src\ImmichReverseGeo.Web\bundled-data\iso3166.json" Link="data/iso3166.json" CopyToOutputDirectory="PreserveNewest" />
-    <Content Include="..\..\src\ImmichReverseGeo.Web\bundled-data\defaults\city-resolver-profiles.json" Link="data\city-resolver-profiles.json" CopyToOutputDirectory="PreserveNewest" />
+    <ProjectReference Include="..\..\src\ImmichReverseGeo.Gadm\ImmichReverseGeo.Gadm.csproj" />
   </ItemGroup>
 
 </Project>

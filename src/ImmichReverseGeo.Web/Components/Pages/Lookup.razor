@@ -1,8 +1,10 @@
 @page "/lookup"
 @rendermode InteractiveServer
+@inject GadmDivisionsService GadmDivisions
+@inject GadmDivisionCacheService GadmCache
 @inject OverturePlacesService Overture
+@inject OvertureDivisionCacheService OvertureCache
 @inject OvertureDivisionsService OvertureDivisions
-@inject DataCacheService Cache
 @inject ConfigService Config
 @inject CityResolverProfileCatalogService CityResolverCatalog
 
@@ -44,12 +46,27 @@
             <input type="checkbox" @bind="_includeLivePlaces" />
             <span>Include live Overture Places lookup (slower)</span>
         </label>
+        <label class="checkbox-label">
+            <input type="checkbox" @bind="_preferGadmAdministrativeAreas" />
+            <span>Prefer cached GADM administrative areas (experimental, non-commercial)</span>
+        </label>
     </div>
 </div>
 
 @if (_error is not null)
 {
     <div class="alert alert-error">@_error</div>
+}
+
+@if (_running || _lookupStatus is not null)
+{
+    <div class="settings-card">
+        <h3>Lookup Status</h3>
+        <p class="section-intro">
+            @(_running ? "The lookup is running. Current step:" : "Last lookup activity:")
+        </p>
+        <p class="run-info activity">@(_lookupStatus ?? "Preparing lookup...")</p>
+    </div>
 }
 
 @if (_result is not null)
@@ -95,6 +112,33 @@
                 <div class="result-row"><span class="result-key">Raw Best Admin Level</span><span class="result-val">@(_result.OvertureDivision?.AdminLevel?.ToString() ?? "—")</span></div>
                 <div class="result-row"><span class="result-key">Cache</span><span class="result-val">@(_result.OvertureDivisionCacheReady ? "ready" : "missing")</span></div>
                 <div class="result-note">Resolved City uses the configured country-aware profile. Raw Best Area shows the strongest single cached division candidate before that policy is applied.</div>
+            }
+        </div>
+
+        <div class="result-card @(_result.GadmDivisionState is not null ? "found" : "not-found")">
+            <div class="result-header">
+                <span class="result-source">Administrative Areas — Cached GADM</span>
+                <span class="result-badge @(_result.Iso3 is null ? "badge-miss" : !_result.GadmEnabled ? "badge-miss" : _result.GadmDivisionState is not null || _result.GadmDivisionCity is not null ? "badge-found" : "badge-miss")">
+                    @(_result.Iso3 is null ? "skipped" : !_result.GadmEnabled ? "disabled" : _result.GadmDivisionState is not null || _result.GadmDivisionCity is not null ? "found" : "no match")
+                </span>
+            </div>
+            @if (!_result.GadmEnabled)
+            {
+                <div class="result-note">Cached GADM lookup is disabled for this run.</div>
+            }
+            else if (_result.Iso3 is null)
+            {
+                <div class="result-note">Country lookup must succeed before the per-country GADM cache can be queried.</div>
+            }
+            else
+            {
+                <div class="result-row"><span class="result-key">State</span><span class="result-val">@(_result.GadmDivisionState ?? "—")</span></div>
+                <div class="result-row"><span class="result-key">Resolved City</span><span class="result-val">@(_result.GadmDivisionCity ?? "—")</span></div>
+                <div class="result-row"><span class="result-key">Raw Best Area</span><span class="result-val">@(_result.GadmDivision?.Name ?? "—")</span></div>
+                <div class="result-row"><span class="result-key">Raw Best Type</span><span class="result-val">@(_result.GadmDivision?.EnglishType ?? _result.GadmDivision?.LocalType ?? "—")</span></div>
+                <div class="result-row"><span class="result-key">Raw Best Admin Level</span><span class="result-val">@(_result.GadmDivision?.AdminLevel.ToString() ?? "—")</span></div>
+                <div class="result-row"><span class="result-key">Cache</span><span class="result-val">@(_result.GadmDivisionCacheReady ? "ready" : "missing")</span></div>
+                <div class="result-note">This experimental path still uses bundled Overture country detection to decide which country cache to load first.</div>
             }
         </div>
 
@@ -267,6 +311,42 @@
                     </div>
                 </details>
             }
+            @if (_result.GadmDivisionDiagnostics is not null)
+            {
+                <details class="trace-details">
+                    <summary class="trace-summary">Cached GADM Areas (@_result.GadmDivisionDiagnostics.Candidates.Count considered, version @(_result.GadmDivisionDiagnostics.Version ?? "unknown"))</summary>
+                    <div class="trace-section">
+                        @if (_result.GadmDivisionDiagnostics.Error is not null)
+                        {
+                            <div class="trace-line">GADM error: @_result.GadmDivisionDiagnostics.Error</div>
+                        }
+                        else if (_result.GadmDivisionDiagnostics.Candidates.Count == 0)
+                        {
+                            <div class="trace-line">No cached GADM areas were returned for the point.</div>
+                        }
+                        else
+                        {
+                            @foreach (var candidate in SortGadmCandidates(_result.GadmDivisionDiagnostics.Candidates))
+                            {
+                                <div class="trace-candidate @(candidate.Selected ? "selected" : null)">
+                                    <div class="trace-candidate-main">
+                                        <span class="trace-name">@candidate.Name</span>
+                                        <span class="trace-meta">level @candidate.AdminLevel</span>
+                                        <span class="trace-meta">bbox @(candidate.BoundingBoxContainsPoint ? "yes" : "no")</span>
+                                        <span class="trace-meta">geom @(candidate.GeometryContainsPoint ? "yes" : "no")</span>
+                                        <span class="trace-meta">@((candidate.EnglishType ?? candidate.LocalType ?? "unknown").ToLowerInvariant())</span>
+                                    </div>
+                                    <div class="trace-candidate-sub">
+                                        <span class="mono">@candidate.Id</span>
+                                        <span>bbox area @candidate.BoundingBoxArea.ToString("0.######")</span>
+                                        <span>@candidate.Decision</span>
+                                    </div>
+                                </div>
+                            }
+                        }
+                    </div>
+                </details>
+            }
             @if (_result.OvertureDiagnostics is not null)
             {
                 <details class="trace-details">
@@ -316,6 +396,9 @@
     private bool _expandTrace = true;
     private bool _includeAirportInfrastructure = true;
     private bool _includeLivePlaces;
+    private bool _preferGadmAdministrativeAreas;
+    private IReadOnlyList<string> _gadmCandidateCodes = [];
+    private string? _lookupStatus;
     private string? _error;
     private LookupResult? _result;
 
@@ -423,14 +506,21 @@
         _error = null;
         _result = null;
         _running = true;
+        _lookupStatus = "Preparing lookup...";
         StateHasChanged();
 
         try
         {
             await RunLookupCore();
         }
+        catch (Exception ex)
+        {
+            _error = ex.Message;
+            _lookupStatus = $"Lookup failed: {ex.Message}";
+        }
         finally
         {
+            _lookupStatus ??= "Lookup finished.";
             _running = false;
         }
     }
@@ -440,19 +530,23 @@
         var r = new LookupResult
         {
             AirportInfrastructureEnabled = _includeAirportInfrastructure,
-            LivePlacesEnabled = _includeLivePlaces
+            LivePlacesEnabled = _includeLivePlaces,
+            GadmEnabled = _preferGadmAdministrativeAreas
         };
 
+        await UpdateLookupStatusAsync("Checking bundled Overture country coverage...");
         (r.Iso3, r.CountryName, r.Alpha2) = await OvertureDivisions.FindBundledCountryAsync(_lat, _lon);
         if (r.Iso3 is null)
         {
             r.Trace.Add("Country lookup: bundled Overture country divisions found no match.");
+            await UpdateLookupStatusAsync("Bundled Overture country lookup found no match.");
             _result = r;
             StateHasChanged();
             return;
         }
 
         r.Trace.Add($"Country matched from bundled Overture divisions: {r.CountryName} ({r.Iso3}, {r.Alpha2 ?? "no alpha-2"})");
+        await UpdateLookupStatusAsync($"Country resolved as {r.CountryName} ({r.Iso3}).");
 
         var cfg = await Config.GetConfigAsync();
         var cityResolverProfile = CityResolverCatalog.GetProfile(cfg.Processing.CityResolver, r.Iso3);
@@ -460,6 +554,11 @@
         r.Trace.Add($"City resolver profile: {r.CityResolverSummary}");
 
         var ensureDivisionTask = EnsureDivisionCacheAsync(r);
+        _gadmCandidateCodes = r.Iso3 is not null
+            ? GadmCountryFallbackCatalog.ExpandCandidateCodes(r.Iso3)
+            : [];
+
+        var ensureGadmTask = EnsureGadmCacheAsync(r, _gadmCandidateCodes);
         Task<OvertureInfrastructureLookupDiagnostics>? infrastructureTask = null;
         if (_includeAirportInfrastructure)
         {
@@ -472,6 +571,7 @@
         }
 
         await ensureDivisionTask;
+        await UpdateLookupStatusAsync("Querying cached Overture administrative areas...");
         r.OvertureDivisionDiagnostics = await OvertureDivisions.FindContainingDivisionAreasAsync(_lat, _lon, r.Alpha2, r.Iso3);
         r.OvertureDivision = r.OvertureDivisionDiagnostics.BestMatch;
         r.OvertureDivisionState = OvertureDivisionsLogic.SelectStateName(r.OvertureDivisionDiagnostics.Candidates);
@@ -480,8 +580,30 @@
             ? $"Overture division lookup failed: {r.OvertureDivisionDiagnostics.Error}"
             : $"Overture division admin resolution: state={r.OvertureDivisionState ?? "—"}, city={r.OvertureDivisionCity ?? "—"}");
 
+        await ensureGadmTask;
+        if (_preferGadmAdministrativeAreas && r.GadmDivisionCacheReady)
+        {
+            await UpdateLookupStatusAsync($"Querying cached GADM administrative areas across {string.Join(", ", _gadmCandidateCodes)}...");
+            r.GadmDivisionDiagnostics = await GadmDivisions.FindContainingDivisionAreasAsync(_lat, _lon, _gadmCandidateCodes);
+            r.GadmDivision = r.GadmDivisionDiagnostics.BestMatch;
+            r.GadmDivisionState = GadmDivisionsLogic.SelectStateName(r.GadmDivisionDiagnostics.Candidates);
+            r.GadmDivisionCity = GadmDivisionsLogic.SelectCityName(r.GadmDivisionDiagnostics.Candidates);
+            r.Trace.Add(r.GadmDivisionDiagnostics.Error is not null
+                ? $"GADM lookup failed: {r.GadmDivisionDiagnostics.Error}"
+                : $"GADM admin resolution: state={r.GadmDivisionState ?? "—"}, city={r.GadmDivisionCity ?? "—"} (candidates: {string.Join(", ", _gadmCandidateCodes)})");
+        }
+        else if (_preferGadmAdministrativeAreas)
+        {
+            r.Trace.Add("GADM lookup skipped because the cache is unavailable.");
+        }
+        else
+        {
+            r.Trace.Add("GADM lookup skipped.");
+        }
+
         if (infrastructureTask is not null)
         {
+            await UpdateLookupStatusAsync("Querying bundled airport infrastructure...");
             r.OvertureInfrastructureDiagnostics = await infrastructureTask;
             r.OvertureInfrastructure = r.OvertureInfrastructureDiagnostics.BestMatch;
             r.Trace.Add(r.OvertureInfrastructureDiagnostics.Error is not null
@@ -497,6 +619,7 @@
 
         if (livePlacesTask is not null)
         {
+            await UpdateLookupStatusAsync("Querying live Overture Places...");
             r.OvertureDiagnostics = await livePlacesTask;
             r.OverturePoi = r.OvertureDiagnostics.BestMatch;
             r.Trace.Add(r.OvertureDiagnostics.Error is not null
@@ -510,16 +633,33 @@
             r.Trace.Add("Overture Places lookup skipped.");
         }
 
-        r.FinalState = r.OvertureDivisionState;
-        r.FinalStateSource = r.FinalState is not null ? "Cached Overture divisions" : null;
+        var adminState = _preferGadmAdministrativeAreas && r.GadmDivisionState is not null
+            ? r.GadmDivisionState
+            : r.OvertureDivisionState;
+        var adminStateSource = _preferGadmAdministrativeAreas && r.GadmDivisionState is not null
+            ? "Cached GADM divisions"
+            : r.OvertureDivisionState is not null
+                ? "Cached Overture divisions"
+                : null;
+        var adminCity = _preferGadmAdministrativeAreas && r.GadmDivisionCity is not null
+            ? r.GadmDivisionCity
+            : r.OvertureDivisionCity;
+        var adminCitySource = _preferGadmAdministrativeAreas && r.GadmDivisionCity is not null
+            ? "Cached GADM divisions"
+            : r.OvertureDivisionCity is not null
+                ? "Cached Overture divisions"
+                : null;
+
+        r.FinalState = adminState;
+        r.FinalStateSource = adminStateSource;
         r.FinalCountrySource = r.CountryName is not null ? "Bundled Overture country divisions" : null;
         var city = r.OvertureInfrastructure?.GeometryContainsPoint == true
             ? r.OvertureInfrastructure.Name
-            : r.OvertureDivisionCity ?? r.OvertureInfrastructure?.Name;
+            : adminCity ?? r.OvertureInfrastructure?.Name;
         r.FinalCitySource = r.OvertureInfrastructure?.GeometryContainsPoint == true
             ? "Bundled airport infrastructure (geometry match)"
-            : r.OvertureDivisionCity is not null
-                ? "Cached Overture divisions"
+            : adminCitySource is not null
+                ? adminCitySource
                 : r.OvertureInfrastructure?.Name is not null
                     ? "Bundled airport infrastructure (fallback)"
                     : null;
@@ -536,6 +676,7 @@
 
         r.FinalCity = city;
         r.Trace.Add($"Final city decision: {r.FinalCity ?? "no result"}");
+        await UpdateLookupStatusAsync("Lookup finished.");
 
         _result = r;
         StateHasChanged();
@@ -545,14 +686,64 @@
     {
         try
         {
-            await Cache.EnsureOvertureDivisionDataAsync(r.Iso3!);
-            r.OvertureDivisionCacheReady = Cache.HasOvertureDivisionData(r.Iso3!);
+            var (downloadTask, ensureResult) = OvertureCache.GetOrStartDownload(r.Iso3!);
+            await UpdateLookupStatusAsync(ensureResult switch
+            {
+                OvertureDivisionEnsureResult.StartedDownload => $"Downloading Overture administrative cache for {r.Iso3}...",
+                OvertureDivisionEnsureResult.AwaitedExistingDownload => $"Waiting for Overture administrative cache for {r.Iso3}...",
+                _ => $"Overture administrative cache already ready for {r.Iso3}."
+            });
+            await downloadTask;
+            r.OvertureDivisionCacheReady = OvertureCache.HasData(r.Iso3!);
             r.Trace.Add($"Overture division cache ready for {r.Iso3}");
         }
         catch (Exception ex)
         {
             r.Trace.Add($"Overture division cache unavailable: {ex.Message}");
         }
+    }
+
+    private async Task EnsureGadmCacheAsync(LookupResult r, IReadOnlyList<string> candidateCodes)
+    {
+        if (!_preferGadmAdministrativeAreas || r.Iso3 is null)
+        {
+            return;
+        }
+
+        try
+        {
+            var readyCodes = new List<string>();
+            foreach (var iso3 in candidateCodes)
+            {
+                var (downloadTask, ensureResult) = GadmCache.GetOrStartDownload(iso3);
+                await UpdateLookupStatusAsync(ensureResult switch
+                {
+                    GadmDivisionEnsureResult.StartedDownload => $"Downloading GADM administrative cache for {iso3}...",
+                    GadmDivisionEnsureResult.AwaitedExistingDownload => $"Waiting for GADM administrative cache for {iso3}...",
+                    _ => $"GADM administrative cache already ready for {iso3}."
+                });
+                await downloadTask;
+                if (GadmCache.HasData(iso3))
+                {
+                    readyCodes.Add(iso3);
+                }
+            }
+
+            r.GadmDivisionCacheReady = readyCodes.Count > 0;
+            r.Trace.Add(readyCodes.Count > 0
+                ? $"GADM division cache ready for {string.Join(", ", readyCodes)}"
+                : "GADM division cache unavailable.");
+        }
+        catch (Exception ex)
+        {
+            r.Trace.Add($"GADM division cache unavailable: {ex.Message}");
+        }
+    }
+
+    private Task UpdateLookupStatusAsync(string status)
+    {
+        _lookupStatus = status;
+        return InvokeAsync(StateHasChanged);
     }
 
     private sealed class LookupResult
@@ -562,11 +753,17 @@
         public string? Alpha2 { get; set; }
         public bool AirportInfrastructureEnabled { get; set; }
         public bool LivePlacesEnabled { get; set; }
+        public bool GadmEnabled { get; set; }
         public bool OvertureDivisionCacheReady { get; set; }
         public OvertureDivisionResult? OvertureDivision { get; set; }
         public OvertureDivisionLookupDiagnostics? OvertureDivisionDiagnostics { get; set; }
         public string? OvertureDivisionState { get; set; }
         public string? OvertureDivisionCity { get; set; }
+        public bool GadmDivisionCacheReady { get; set; }
+        public GadmDivisionResult? GadmDivision { get; set; }
+        public GadmDivisionLookupDiagnostics? GadmDivisionDiagnostics { get; set; }
+        public string? GadmDivisionState { get; set; }
+        public string? GadmDivisionCity { get; set; }
         public OvertureInfrastructureResult? OvertureInfrastructure { get; set; }
         public OvertureInfrastructureLookupDiagnostics? OvertureInfrastructureDiagnostics { get; set; }
         public OverturePlaceResult? OverturePoi { get; set; }
@@ -622,5 +819,16 @@
             .ThenByDescending(c => OverturePlacesLogic.IsPreferredStatus(c.OperatingStatus))
             .ThenByDescending(c => c.BoundingBoxContainsPoint)
             .ThenBy(c => c.DistanceMetres);
+    }
+
+    private static IEnumerable<GadmDivisionCandidateDiagnostic> SortGadmCandidates(
+        IEnumerable<GadmDivisionCandidateDiagnostic> candidates)
+    {
+        return candidates
+            .OrderByDescending(candidate => candidate.Selected)
+            .ThenByDescending(candidate => candidate.GeometryContainsPoint)
+            .ThenByDescending(candidate => candidate.BoundingBoxContainsPoint)
+            .ThenByDescending(candidate => candidate.AdminLevel)
+            .ThenBy(candidate => candidate.BoundingBoxArea);
     }
 }

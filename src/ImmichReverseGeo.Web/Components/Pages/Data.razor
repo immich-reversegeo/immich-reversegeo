@@ -1,21 +1,22 @@
 @page "/data"
 @rendermode InteractiveServer
-@inject DataCacheService Cache
+@inject GadmDivisionCacheService GadmCache
+@inject OvertureDivisionCacheService OvertureCache
 @inject SkippedAssetsRepository Skipped
 
 <h2>Data Management</h2>
 
 <section class="settings-card">
     <h3>Management Sections</h3>
-    <p class="section-intro">Use this page to manage on-demand Overture administrative data and reverse geo maintenance tools.</p>
+    <p class="section-intro">Use this page to manage downloaded administrative caches and reverse geo maintenance tools.</p>
     <div class="data-grid">
         <a class="data-link-card" href="/data/reset-geo-data">
-            <span class="data-card-title">Reset Geo Data</span>
+            <span class="data-card-title">Reset Immich Geo Data</span>
             <span class="data-card-meta">Clear only reverse geo city, state, and country fields</span>
         </a>
         <a class="data-link-card" href="/data/geoboundaries">
             <span class="data-card-title">Administrative Areas</span>
-            <span class="data-card-meta">@_overtureDivisionCountryCount country cache(s)</span>
+            <span class="data-card-meta">@_overtureDivisionCountryCount Overture cache(s), @_gadmDivisionCountryCount GADM cache(s)</span>
         </a>
     </div>
 </section>
@@ -41,6 +42,7 @@
     private long _skippedCount;
     private string? _skipClearResult;
     private int _overtureDivisionCountryCount;
+    private int _gadmDivisionCountryCount;
 
     protected override async Task OnInitializedAsync()
     {
@@ -57,7 +59,8 @@
 
     private async Task RefreshPageState()
     {
-        _overtureDivisionCountryCount = Cache.GetOvertureDivisionStatus().Count;
+        _overtureDivisionCountryCount = OvertureCache.GetStatus().Count;
+        _gadmDivisionCountryCount = GadmCache.GetStatus().Count;
         try
         {
             _skippedCount = await Skipped.GetCountAsync();

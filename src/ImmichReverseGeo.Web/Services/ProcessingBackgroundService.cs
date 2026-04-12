@@ -4,7 +4,6 @@ using System.Threading;
 using System.Threading.Tasks;
 using Cronos;
 using ImmichReverseGeo.Core.Models;
-using ImmichReverseGeo.Overture.Models;
 using ImmichReverseGeo.Overture.Services;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -14,12 +13,10 @@ namespace ImmichReverseGeo.Web.Services;
 public class ProcessingBackgroundService(
     ILogger<ProcessingBackgroundService> logger,
     ConfigService config,
-    CityResolverProfileCatalogService cityResolverCatalog,
+    AdministrativeAreaResolverService administrativeResolver,
     ProcessingState state,
     ImmichDbRepository db,
     OverturePlacesService overturePlaces,
-    OvertureDivisionsService overtureDivisions,
-    DataCacheService cache,
     SkippedAssetsRepository skipped) : BackgroundService
 {
     private CancellationTokenSource? _runCts;
@@ -185,12 +182,14 @@ public class ProcessingBackgroundService(
         try
         {
             // 1. Country detection — bundled Overture country divisions only.
-            var (iso3, countryName, alpha2) = await overtureDivisions.FindBundledCountryAsync(
+            var adminResolution = await administrativeResolver.ResolveAsync(
                 asset.Latitude,
                 asset.Longitude,
+                cfg.Processing,
+                new ProcessingResolutionProgress(state),
                 ct);
 
-            if (iso3 is null)
+            if (adminResolution is null)
             {
                 state.AppendLog($"[WARN] Asset {asset.Id}: no country found at ({asset.Latitude:F4}, {asset.Longitude:F4}), skipping.");
                 await skipped.AddAsync(asset.Id);
@@ -198,33 +197,14 @@ public class ProcessingBackgroundService(
                 return;
             }
 
-            // 2. On-demand Overture data fetch
-            step = "EnsureOvertureDivisionData";
-            var (divisionEnsureTask, ensureResult) = cache.GetOrStartOvertureDivisionDownload(iso3, ct);
-            using var divisionDownloadActivity = ensureResult == OvertureDivisionEnsureResult.StartedDownload
-                ? state.BeginActivity($"Downloading Overture divisions for {countryName} ({iso3})…")
-                : null;
-            if (ensureResult == OvertureDivisionEnsureResult.StartedDownload)
-            {
-                state.AppendLog($"Preparing Overture divisions cache for {countryName} ({iso3}).");
-            }
-            await divisionEnsureTask.WaitAsync(ct);
-
-            // 3. Admin lookup — Overture divisions only.
             step = "FindAdminLevels";
-            var cityResolverProfile = cityResolverCatalog.GetProfile(cfg.Processing.CityResolver, iso3);
-            var adminResult = await overtureDivisions.ResolveAdministrativeGeoAsync(
-                                asset.Latitude,
-                                asset.Longitude,
-                                alpha2,
-                                iso3,
-                                cityResolverProfile,
-                                ct);
-            var geoResult = new GeoResult(countryName!, adminResult?.State, adminResult?.City);
+            var iso3 = adminResolution.Iso3;
+            var countryName = adminResolution.CountryName;
+            var geoResult = adminResolution.GeoResult;
 
             if (cfg.Processing.UseAirportInfrastructure)
             {
-                // 4. Transport lookup — bundled Overture airport infrastructure.
+                // 2. Transport lookup — bundled Overture airport infrastructure.
                 step = "FindNearestInfrastructure";
                 var infrastructure = await overturePlaces.FindNearestInfrastructureWithDiagnosticsAsync(
                     asset.Latitude,
@@ -242,10 +222,10 @@ public class ProcessingBackgroundService(
                 }
             }
 
-            // 5. City fallback — prefer city, then state, then country for country-only microstates.
+            // 3. City fallback — prefer city, then state, then country for country-only microstates.
             geoResult = geoResult.WithFallbackCity();
 
-            // 6. Write back (only if we have country AND city)
+            // 4. Write back (only if we have country AND city)
             step = "WriteLocation";
             if (geoResult.HasMatch)
             {
@@ -305,5 +285,18 @@ public class ProcessingBackgroundService(
             return expr.GetNextOccurrence(DateTime.UtcNow, TimeZoneInfo.Utc);
         }
         catch { return null; }
+    }
+
+    private sealed class ProcessingResolutionProgress(ProcessingState state) : IAdministrativeAreaResolutionProgress
+    {
+        public IDisposable BeginActivity(string activity)
+        {
+            return state.BeginActivity(activity);
+        }
+
+        public void Report(string message)
+        {
+            state.AppendLog(message);
+        }
     }
 }

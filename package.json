@@ -5,7 +5,7 @@
   "scripts": {
     "build": "dotnet build",
     "test": "dotnet test --filter \"TestCategory!=Integration&TestCategory!=Performance\"",
-    "test:integration": "dotnet test --filter \"TestCategory=Integration\"",
+    "test:integration": "dotnet test --settings integration.runsettings --filter \"TestCategory=Integration\"",
     "start": "dotnet run --project src/ImmichReverseGeo.Web",
     "docker:build": "docker compose -f docker-compose.local.yml build --no-cache",
     "docker:up": "docker compose -f docker-compose.local.yml build --no-cache && docker compose -f docker-compose.local.yml up -d --force-recreate",

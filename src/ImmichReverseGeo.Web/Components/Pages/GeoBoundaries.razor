@@ -1,51 +1,87 @@
 @page "/data/geoboundaries"
 @rendermode InteractiveServer
-@inject DataCacheService Cache
+@inject GadmDivisionCacheService GadmCache
+@inject OvertureDivisionCacheService OvertureCache
 
 <h2>Administrative Areas</h2>
 
-<section class="settings-card">
-    <h3>Overture Divisions Cache</h3>
-    <p class="section-intro">Per-country Overture <code>division_area</code> caches are downloaded on demand and reused for processing and lookup.</p>
+@if (_result is not null)
+{
+    <div class="alert alert-success">@_result</div>
+}
+
+<div class="administrative-cache-page">
+<section class="settings-card wide-card">
+    <h3>Administrative Area Caches</h3>
+    <p class="section-intro">Downloaded Overture and optional GADM administrative caches are reused for processing and lookup. Use the filters below to inspect one source or search by country code.</p>
     <div class="btn-row">
         <button @onclick="DeleteAllOvertureDivisions"
                 disabled="@_busy"
                 class="btn btn-danger">
             Delete All Overture Divisions
         </button>
+        <button @onclick="DeleteAllGadmDivisions"
+                disabled="@_busy"
+                class="btn btn-danger">
+            Delete All GADM Caches
+        </button>
+    </div>
+    <div class="cache-filters">
+        <div class="input-group">
+            <label for="cache-source-filter">Source</label>
+            <select id="cache-source-filter" @bind="_selectedSourceFilter">
+                <option value="@CacheSourceFilter.All">All</option>
+                <option value="@CacheSourceFilter.Overture">Overture</option>
+                <option value="@CacheSourceFilter.Gadm">GADM</option>
+            </select>
+        </div>
+        <div class="input-group">
+            <label for="cache-search-filter">Country code</label>
+            <input id="cache-search-filter"
+                   type="text"
+                   class="form-control"
+                   placeholder="CHE"
+                   @bind="_countrySearch"
+                   @bind:event="oninput" />
+        </div>
     </div>
 
-    @if (_overtureDivisionStatus.Count == 0)
+    @if (GetFilteredRows().Count == 0)
     {
-        <p>No Overture division data downloaded yet.</p>
+        <p>No cached administrative area data matches the current filters.</p>
     }
     else
     {
-        <table class="data-table">
+        <div class="table-scroll">
+        <table class="data-table cache-table">
             <thead>
                 <tr>
-                    <th>Country</th>
-                    <th>Area Count</th>
-                    <th>Release</th>
-                    <th>Downloaded At</th>
+                    <th><button type="button" class="table-sort-btn" @onclick="() => SortBy(CacheSortColumn.Source)"><span>Source</span><span class="sort-indicator">@SortIndicator(CacheSortColumn.Source)</span></button></th>
+                    <th><button type="button" class="table-sort-btn" @onclick="() => SortBy(CacheSortColumn.Country)"><span>Country</span><span class="sort-indicator">@SortIndicator(CacheSortColumn.Country)</span></button></th>
+                    <th><button type="button" class="table-sort-btn" @onclick="() => SortBy(CacheSortColumn.AreaCount)"><span>Area Count</span><span class="sort-indicator">@SortIndicator(CacheSortColumn.AreaCount)</span></button></th>
+                    <th><button type="button" class="table-sort-btn" @onclick="() => SortBy(CacheSortColumn.Version)"><span>Version / Release</span><span class="sort-indicator">@SortIndicator(CacheSortColumn.Version)</span></button></th>
+                    <th><button type="button" class="table-sort-btn" @onclick="() => SortBy(CacheSortColumn.Size)"><span>Size</span><span class="sort-indicator">@SortIndicator(CacheSortColumn.Size)</span></button></th>
+                    <th><button type="button" class="table-sort-btn" @onclick="() => SortBy(CacheSortColumn.DownloadedAt)"><span>Downloaded At</span><span class="sort-indicator">@SortIndicator(CacheSortColumn.DownloadedAt)</span></button></th>
                     <th></th>
                 </tr>
             </thead>
             <tbody>
-                @foreach (var (iso3, status) in _overtureDivisionStatus)
+                @foreach (var row in GetFilteredRows())
                 {
                     <tr>
-                        <td><code>@iso3</code></td>
-                        <td>@status.RowCount.ToString("N0")</td>
-                        <td>@(status.Release ?? "—")</td>
-                        <td>@status.DownloadedAt?.ToString("u")</td>
-                        <td>
-                            <button @onclick="() => DeleteOvertureDivision(iso3)"
+                        <td><span class="source-badge @row.SourceCssClass">@row.SourceLabel</span></td>
+                        <td><code>@row.Iso3</code></td>
+                        <td>@row.RowCount.ToString("N0")</td>
+                        <td>@(row.Version ?? "—")</td>
+                        <td>@FormatFileSize(row.FileSizeBytes)</td>
+                        <td>@row.DownloadedAt?.ToString("u")</td>
+                        <td class="table-actions-cell">
+                            <button @onclick="() => DeleteCache(row)"
                                     disabled="@_busy"
                                     class="btn btn-danger">
                                 Delete
                             </button>
-                            <button @onclick="() => RedownloadOvertureDivision(iso3)"
+                            <button @onclick="() => RedownloadCache(row)"
                                     disabled="@_busy"
                                     class="btn btn-secondary">
                                 Re-download
@@ -55,13 +91,20 @@
                 }
             </tbody>
         </table>
+        </div>
     }
 </section>
+</div>
 
 @code {
     private Dictionary<string, OvertureDivisionStatus> _overtureDivisionStatus = [];
+    private Dictionary<string, GadmDivisionStatus> _gadmDivisionStatus = [];
     private bool _busy;
     private string? _result;
+    private CacheSortColumn _sortColumn = CacheSortColumn.Source;
+    private bool _sortAscending = true;
+    private CacheSourceFilter _selectedSourceFilter = CacheSourceFilter.All;
+    private string _countrySearch = string.Empty;
 
     protected override Task OnInitializedAsync()
     {
@@ -71,7 +114,8 @@
 
     private void RefreshState()
     {
-        _overtureDivisionStatus = Cache.GetOvertureDivisionStatus();
+        _overtureDivisionStatus = OvertureCache.GetStatus();
+        _gadmDivisionStatus = GadmCache.GetStatus();
     }
 
     private async Task RedownloadOvertureDivision(string iso3)
@@ -79,8 +123,8 @@
         _busy = true;
         try
         {
-            Cache.DeleteOvertureDivisionFile(iso3);
-            await Cache.EnsureOvertureDivisionDataAsync(iso3);
+            OvertureCache.DeleteFile(iso3);
+            await OvertureCache.EnsureDataAsync(iso3);
             _result = $"Re-downloaded Overture divisions for {iso3}.";
             RefreshState();
         }
@@ -95,7 +139,7 @@
         _busy = true;
         try
         {
-            Cache.DeleteOvertureDivisionFile(iso3);
+            OvertureCache.DeleteFile(iso3);
             _result = $"Deleted Overture divisions cache for {iso3}.";
             RefreshState();
             return Task.CompletedTask;
@@ -114,7 +158,7 @@
             var count = _overtureDivisionStatus.Count;
             foreach (var iso3 in _overtureDivisionStatus.Keys.ToList())
             {
-                Cache.DeleteOvertureDivisionFile(iso3);
+                OvertureCache.DeleteFile(iso3);
             }
 
             _result = $"Deleted Overture division caches for {count:N0} countr{(count == 1 ? "y" : "ies")}.";
@@ -125,6 +169,195 @@
         {
             _busy = false;
         }
+    }
+
+    private async Task RedownloadGadmDivision(string iso3)
+    {
+        _busy = true;
+        try
+        {
+            GadmCache.DeleteFile(iso3);
+            await GadmCache.EnsureDataAsync(iso3);
+            _result = $"Re-downloaded GADM data for {iso3}.";
+            RefreshState();
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task DeleteGadmDivision(string iso3)
+    {
+        _busy = true;
+        try
+        {
+            GadmCache.DeleteFile(iso3);
+            _result = $"Deleted GADM cache for {iso3}.";
+            RefreshState();
+            return Task.CompletedTask;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task DeleteAllGadmDivisions()
+    {
+        _busy = true;
+        try
+        {
+            var count = _gadmDivisionStatus.Count;
+            foreach (var iso3 in _gadmDivisionStatus.Keys.ToList())
+            {
+                GadmCache.DeleteFile(iso3);
+            }
+
+            _result = $"Deleted GADM caches for {count:N0} countr{(count == 1 ? "y" : "ies")}.";
+            RefreshState();
+            return Task.CompletedTask;
+        }
+        finally
+        {
+            _busy = false;
+        }
+    }
+
+    private Task DeleteCache(CacheRow row)
+    {
+        return row.Source switch
+        {
+            CacheSource.Overture => DeleteOvertureDivision(row.Iso3),
+            CacheSource.Gadm => DeleteGadmDivision(row.Iso3),
+            _ => Task.CompletedTask
+        };
+    }
+
+    private Task RedownloadCache(CacheRow row)
+    {
+        return row.Source switch
+        {
+            CacheSource.Overture => RedownloadOvertureDivision(row.Iso3),
+            CacheSource.Gadm => RedownloadGadmDivision(row.Iso3),
+            _ => Task.CompletedTask
+        };
+    }
+
+    private IReadOnlyList<CacheRow> GetFilteredRows()
+    {
+        var rows = _overtureDivisionStatus
+            .Select(pair => new CacheRow(CacheSource.Overture, pair.Key, "Overture", pair.Value.RowCount, pair.Value.Release, pair.Value.FileSizeBytes, pair.Value.DownloadedAt))
+            .Concat(_gadmDivisionStatus.Select(pair => new CacheRow(CacheSource.Gadm, pair.Key, "GADM", pair.Value.RowCount, pair.Value.Version, pair.Value.FileSizeBytes, pair.Value.DownloadedAt)));
+
+        if (_selectedSourceFilter == CacheSourceFilter.Overture)
+        {
+            rows = rows.Where(row => row.Source == CacheSource.Overture);
+        }
+        else if (_selectedSourceFilter == CacheSourceFilter.Gadm)
+        {
+            rows = rows.Where(row => row.Source == CacheSource.Gadm);
+        }
+
+        if (!string.IsNullOrWhiteSpace(_countrySearch))
+        {
+            rows = rows.Where(row => row.Iso3.Contains(_countrySearch.Trim(), StringComparison.OrdinalIgnoreCase));
+        }
+
+        IOrderedEnumerable<CacheRow> ordered = _sortColumn switch
+        {
+            CacheSortColumn.Country => rows.OrderBy(row => row.Iso3, StringComparer.OrdinalIgnoreCase),
+            CacheSortColumn.AreaCount => rows.OrderBy(row => row.RowCount),
+            CacheSortColumn.Version => rows.OrderBy(row => row.Version ?? string.Empty, StringComparer.OrdinalIgnoreCase),
+            CacheSortColumn.Size => rows.OrderBy(row => row.FileSizeBytes ?? -1),
+            CacheSortColumn.DownloadedAt => rows.OrderBy(row => row.DownloadedAt ?? DateTime.MinValue),
+            _ => rows.OrderBy(row => row.SourceLabel, StringComparer.OrdinalIgnoreCase)
+        };
+
+        return (_sortAscending ? ordered : ordered.Reverse()).ToList();
+    }
+
+    private void SortBy(CacheSortColumn column)
+    {
+        if (_sortColumn == column)
+        {
+            _sortAscending = !_sortAscending;
+            return;
+        }
+
+        _sortColumn = column;
+        _sortAscending = true;
+    }
+
+    private string SortIndicator(CacheSortColumn column)
+    {
+        if (_sortColumn != column)
+        {
+            return string.Empty;
+        }
+
+        return _sortAscending ? " ↑" : " ↓";
+    }
+
+    private static string FormatFileSize(long? bytes)
+    {
+        if (bytes is null || bytes < 0)
+        {
+            return "—";
+        }
+
+        string[] units = ["B", "KiB", "MiB", "GiB"];
+        double size = bytes.Value;
+        var unitIndex = 0;
+        while (size >= 1024 && unitIndex < units.Length - 1)
+        {
+            size /= 1024;
+            unitIndex++;
+        }
+
+        return unitIndex == 0
+            ? $"{size:0} {units[unitIndex]}"
+            : $"{size:0.##} {units[unitIndex]}";
+    }
+
+    private sealed record CacheRow(
+        CacheSource Source,
+        string Iso3,
+        string SourceLabel,
+        long RowCount,
+        string? Version,
+        long? FileSizeBytes,
+        DateTime? DownloadedAt)
+    {
+        public string SourceCssClass => Source switch
+        {
+            CacheSource.Overture => "source-overture",
+            CacheSource.Gadm => "source-gadm",
+            _ => string.Empty
+        };
+    }
+
+    private enum CacheSource
+    {
+        Overture,
+        Gadm
+    }
+
+    private enum CacheSourceFilter
+    {
+        All,
+        Overture,
+        Gadm
+    }
+
+    private enum CacheSortColumn
+    {
+        Source,
+        Country,
+        AreaCount,
+        Version,
+        Size,
+        DownloadedAt
     }
 
 }
