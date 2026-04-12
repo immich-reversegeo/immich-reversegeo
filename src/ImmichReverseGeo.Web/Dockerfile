@@ -6,6 +6,7 @@ COPY Directory.Build.props ./
 COPY global.json ./
 COPY src/ImmichReverseGeo.Core/ImmichReverseGeo.Core.csproj src/ImmichReverseGeo.Core/
 COPY src/ImmichReverseGeo.Overture/ImmichReverseGeo.Overture.csproj src/ImmichReverseGeo.Overture/
+COPY src/ImmichReverseGeo.Gadm/ImmichReverseGeo.Gadm.csproj src/ImmichReverseGeo.Gadm/
 COPY src/ImmichReverseGeo.Web/ImmichReverseGeo.Web.csproj src/ImmichReverseGeo.Web/
 RUN case "$TARGETARCH" in \
         "amd64") export RID="linux-x64" ;; \
