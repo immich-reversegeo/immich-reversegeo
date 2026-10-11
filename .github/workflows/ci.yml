@@ -33,6 +33,9 @@ jobs:
       - name: Compile local Immich database harness
         run: dotnet build tests/LiveImmichDb/LiveImmichDb.csproj --configuration Release
 
+      - name: Compile geographic workload harness
+        run: dotnet build tests/GeographicWorkload/GeographicWorkload.csproj --configuration Release
+
       - name: Test
         run: dotnet test --solution immich-reversegeo.slnx --configuration Release --no-build --filter "TestCategory!=Integration&TestCategory!=Performance"
 
