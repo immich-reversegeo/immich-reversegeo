@@ -45,7 +45,12 @@ public record OvertureInfrastructureResult(
     double DistanceMetres,
     bool BoundingBoxContainsPoint,
     bool GeometryContainsPoint,
-    IReadOnlyList<string> Sources);
+    IReadOnlyList<string> Sources,
+    bool HasMappedBoundary = false)
+{
+    public bool IsBoundaryMatch => HasMappedBoundary && GeometryContainsPoint;
+    public string BoundaryStatus => !HasMappedBoundary ? "boundary unavailable" : GeometryContainsPoint ? "inside boundary" : "outside boundary";
+}
 
 public record OvertureInfrastructureLookupDiagnostics(
     OvertureInfrastructureResult? BestMatch,
@@ -64,4 +69,8 @@ public record OvertureInfrastructureCandidateDiagnostic(
     bool GeometryContainsPoint,
     IReadOnlyList<string> Sources,
     bool Selected,
-    string Decision);
+    string Decision,
+    bool HasMappedBoundary = false)
+{
+    public string BoundaryStatus => !HasMappedBoundary ? "boundary unavailable" : GeometryContainsPoint ? "inside boundary" : "outside boundary";
+}

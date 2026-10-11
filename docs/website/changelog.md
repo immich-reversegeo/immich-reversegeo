@@ -11,6 +11,8 @@ Technical implementation notes live in [CHANGELOG.md](https://github.com/immich-
 
 ## Unreleased
 
+- Airport names now require a mapped boundary containing the photo coordinates. Nearby and point-only airports no longer fill missing city names; use Lookup to inspect excluded airport candidates.
+
 - Use county names as a fallback for US photos where Overture has no preferred city-like match, instead of falling back directly to a state or a nearby airport.
 
 - Refresh the built-in airport data. Use Lookup to compare airport matches before reprocessing existing photos.

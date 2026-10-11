@@ -207,9 +207,8 @@ public class OverturePlacesService
                                && lon <= reader.GetDouble(10)
                                && lat >= reader.GetDouble(9)
                                && lat <= reader.GetDouble(11);
-            var geometryContains = bboxContains
-                                   && !reader.IsDBNull(7)
-                                   && OvertureDataAccess.TryGeometryContains(OvertureDataAccess.ReadBlobValue(reader.GetValue(7)), point);
+            var boundary = OvertureDataAccess.ReadAirportBoundary(
+                reader.IsDBNull(7) ? null : OvertureDataAccess.ReadBlobValue(reader.GetValue(7)), point);
 
             var candidate = new OvertureInfrastructureResult(
                 reader.GetString(0),
@@ -219,12 +218,13 @@ public class OverturePlacesService
                 OvertureDataAccess.ReadNullableString(reader, 4),
                 distance,
                 bboxContains,
-                geometryContains,
-                []);
+                boundary.ContainsPoint,
+                [],
+                boundary.HasBoundary);
 
             var selected = false;
-            var decision = "considered: weaker than current bundled best";
-            if (best is null || OverturePlacesLogic.ShouldPreferInfrastructureCandidate(candidate, best))
+            var decision = candidate.IsBoundaryMatch ? "considered: weaker than current bundled best" : $"excluded: {candidate.BoundaryStatus}";
+            if (candidate.IsBoundaryMatch && (best is null || OverturePlacesLogic.ShouldPreferInfrastructureCandidate(candidate, best)))
             {
                 decision = best is null ? "selected: first bundled infrastructure candidate" : "selected: outranked previous bundled best";
                 best = candidate;
@@ -242,7 +242,8 @@ public class OverturePlacesService
                 candidate.GeometryContainsPoint,
                 candidate.Sources,
                 selected,
-                decision));
+                decision,
+                candidate.HasMappedBoundary));
         }
 
         using var meta = conn.CreateCommand();
@@ -281,6 +282,7 @@ public class OverturePlacesService
         var candidates = new List<OvertureInfrastructureCandidateDiagnostic>();
         OvertureInfrastructureResult? best = null;
 
+        var point = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326).CreatePoint(new Coordinate(lon, lat));
         using var reader = query.ExecuteReader();
         while (reader.Read())
         {
@@ -288,7 +290,9 @@ public class OverturePlacesService
             var candidateLat = reader.GetDouble(5);
             var candidateLon = reader.GetDouble(6);
             var distance = OverturePlacesLogic.HaversineMetres(lat, lon, candidateLat, candidateLon);
-            if (distance > OverturePlacesLogic.InfrastructureSearchRadiusMetres)
+            var boundary = OvertureDataAccess.ReadAirportBoundary(
+                reader.IsDBNull(8) ? null : OvertureDataAccess.ReadBlobValue(reader.GetValue(8)), point);
+            if (!boundary.ContainsPoint && distance > OverturePlacesLogic.InfrastructureSearchRadiusMetres)
             {
                 continue;
             }
@@ -301,12 +305,13 @@ public class OverturePlacesService
                 OvertureDataAccess.ReadNullableString(reader, 4),
                 distance,
                 reader.GetBoolean(7),
-                reader.GetBoolean(8),
-                OverturePlacesLogic.ParseSources(OvertureDataAccess.ReadNullableString(reader, 9)));
+                boundary.ContainsPoint,
+                OverturePlacesLogic.ParseSources(OvertureDataAccess.ReadNullableString(reader, 9)),
+                boundary.HasBoundary);
 
             var selected = false;
-            var decision = "considered: weaker than current best";
-            if (best is null || OverturePlacesLogic.ShouldPreferInfrastructureCandidate(candidate, best))
+            var decision = candidate.IsBoundaryMatch ? "considered: weaker than current best" : $"excluded: {candidate.BoundaryStatus}";
+            if (candidate.IsBoundaryMatch && (best is null || OverturePlacesLogic.ShouldPreferInfrastructureCandidate(candidate, best)))
             {
                 decision = best is null
                     ? "selected: first live infrastructure candidate"
@@ -333,7 +338,8 @@ public class OverturePlacesService
                 candidate.GeometryContainsPoint,
                 candidate.Sources,
                 selected,
-                decision));
+                decision,
+                candidate.HasMappedBoundary));
         }
 
         return new OvertureInfrastructureLookupDiagnostics(best, candidates, release);

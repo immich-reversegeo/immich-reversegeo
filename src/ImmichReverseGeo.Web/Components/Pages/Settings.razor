@@ -218,8 +218,8 @@ else
         <span class="hint">How many assets can be resolved in parallel within a batch. Start with 4 and increase carefully. Low-memory mode uses one worker without changing this saved value.</span>
     </div>
     <div class="form-group">
-        <label><input type="checkbox" @bind="_cfg.Processing.UseAirportInfrastructure" /> Use bundled airport infrastructure to improve city matching when it fits</label>
-        <span class="hint">Turn this off if you prefer commune or city names over airport names for photos taken on airport grounds.</span>
+        <label><input type="checkbox" @bind="_cfg.Processing.UseAirportInfrastructure" /> Use airport names when photos fall inside mapped airport boundaries</label>
+        <span class="hint">Airports mapped only as points are excluded. Turn this off if you prefer commune or city names on airport grounds.</span>
     </div>
     <div class="form-group">
         <label><input type="checkbox" @bind="_cfg.Processing.UseGadmAdministrativeAreas" /> Enable GADM administrative areas as an optional source</label>

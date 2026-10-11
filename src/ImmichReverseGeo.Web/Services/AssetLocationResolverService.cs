@@ -38,7 +38,7 @@ public class AssetLocationResolverService(
 
     public static GeoResult FinalizeLocation(GeoResult result, OvertureInfrastructureResult? airport)
     {
-        if (airport is not null && (airport.GeometryContainsPoint || result.City is null))
+        if (airport?.IsBoundaryMatch == true)
         {
             result = result with { City = airport.Name };
         }
