@@ -28,6 +28,7 @@ Use the Lookup page when you want to test a coordinate before running a full pro
 - it shows the country match, cached administrative area match, optional airport match, and final values that would be written
 - `Include bundled airport infrastructure lookup` lets you test with or without airport matching for that lookup
 - `Include live Overture Places lookup` adds an extra live place search for debugging, but it is slower and not needed for normal use
+- Saved [city name replacements](./configuration.md#city-name-replacements) are applied to the final city; the trace shows the original name and matching rule.
 - `Prefer cached GADM administrative areas` switches the administrative area part of the lookup to an experimental on-demand GADM cache for that country; country detection still starts with the bundled Overture country data
 
 ## Data tools

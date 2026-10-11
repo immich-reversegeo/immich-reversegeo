@@ -674,7 +674,15 @@
             r.FinalCitySource = r.FinalCountrySource;
         }
 
-        r.FinalCity = city;
+        var nameReplacement = CityNameOverrides.Resolve(
+            new GeoResult(r.CountryName, r.FinalState, city), r.Iso3, cfg.Processing.CityResolver);
+        if (nameReplacement.Rule is not null)
+        {
+            r.Trace.Add($"City name replacement: {city} -> {nameReplacement.GeoResult.City} ({r.Iso3}, state: {nameReplacement.Rule.State ?? "any"}).");
+            r.FinalCitySource = $"City name replacement (resolved by {r.FinalCitySource ?? "fallback"})";
+        }
+
+        r.FinalCity = nameReplacement.GeoResult.City;
         r.Trace.Add($"Final city decision: {r.FinalCity ?? "no result"}");
         await UpdateLookupStatusAsync("Lookup finished.");
 

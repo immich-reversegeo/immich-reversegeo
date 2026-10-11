@@ -11,6 +11,7 @@ Technical implementation notes live in [CHANGELOG.md](https://github.com/immich-
 ## Unreleased
 
 - Fixed the app stopping while waiting for an infrequent custom schedule, such as an annual run.
+- Add city name replacements in City Resolver to correct known location names for your library. Scope them by country and optional state, then check the final result in Lookup before reprocessing affected assets.
 
 - You can now reuse Immich's `DB_HOSTNAME` setting to connect to an external database. Existing `DB_HOST` settings continue to work and take precedence when nonblank.
 - Dashboard and Logs now show dates and times in your browser's timezone. Downloaded logs remain in UTC with full dates.

@@ -31,6 +31,7 @@ public class ProcessingConfig
 
 public class CityResolverConfig
 {
+    public List<CityNameOverride> CityNameOverrides { get; set; } = [];
     public CityResolverProfile DefaultProfile { get; set; } = CityResolverProfile.CreateEmpty();
     public Dictionary<string, CityResolverProfile> CountryOverrides { get; set; } = new(StringComparer.OrdinalIgnoreCase);
 }

@@ -45,6 +45,7 @@ public class ConfigService(ILogger<ConfigService> logger, string? configDir = nu
 
     public async Task SaveConfigAsync(AppConfig config)
     {
+        config = EnsureDefaults(config);
         // Capture the caller's values before awaiting; later UI edits belong to the next save.
         var json = JsonSerializer.SerializeToUtf8Bytes(config, _json);
         var directory = Path.GetDirectoryName(_configPath)!;
@@ -107,6 +108,7 @@ public class ConfigService(ILogger<ConfigService> logger, string? configDir = nu
         config.Processing.CityResolver ??= new CityResolverConfig();
         config.Processing.CityResolver.DefaultProfile ??= CityResolverProfile.CreateEmpty();
         config.Processing.CityResolver.CountryOverrides ??= new(StringComparer.OrdinalIgnoreCase);
+        config.Processing.CityResolver.CityNameOverrides = CityNameOverrides.NormalizeAndValidate(config.Processing.CityResolver.CityNameOverrides);
         return config;
     }
 }

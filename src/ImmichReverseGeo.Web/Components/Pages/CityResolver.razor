@@ -224,6 +224,8 @@
     }
 </section>
 
+<CityNameOverridesEditor Rules="_cityNameOverrides" Countries="_knownCountries" />
+
 <div class="btn-row">
     <button @onclick="Save" class="btn btn-primary">Save City Resolver Settings</button>
 </div>
@@ -255,12 +257,14 @@
     private string _newCountryInput = string.Empty;
     private string? _countryInputError;
     private List<CountryOverrideEditor> _countryEditors = [];
+    private List<CityNameOverride> _cityNameOverrides = [];
     private bool _saved;
     private string? _saveError;
 
     protected override async Task OnInitializedAsync()
     {
         _cfg = await Config.GetConfigAsync();
+        _cityNameOverrides = _cfg.Processing.CityResolver.CityNameOverrides.ToList();
         _knownCountries = CountryCodes.GetKnownCountries().ToList();
         _bundledDefaultProfile = CityResolverCatalog.GetProfile(null, null);
 
@@ -395,8 +399,11 @@
 
         try
         {
-            _cfg.Processing.CityResolver = BuildCityResolverConfig();
+            var cityResolverConfig = BuildCityResolverConfig();
+            cityResolverConfig.CityNameOverrides = CityNameOverrides.NormalizeAndValidate(_cityNameOverrides);
+            _cfg.Processing.CityResolver = cityResolverConfig;
             await Config.SaveConfigAsync(_cfg);
+            _cityNameOverrides = cityResolverConfig.CityNameOverrides.ToList();
             _saved = true;
         }
         catch (Exception ex)
