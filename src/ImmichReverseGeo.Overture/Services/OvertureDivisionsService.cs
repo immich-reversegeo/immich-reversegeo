@@ -10,6 +10,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using NetTopologySuite;
 using NetTopologySuite.Geometries;
+using NetTopologySuite.Geometries.Implementation;
 using NetTopologySuite.Geometries.Prepared;
 using NetTopologySuite.Index.Strtree;
 using NetTopologySuite.IO;
@@ -19,6 +20,9 @@ namespace ImmichReverseGeo.Overture.Services;
 public class OvertureDivisionsService
 {
     private static readonly WKBReader WkbReader = new();
+    // Compact only the retained index. Disk lookups keep their faster transient decoder.
+    // Doubles preserve coordinate precision without one managed Coordinate object per vertex.
+    private static readonly WKBReader BundledCountryWkbReader = new(new NtsGeometryServices(PackedCoordinateSequenceFactory.DoubleFactory));
     private static readonly GeometryFactory GeometryFactory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
 
     private readonly ILogger<OvertureDivisionsService> _logger;
@@ -176,21 +180,23 @@ public class OvertureDivisionsService
         return bestMapped ?? bestUnmapped;
     }
 
-    private static OvertureDivisionResult? FindBundledCountryFromDisk(string path, double lat, double lon, CancellationToken ct)
+    private OvertureDivisionResult? FindBundledCountryFromDisk(string path, double lat, double lon, CancellationToken ct)
     {
         var exact = QueryBundledCountryFromDisk(path, lat, lon, false, ct);
         return exact ?? QueryBundledCountryFromDisk(path, lat, lon, true, ct);
     }
 
-    private static OvertureDivisionResult? QueryBundledCountryFromDisk(string path, double lat, double lon, bool useTolerance, CancellationToken ct)
+    private OvertureDivisionResult? QueryBundledCountryFromDisk(string path, double lat, double lon, bool useTolerance, CancellationToken ct)
     {
         using var conn = new SqliteConnection($"Data Source={path};Pooling=false");
         conn.Open();
         var adminLevel = HasColumn(conn, "division_area", "admin_level") ? "admin_level" : "NULL";
+        var hasAlpha3 = HasColumn(conn, "division_area", "alpha3");
+        var alpha3Column = hasAlpha3 ? "alpha3" : "NULL";
         using var cmd = conn.CreateCommand();
         cmd.CommandText = $"""
             SELECT id, name, subtype, class_name, {adminLevel}, country, is_land, is_territorial,
-                   geom_wkb, bbox_xmin, bbox_ymin, bbox_xmax, bbox_ymax
+                   geom_wkb, bbox_xmin, bbox_ymin, bbox_xmax, bbox_ymax, {alpha3Column}
             FROM division_area
             WHERE bbox_xmax >= $xmin AND bbox_xmin <= $xmax
               AND bbox_ymax >= $ymin AND bbox_ymin <= $ymax
@@ -203,7 +209,8 @@ public class OvertureDivisionsService
         var point = GeometryFactory.CreatePoint(new Coordinate(lon, lat));
         var tolerance = GeometryFactory.ToGeometry(envelope);
         using var reader = cmd.ExecuteReader();
-        OvertureDivisionResult? best = null;
+        OvertureDivisionResult? bestMapped = null;
+        OvertureDivisionResult? bestUnmapped = null;
         while (reader.Read())
         {
             ct.ThrowIfCancellationRequested();
@@ -220,19 +227,31 @@ public class OvertureDivisionsService
             var ymin = reader.GetDouble(10);
             var xmax = reader.GetDouble(11);
             var ymax = reader.GetDouble(12);
+            var alpha2 = OvertureDataAccess.ReadNullableString(reader, 5);
+            var mappedAlpha3 = string.IsNullOrWhiteSpace(alpha2) ? null : _alpha2ToIso3(alpha2);
+            var alpha3 = hasAlpha3 ? OvertureDataAccess.ReadNullableString(reader, 13) : mappedAlpha3;
             var candidate = new OvertureDivisionResult(
                 reader.GetString(0), reader.GetString(1),
                 OvertureDataAccess.ReadNullableString(reader, 2), OvertureDataAccess.ReadNullableString(reader, 3),
-                reader.IsDBNull(4) ? null : reader.GetInt32(4), OvertureDataAccess.ReadNullableString(reader, 5),
+                reader.IsDBNull(4) ? null : reader.GetInt32(4), alpha2, alpha3,
                 OvertureDataAccess.ReadSqliteBool(reader, 6), OvertureDataAccess.ReadSqliteBool(reader, 7),
                 lon >= xmin && lon <= xmax && lat >= ymin && lat <= ymax, true,
                 Math.Abs((xmax - xmin) * (ymax - ymin)));
-            if (best is null || OvertureDivisionsLogic.ShouldPreferDivisionCandidate(candidate, best))
+            // Match the retained index: rank known identities before unmapped geometry,
+            // but preserve invalid stored Alpha-3 so a broken dependency stays an error.
+            if (!string.IsNullOrWhiteSpace(mappedAlpha3))
             {
-                best = candidate;
+                if (bestMapped is null || OvertureDivisionsLogic.ShouldPreferDivisionCandidate(candidate, bestMapped))
+                {
+                    bestMapped = candidate;
+                }
+            }
+            else if (bestUnmapped is null || OvertureDivisionsLogic.ShouldPreferDivisionCandidate(candidate, bestUnmapped))
+            {
+                bestUnmapped = candidate;
             }
         }
-        return best;
+        return bestMapped ?? bestUnmapped;
     }
 
     private void ReleaseBundledCountryIndex()
@@ -310,7 +329,7 @@ public class OvertureDivisionsService
                 continue;
             }
 
-            var geometry = WkbReader.Read(OvertureDataAccess.ReadBlobValue(reader.GetValue(9)));
+            var geometry = BundledCountryWkbReader.Read(OvertureDataAccess.ReadBlobValue(reader.GetValue(9)));
             var preparedGeometry = PreparedGeometryFactory.Prepare(geometry);
             var xmin = reader.GetDouble(10);
             var ymin = reader.GetDouble(11);

@@ -228,6 +228,43 @@ public class BundledCountryLookupTests
         Assert.IsNotNull(result.FailureReason);
     }
 
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task VerySmallCountry_PreservesDoublePrecision(bool lowMemory)
+    {
+        var root = CreateFixture();
+        try
+        {
+            var factory = new GeometryFactory(new PrecisionModel(), 4326);
+            // These distinct vertices collapse to the same values in single precision.
+            var tiny = factory.CreatePolygon([
+                new Coordinate(10.0000001, 50.0000001),
+                new Coordinate(10.0000002, 50.0000001),
+                new Coordinate(10.0000002, 50.0000002),
+                new Coordinate(10.0000001, 50.0000002),
+                new Coordinate(10.0000001, 50.0000001)
+            ]);
+            using (var conn = new SqliteConnection($"Data Source={Path.Combine(root, "defaults", "overture-country-divisions.db")};Pooling=false"))
+            {
+                conn.Open();
+                InsertCountry(conn, new WKBWriter(), "tiny", "Tiny country", "SP", "SPP", tiny);
+            }
+
+            var service = CreateService(root, lowMemory);
+            var inside = await service.FindBundledCountryAsync(50.00000015, 10.00000015);
+            Assert.AreEqual("SPP", inside.Iso3);
+            Assert.AreEqual("tiny", inside.SourceId);
+            // An exact AA match must still outrank the tiny country's tolerance-only match.
+            var outside = await service.FindBundledCountryAsync(50.0000003, 10.0000003);
+            Assert.AreEqual("AAA", outside.Iso3);
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
     private static OvertureDivisionsService CreateService(string root, bool lowMemory = false)
     {
         var places = new OverturePlacesService(NullLogger<OverturePlacesService>.Instance, root, root);

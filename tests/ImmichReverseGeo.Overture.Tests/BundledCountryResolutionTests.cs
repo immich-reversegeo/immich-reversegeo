@@ -1,4 +1,5 @@
 using ImmichReverseGeo.Overture.Models;
+using ImmichReverseGeo.Core.Models;
 using ImmichReverseGeo.Overture.Services;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -12,11 +13,13 @@ namespace ImmichReverseGeo.Overture.Tests;
 public class BundledCountryResolutionTests
 {
     [TestMethod]
-    public async Task MandatoryTerritoryFixtures_ResolveToCanonicalIdentities()
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task MandatoryTerritoryFixtures_ResolveToCanonicalIdentities(bool lowMemory)
     {
         var catalog = LoadIdentityCatalog();
         using var testData = CreateBundledTestData();
-        var service = CreateService(testData.Root, catalog);
+        var service = CreateService(testData.Root, catalog, lowMemory);
 
         foreach (var fixture in CountryResolutionFixtureCatalog.MandatoryTerritories)
         {
@@ -37,11 +40,13 @@ public class BundledCountryResolutionTests
     }
 
     [TestMethod]
-    public async Task ParentCountryControls_RetainSovereignIdentities()
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task ParentCountryControls_RetainSovereignIdentities(bool lowMemory)
     {
         var catalog = LoadIdentityCatalog();
         using var testData = CreateBundledTestData();
-        var service = CreateService(testData.Root, catalog);
+        var service = CreateService(testData.Root, catalog, lowMemory);
 
         foreach (var fixture in CountryResolutionFixtureCatalog.ParentCountryControls)
         {
@@ -224,9 +229,11 @@ public class BundledCountryResolutionTests
         }
     }
     [TestMethod]
-    [DataRow("HK", null, "HK", BundledCountryLookupStatus.IdentityMappingFailure)]
-    [DataRow("XA", null, "CN", BundledCountryLookupStatus.Matched)]
-    public async Task OverlappingSovereign_DoesNotHideBrokenMappedDependency(string sourceCode, string? storedAlpha3, string expectedAlpha2, BundledCountryLookupStatus expectedStatus)
+    [DataRow("HK", null, "HK", BundledCountryLookupStatus.IdentityMappingFailure, false)]
+    [DataRow("XA", null, "CN", BundledCountryLookupStatus.Matched, false)]
+    [DataRow("HK", null, "HK", BundledCountryLookupStatus.IdentityMappingFailure, true)]
+    [DataRow("XA", null, "CN", BundledCountryLookupStatus.Matched, true)]
+    public async Task OverlappingSovereign_DoesNotHideBrokenMappedDependency(string sourceCode, string? storedAlpha3, string expectedAlpha2, BundledCountryLookupStatus expectedStatus, bool lowMemory)
     {
         var root = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(Path.Combine(root, "defaults"));
@@ -251,7 +258,7 @@ public class BundledCountryResolutionTests
                 command.ExecuteNonQuery();
             }
 
-            var result = await CreateService(root, LoadIdentityCatalog()).FindBundledCountryAsync(0.5, 0.5);
+            var result = await CreateService(root, LoadIdentityCatalog(), lowMemory).FindBundledCountryAsync(0.5, 0.5);
             Assert.AreEqual(expectedStatus, result.Status);
             Assert.AreEqual(expectedAlpha2, result.Alpha2);
         }
@@ -260,7 +267,7 @@ public class BundledCountryResolutionTests
             Directory.Delete(root, recursive: true);
         }
     }
-    private static OvertureDivisionsService CreateService(string root, CountryIdentityCatalog catalog)
+    private static OvertureDivisionsService CreateService(string root, CountryIdentityCatalog catalog, bool lowMemory = false)
     {
         var places = new OverturePlacesService(
             NullLogger<OverturePlacesService>.Instance,
@@ -271,7 +278,8 @@ public class BundledCountryResolutionTests
             places,
             root,
             root,
-            alpha2 => catalog.FindByAlpha2(alpha2)?.Alpha3);
+            alpha2 => catalog.FindByAlpha2(alpha2)?.Alpha3,
+            new MemoryResourcePolicy { LowMemoryMode = lowMemory });
     }
 
     private static CountryIdentityCatalog LoadIdentityCatalog()
