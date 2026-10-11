@@ -112,6 +112,8 @@ Official references:
 
 Immich ReverseGeo also ships with a bundled airport-focused extract built from Overture data.
 
+The extract uses Overture release `2026-09-23.1`. Airports may be represented by a boundary or only a point, so the data cannot always establish whether a photo was taken on airport grounds. Updating the app supplies the new bundled extract; it does not replace existing Immich location names. Use Lookup or Preview Location Corrections before resetting photos for reprocessing.
+
 The app uses it for:
 
 - recognizing airport grounds more accurately than a normal city or commune lookup
@@ -126,19 +128,19 @@ Why this source is used:
 What it does not do:
 
 - it is not a general-purpose places database
-- it only helps when the coordinate actually matches airport-related geometry
+- a nearby airport can fill an empty city result even when its geometry does not contain the coordinate; proximity alone does not prove the photo was taken at the airport
 
 Origin:
 
-- exported from Overture transportation data into a bundled airport cache used by the app
+- exported from the Overture base theme's infrastructure data, derived from OpenStreetMap
 
 License:
 
-- ODbL for the transportation theme
+- ODbL for this OpenStreetMap-derived extract
 
 Official references:
 
-- [Overture Transportation Guide](https://docs.overturemaps.org/guides/transportation/)
+- [Overture Infrastructure Guide](https://docs.overturemaps.org/guides/base/infrastructure/)
 - [Overture Attribution and Licensing](https://docs.overturemaps.org/attribution/)
 
 ## Optional live Overture Places diagnostics
