@@ -1,6 +1,9 @@
 using System;
 using System.Globalization;
 using System.Text.RegularExpressions;
+using System.Threading;
+using System.IO;
+using ImmichReverseGeo.Core.Models;
 using DuckDB.NET.Data;
 
 namespace ImmichReverseGeo.Overture.Services;
@@ -9,16 +12,20 @@ public static class OvertureReleaseCatalog
 {
     public const string CatalogUrl = "https://stac.overturemaps.org/catalog.json";
 
-    public static string GetLatestRelease()
+    public static string GetLatestRelease(MemoryResourcePolicy? memoryPolicy = null, string? dataDir = null, CancellationToken ct = default)
     {
         try
         {
-            using var conn = new DuckDBConnection("Data Source=:memory:");
-            conn.Open();
+            using var work = new DuckDbWorkScope(memoryPolicy ?? new MemoryResourcePolicy(), dataDir ?? Path.GetTempPath(), ct);
+            var conn = work.Connection;
             OvertureDataAccess.LoadHttpfs(conn);
             using var query = conn.CreateCommand();
             query.CommandText = $"SELECT latest FROM '{CatalogUrl}'";
             return ValidateLatestRelease(query.ExecuteScalar()?.ToString(), DateTime.UtcNow);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {

@@ -162,6 +162,10 @@ public class AdministrativeAreaResolverService
                     ReportCacheEvent(progress, $"GADM administrative cache ready for {code}.");
                 }
             }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "GADM cache unavailable for {ISO3}", code);

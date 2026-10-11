@@ -1,4 +1,5 @@
 using ImmichReverseGeo.Overture.Models;
+using ImmichReverseGeo.Core.Models;
 using ImmichReverseGeo.Overture.Services;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
@@ -24,12 +25,14 @@ public class BundledCountryLookupTests
     private const double PointLat = 50.0;
 
     [TestMethod]
-    public async Task PointInsideCompactCountry_IsNotConfusedBySprawlingNeighbour()
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task PointInsideCompactCountry_IsNotConfusedBySprawlingNeighbour(bool lowMemory)
     {
         var root = CreateFixture();
         try
         {
-            var service = CreateService(root);
+            var service = CreateService(root, lowMemory);
 
             var result = await service.FindBundledCountryAsync(PointLat, PointLon);
 
@@ -80,12 +83,14 @@ public class BundledCountryLookupTests
     }
 
     [TestMethod]
-    public async Task PointJustOutsideBoundary_StillResolvesViaTolerance()
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task PointJustOutsideBoundary_StillResolvesViaTolerance(bool lowMemory)
     {
         var root = CreateFixture();
         try
         {
-            var service = CreateService(root);
+            var service = CreateService(root, lowMemory);
 
             // Step ~5m beyond the middle of AA's south-west edge, along that edge's normal:
             // outside the boundary, inside the bounding box, within the ~16m tolerance.
@@ -102,14 +107,16 @@ public class BundledCountryLookupTests
     }
 
     [TestMethod]
-    [DataRow(0.00005, "AAA")]
-    [DataRow(0.00025, null)]
-    public async Task PointOutsideBoundingBox_ResolvesOnlyWithinTolerance(double offset, string? expectedIso3)
+    [DataRow(0.00005, "AAA", false)]
+    [DataRow(0.00025, null, false)]
+    [DataRow(0.00005, "AAA", true)]
+    [DataRow(0.00025, null, true)]
+    public async Task PointOutsideBoundingBox_ResolvesOnlyWithinTolerance(double offset, string? expectedIso3, bool lowMemory)
     {
         var root = CreateFixture();
         try
         {
-            var result = await CreateService(root).FindBundledCountryAsync(PointLat, 9.0 - offset);
+            var result = await CreateService(root, lowMemory).FindBundledCountryAsync(PointLat, 9.0 - offset);
 
             Assert.AreEqual(expectedIso3, result.Iso3);
         }
@@ -120,7 +127,9 @@ public class BundledCountryLookupTests
     }
 
     [TestMethod]
-    public async Task ExactCountryMatch_WinsOverSmallerToleranceOnlyNeighbour()
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task ExactCountryMatch_WinsOverSmallerToleranceOnlyNeighbour(bool lowMemory)
     {
         var root = CreateFixture();
         try
@@ -141,7 +150,7 @@ public class BundledCountryLookupTests
 
             // AA covers this boundary point exactly. The smaller neighbour's bounding box
             // also contains it, but its geometry only intersects the tolerance rectangle.
-            var result = await CreateService(root).FindBundledCountryAsync(PointLat, 9.0);
+            var result = await CreateService(root, lowMemory).FindBundledCountryAsync(PointLat, 9.0);
 
             Assert.AreEqual("AAA", result.Iso3);
         }
@@ -152,12 +161,14 @@ public class BundledCountryLookupTests
     }
 
     [TestMethod]
-    public async Task PointOutsideEveryBoundary_ReturnsNoMatch()
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task PointOutsideEveryBoundary_ReturnsNoMatch(bool lowMemory)
     {
         var root = CreateFixture();
         try
         {
-            var service = CreateService(root);
+            var service = CreateService(root, lowMemory);
 
             // Open water: inside SP's globe-spanning bounding box, inside no actual boundary.
             var result = await service.FindBundledCountryAsync(0.0, 0.0);
@@ -173,9 +184,11 @@ public class BundledCountryLookupTests
     }
 
     [TestMethod]
-    [DataRow("ZZ")]
-    [DataRow(null)]
-    public async Task MatchedBoundaryWithUnresolvedIdentity_ReturnsMappingFailure(string? alpha2)
+    [DataRow("ZZ", false)]
+    [DataRow(null, false)]
+    [DataRow("ZZ", true)]
+    [DataRow(null, true)]
+    public async Task MatchedBoundaryWithUnresolvedIdentity_ReturnsMappingFailure(string? alpha2, bool lowMemory)
     {
         var root = CreateFixture();
         try
@@ -189,7 +202,7 @@ public class BundledCountryLookupTests
                 cmd.ExecuteNonQuery();
             }
 
-            var result = await CreateService(root).FindBundledCountryAsync(PointLat, PointLon);
+            var result = await CreateService(root, lowMemory).FindBundledCountryAsync(PointLat, PointLon);
 
             Assert.AreEqual(BundledCountryLookupStatus.IdentityMappingFailure, result.Status);
             Assert.IsNull(result.Iso3);
@@ -215,7 +228,7 @@ public class BundledCountryLookupTests
         Assert.IsNotNull(result.FailureReason);
     }
 
-    private static OvertureDivisionsService CreateService(string root)
+    private static OvertureDivisionsService CreateService(string root, bool lowMemory = false)
     {
         var places = new OverturePlacesService(NullLogger<OverturePlacesService>.Instance, root, root);
         return new OvertureDivisionsService(
@@ -228,7 +241,7 @@ public class BundledCountryLookupTests
                 "AA" => "AAA",
                 "SP" => "SPP",
                 _ => null
-            });
+            }, new MemoryResourcePolicy { LowMemoryMode = lowMemory });
     }
 
     /// <summary>

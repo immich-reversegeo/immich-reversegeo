@@ -3,6 +3,7 @@ using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using Microsoft.Data.Sqlite;
 using NetTopologySuite.IO;
 
@@ -11,8 +12,9 @@ namespace ImmichReverseGeo.Gadm.Services;
 public static class GadmCacheExporter
 {
     private static readonly WKBReader WkbReader = new();
-    public static long ExportGeoPackageToSqlite(string geoPackagePath, string outputPath, string iso3)
+    public static long ExportGeoPackageToSqlite(string geoPackagePath, string outputPath, string iso3, CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         var layers = LoadLayerDefinitions(geoPackagePath);
 
         using var output = new SqliteConnection($"Data Source={outputPath};Pooling=false");
@@ -66,6 +68,7 @@ public static class GadmCacheExporter
 
         foreach (var layer in layers)
         {
+            ct.ThrowIfCancellationRequested();
             using var cmd = source.CreateCommand();
             cmd.CommandText = $"""
                 SELECT
@@ -82,6 +85,7 @@ public static class GadmCacheExporter
             using var reader = cmd.ExecuteReader();
             while (reader.Read())
             {
+                ct.ThrowIfCancellationRequested();
                 var rawGeometry = (byte[])reader["geom"];
                 var parsed = GadmDataAccess.ReadGeoPackageGeometry(rawGeometry);
                 var bbox = GetBoundingBox(parsed.Wkb, parsed.XMin, parsed.YMin, parsed.XMax, parsed.YMax);

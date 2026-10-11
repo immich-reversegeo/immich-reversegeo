@@ -44,6 +44,7 @@ public class ConfigServiceTests
         var cfg = await svc.GetConfigAsync();
         Assert.AreEqual("0 * * * *", cfg.Schedule.Cron);
         Assert.AreEqual(50, cfg.Processing.BatchSize);
+        Assert.IsFalse(cfg.Processing.LowMemoryMode);
         Assert.IsTrue(cfg.Processing.UseAirportInfrastructure);
         Assert.AreEqual(0, cfg.Processing.CityResolver.CountryOverrides.Count);
     }
@@ -219,6 +220,7 @@ public class ConfigServiceTests
         Assert.IsNotNull(loaded.Processing.CityResolver.CountryOverrides);
         Assert.AreEqual(0, loaded.Processing.CityResolver.CountryOverrides.Count);
         Assert.AreEqual(25, loaded.Processing.BatchSize);
+        Assert.IsFalse(loaded.Processing.LowMemoryMode);
         Assert.IsFalse(loaded.Processing.UseAirportInfrastructure);
         Assert.IsTrue(loaded.Processing.VerboseLogging);
     }
@@ -241,6 +243,33 @@ public class ConfigServiceTests
         var svc = new ConfigService(NullLogger<ConfigService>.Instance, configDir: _tempDir);
 
         Assert.AreEqual(expectedHost, svc.GetDbSettings().Host);
+    }
+
+    [TestMethod]
+    public async Task LowMemoryMode_RoundTripsAndUpdatesRuntimePolicyWithoutChangingSavedLimits()
+    {
+        var policy = new MemoryResourcePolicy();
+        var svc = new ConfigService(NullLogger<ConfigService>.Instance, _tempDir, policy);
+        var cfg = new AppConfig();
+        cfg.Processing.BatchSize = 100;
+        cfg.Processing.MaxDegreeOfParallelism = 8;
+        cfg.Processing.LowMemoryMode = true;
+        await svc.SaveConfigAsync(cfg);
+        var loaded = await svc.GetConfigAsync();
+
+        Assert.IsTrue(policy.LowMemoryMode);
+        Assert.IsTrue(loaded.Processing.LowMemoryMode);
+        Assert.AreEqual(25, loaded.Processing.EffectiveBatchSize);
+        Assert.AreEqual(1, loaded.Processing.EffectiveParallelism);
+        loaded.Processing.LowMemoryMode = false;
+        await svc.SaveConfigAsync(loaded);
+        Assert.IsFalse(policy.LowMemoryMode);
+        Assert.AreEqual(100, loaded.Processing.EffectiveBatchSize);
+        Assert.AreEqual(8, loaded.Processing.EffectiveParallelism);
+        await svc.UpdateConfigAsync(current => current.Processing.LowMemoryMode = true);
+        Assert.IsTrue(policy.LowMemoryMode);
+        await svc.UpdateConfigAsync(current => current.Schedule.Enabled = false);
+        Assert.IsTrue(policy.LowMemoryMode, "Updating another section must preserve the active memory mode.");
     }
 
     [TestMethod]
