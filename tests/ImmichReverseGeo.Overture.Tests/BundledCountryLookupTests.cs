@@ -663,6 +663,31 @@ public class BundledCountryLookupTests
         }
     }
 
+    [TestMethod]
+    [DataRow(4096L)]
+    [DataRow(8L * 1024 * 1024)]
+    public async Task ExperimentalCache_PreservesResultsAcrossConcurrencyAndSourceReplacement(long budget)
+    {
+        var root = CreateFixture();
+        try
+        {
+            using var service = new OvertureDivisionsService(NullLogger<OvertureDivisionsService>.Instance,
+                new OverturePlacesService(NullLogger<OverturePlacesService>.Instance, root, root), root, root,
+                code => code == "AA" ? "AAA" : "SPP", experimentalCountryCacheBytes: budget);
+            var matches = await Task.WhenAll(Enumerable.Range(0, 8)
+                .Select(_ => Task.Run(() => service.FindBundledCountryAsync(PointLat, PointLon))));
+            Assert.IsTrue(matches.All(result => result.Iso3 == "AAA"));
+            Assert.AreEqual(BundledCountryLookupStatus.SpatialNoMatch, (await service.FindBundledCountryAsync(89, 0)).Status);
+            Assert.AreEqual("AAA", (await service.FindBundledCountryAsync(50, 11.00005)).Iso3);
+            RenameFixture(root);
+            Assert.AreEqual("Reloaded", (await service.FindBundledCountryAsync(PointLat, PointLon)).CountryName);
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
     private static void RenameFixture(string root)
     {
         using var connection = new SqliteConnection($"Data Source={Path.Combine(root, "defaults", "overture-country-divisions.db")};Pooling=false");
