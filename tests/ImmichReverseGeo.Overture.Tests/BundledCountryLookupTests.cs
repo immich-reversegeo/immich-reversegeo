@@ -690,6 +690,39 @@ public class BundledCountryLookupTests
         }
     }
 
+    [TestMethod]
+    [DataRow(true)]
+    [DataRow(false)]
+    public async Task ExperimentalCache_IsReleasedOnIdleAndLowMemorySwitch(bool prepare)
+    {
+        var root = CreateFixture();
+        try
+        {
+            var policy = new MemoryResourcePolicy { CountryIndexIdleMinutes = 1 };
+            var clock = new ManualClock();
+            using var service = new OvertureDivisionsService(NullLogger<OvertureDivisionsService>.Instance,
+                new OverturePlacesService(NullLogger<OverturePlacesService>.Instance, root, root), root, root,
+                code => code == "AA" ? "AAA" : "SPP", policy, clock,
+                experimentalCountryCacheBytes: 8 * 1024 * 1024, experimentalPrepareCountryParts: prepare);
+            int Entries() => System.Text.Json.JsonSerializer.SerializeToElement(service.ExperimentalCountryCacheStatistics)
+                .GetProperty("entries").GetInt32();
+            await service.FindBundledCountryAsync(PointLat, PointLon);
+            Assert.IsTrue(Entries() > 0);
+            clock.Advance(TimeSpan.FromMinutes(2));
+            Assert.AreEqual(0, Entries());
+            Assert.AreEqual("AAA", (await service.FindBundledCountryAsync(PointLat, PointLon)).Iso3);
+            Assert.IsTrue(Entries() > 0);
+            policy.LowMemoryMode = true;
+            Assert.AreEqual(0, Entries());
+            Assert.AreEqual("AAA", (await service.FindBundledCountryAsync(PointLat, PointLon)).Iso3);
+            Assert.AreEqual(0, Entries());
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
     private static void RenameFixture(string root)
     {
         using var connection = new SqliteConnection($"Data Source={Path.Combine(root, "defaults", "overture-country-divisions.db")};Pooling=false");
