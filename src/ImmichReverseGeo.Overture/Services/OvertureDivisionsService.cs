@@ -10,6 +10,7 @@ using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using NetTopologySuite;
 using NetTopologySuite.Geometries;
+using NetTopologySuite.Geometries.Implementation;
 using NetTopologySuite.Geometries.Prepared;
 using NetTopologySuite.Index.Strtree;
 using NetTopologySuite.IO;
@@ -19,6 +20,9 @@ namespace ImmichReverseGeo.Overture.Services;
 public class OvertureDivisionsService
 {
     private static readonly WKBReader WkbReader = new();
+    // Compact only the retained index. Disk lookups keep their faster transient decoder.
+    // Doubles preserve coordinate precision without one managed Coordinate object per vertex.
+    private static readonly WKBReader BundledCountryWkbReader = new(new NtsGeometryServices(PackedCoordinateSequenceFactory.DoubleFactory));
     private static readonly GeometryFactory GeometryFactory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
 
     private readonly ILogger<OvertureDivisionsService> _logger;
@@ -274,7 +278,7 @@ public class OvertureDivisionsService
                 continue;
             }
 
-            var geometry = WkbReader.Read(OvertureDataAccess.ReadBlobValue(reader.GetValue(8)));
+            var geometry = BundledCountryWkbReader.Read(OvertureDataAccess.ReadBlobValue(reader.GetValue(8)));
             var preparedGeometry = PreparedGeometryFactory.Prepare(geometry);
             var xmin = reader.GetDouble(9);
             var ymin = reader.GetDouble(10);
