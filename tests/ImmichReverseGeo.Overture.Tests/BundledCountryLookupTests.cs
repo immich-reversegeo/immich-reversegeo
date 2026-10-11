@@ -664,16 +664,18 @@ public class BundledCountryLookupTests
     }
 
     [TestMethod]
-    [DataRow(4096L)]
-    [DataRow(8L * 1024 * 1024)]
-    public async Task ExperimentalCache_PreservesResultsAcrossConcurrencyAndSourceReplacement(long budget)
+    [DataRow(4096L, true)]
+    [DataRow(8L * 1024 * 1024, true)]
+    [DataRow(4096L, false)]
+    [DataRow(8L * 1024 * 1024, false)]
+    public async Task ExperimentalCache_PreservesResultsAcrossConcurrencyAndSourceReplacement(long budget, bool prepare)
     {
         var root = CreateFixture();
         try
         {
             using var service = new OvertureDivisionsService(NullLogger<OvertureDivisionsService>.Instance,
                 new OverturePlacesService(NullLogger<OverturePlacesService>.Instance, root, root), root, root,
-                code => code == "AA" ? "AAA" : "SPP", experimentalCountryCacheBytes: budget);
+                code => code == "AA" ? "AAA" : "SPP", experimentalCountryCacheBytes: budget, experimentalPrepareCountryParts: prepare);
             var matches = await Task.WhenAll(Enumerable.Range(0, 8)
                 .Select(_ => Task.Run(() => service.FindBundledCountryAsync(PointLat, PointLon))));
             Assert.IsTrue(matches.All(result => result.Iso3 == "AAA"));

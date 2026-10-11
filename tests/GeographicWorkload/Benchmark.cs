@@ -48,8 +48,9 @@ internal static partial class Program
         var codes = new CountryCodeService(bundled);
         var places = new OverturePlacesService(NullLogger<OverturePlacesService>.Instance, data, bundled, policy);
         var experimentalBudget = long.TryParse(Environment.GetEnvironmentVariable("EXPERIMENT_COUNTRY_CACHE_MIB"), out var cacheMiB) ? cacheMiB * 1024 * 1024 : 0;
+        var experimentalStyle = Environment.GetEnvironmentVariable("EXPERIMENT_COUNTRY_CACHE_STYLE") ?? "prepared";
         using var divisions = new OvertureDivisionsService(NullLogger<OvertureDivisionsService>.Instance, places, data, bundled, codes.Alpha2ToIso3, policy,
-            experimentalCountryCacheBytes: experimentalBudget);
+            experimentalCountryCacheBytes: experimentalBudget, experimentalPrepareCountryParts: experimentalStyle != "geometry");
         var cache = new OvertureDivisionCacheService(NullLogger<OvertureDivisionCacheService>.Instance, storage, codes.Iso3ToAlpha2, policy);
         var resolver = new AssetLocationResolverService(new AdministrativeAreaResolverService(
             NullLogger<AdministrativeAreaResolverService>.Instance,
@@ -212,7 +213,7 @@ internal static partial class Program
         {
             sampleCts.Cancel();
             await sampling;
-            var report = new { mode, scope, profile, gcMode, eligiblePoints, selectedCountry, revision, config, experimentalBudget,
+            var report = new { mode, scope, profile, gcMode, eligiblePoints, selectedCountry, revision, config, experimentalBudget, experimentalStyle,
                 countryCache = divisions.ExperimentalCountryCacheStatistics, countrySha256 = countryHash, workers = config.EffectiveParallelism, idleSeconds,
                 runtime = System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription,
                 processorCount = Environment.ProcessorCount, datasetSha256 = Convert.ToHexString(SHA256.HashData(manifestBytes)),

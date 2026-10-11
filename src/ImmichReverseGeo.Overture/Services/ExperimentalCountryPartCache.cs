@@ -6,7 +6,7 @@ using NetTopologySuite.Geometries.Prepared;
 namespace ImmichReverseGeo.Overture.Services;
 
 // Experimental estimated budget, not a measured CLR heap or process limit.
-internal sealed class ExperimentalCountryPartCache(long budget)
+internal sealed class ExperimentalCountryPartCache(long budget, bool prepare)
 {
     private readonly object _gate = new();
     private readonly Dictionary<(long Row, long Offset), LinkedListNode<Entry>> _entries = new();
@@ -48,7 +48,7 @@ internal sealed class ExperimentalCountryPartCache(long budget)
             }
             _misses++;
             // Conservative initial hypothesis for packed coordinates plus lazy prepared indexes.
-            var weight = (long)length * 16 + 4096;
+            var weight = (long)length * (prepare ? 16 : 1) + 4096;
             var geometry = read();
             if (weight > budget)
             {
@@ -62,7 +62,7 @@ internal sealed class ExperimentalCountryPartCache(long budget)
                 _recent.RemoveLast();
                 _evictions++;
             }
-            var part = new Part(geometry, PreparedGeometryFactory.Prepare(geometry));
+            var part = new Part(geometry, prepare ? PreparedGeometryFactory.Prepare(geometry) : null);
             _entries.Add(key, _recent.AddFirst(new Entry(key, weight, part)));
             _weight += weight;
             return part;

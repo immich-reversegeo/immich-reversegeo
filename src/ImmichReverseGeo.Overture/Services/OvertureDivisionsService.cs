@@ -52,7 +52,8 @@ public class OvertureDivisionsService : IDisposable
         Func<string, string?> alpha2ToIso3,
         MemoryResourcePolicy? memoryPolicy = null,
         TimeProvider? timeProvider = null,
-        long experimentalCountryCacheBytes = 0)
+        long experimentalCountryCacheBytes = 0,
+        bool experimentalPrepareCountryParts = true)
     {
         _logger = logger;
         _overturePlacesService = overturePlacesService;
@@ -60,7 +61,7 @@ public class OvertureDivisionsService : IDisposable
         _bundledDataDir = bundledDataDir;
         _alpha2ToIso3 = alpha2ToIso3;
         _memoryPolicy = memoryPolicy ?? new MemoryResourcePolicy();
-        _experimentalCache = experimentalCountryCacheBytes > 0 ? new ExperimentalCountryPartCache(experimentalCountryCacheBytes) : null;
+        _experimentalCache = experimentalCountryCacheBytes > 0 ? new ExperimentalCountryPartCache(experimentalCountryCacheBytes, experimentalPrepareCountryParts) : null;
         _countryParts = new CountryPolygonDiskIndex(dataDir, _memoryPolicy);
         _timeProvider = timeProvider ?? TimeProvider.System;
         _lastCountryLookup = _timeProvider.GetTimestamp();
