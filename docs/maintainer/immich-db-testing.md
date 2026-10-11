@@ -1,5 +1,7 @@
 # Live Immich database checks
 
+For a separate few-thousand-asset worldwide GPS library, see [Worldwide geographic workload](geographic-workload.md). Keep that workload separate from these eight-asset contract fixtures.
+
 The opt-in harness validates ReverseGeo's actual SQL against pinned Immich 3.1.0, 3.2.0, and 3.3.1 servers. It creates separate synthetic libraries; it accepts no production connection settings.
 
 | Target | Immich UI | PostgreSQL | Docker project |

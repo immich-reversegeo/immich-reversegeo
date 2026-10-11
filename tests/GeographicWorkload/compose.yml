@@ -1,0 +1,47 @@
+name: immich-reversegeo-geographic-workload
+services:
+  immich-server:
+    image: ghcr.io/immich-app/immich-server:v3.3.1
+    ports:
+      - "127.0.0.1:18283:2283"
+    environment:
+      DB_HOSTNAME: database
+      DB_USERNAME: postgres
+      DB_PASSWORD: ${DB_PASSWORD:?Required}
+      DB_DATABASE_NAME: immich
+      REDIS_HOSTNAME: redis
+      IMMICH_CONFIG_FILE: /config/immich.json
+    volumes:
+      - library:/data
+      - ./immich.json:/config/immich.json:ro
+    depends_on:
+      database:
+        condition: service_healthy
+      redis:
+        condition: service_started
+    restart: "no"
+  redis:
+    image: docker.io/valkey/valkey:9@sha256:70739f85ad2ee01a726a965584a0f94895f01b0c60b3cc8b0aeef11eaa6888cf
+    restart: "no"
+  database:
+    image: ghcr.io/immich-app/postgres:14-vectorchord0.4.3-pgvectors0.2.0@sha256:bcf63357191b76a916ae5eb93464d65c07511da41e3bf7a8416db519b40b1c23
+    ports:
+      - "127.0.0.1:18433:5432"
+    environment:
+      POSTGRES_PASSWORD: ${DB_PASSWORD:?Required}
+      POSTGRES_USER: postgres
+      POSTGRES_DB: immich
+      POSTGRES_INITDB_ARGS: --data-checksums
+    volumes:
+      - database:/var/lib/postgresql/data
+      - ./bulk-guard.sql:/docker-entrypoint-initdb.d/99-reversegeo-workload.sql:ro
+    shm_size: 128mb
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -h 127.0.0.1 -U postgres -d immich"]
+      interval: 2s
+      timeout: 3s
+      retries: 60
+    restart: "no"
+volumes:
+  library:
+  database:

@@ -19,6 +19,7 @@ public class ScheduleConfig
 public class ProcessingConfig
 {
     public bool LowMemoryMode { get; set; } = false;
+    public int CountryIndexIdleMinutes { get; set; } = 5;
     [System.Text.Json.Serialization.JsonIgnore]
     public int EffectiveBatchSize => LowMemoryMode ? Math.Clamp(BatchSize, 1, 25) : Math.Max(1, BatchSize);
     [System.Text.Json.Serialization.JsonIgnore]
