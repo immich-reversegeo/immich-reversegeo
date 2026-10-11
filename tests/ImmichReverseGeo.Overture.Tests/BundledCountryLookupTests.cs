@@ -555,6 +555,85 @@ public class BundledCountryLookupTests
         }
     }
 
+    [TestMethod]
+    [DataRow(false, false, false)]
+    [DataRow(true, false, false)]
+    [DataRow(false, true, false)]
+    [DataRow(true, true, false)]
+    [DataRow(false, false, true)]
+    [DataRow(true, false, true)]
+    [DataRow(false, true, true)]
+    [DataRow(true, true, true)]
+    public async Task PolygonParts_ReadBothByteOrdersAndAdditionalOrdinates(bool bigEndian, bool emitZ, bool emitM)
+    {
+        var root = CreateFixture();
+        try
+        {
+            var factory = new GeometryFactory(new PrecisionModel(), 4326);
+            var shell = factory.CreateLinearRing(new Coordinate[]
+            {
+                new CoordinateZM(9,49,7,8), new CoordinateZM(11,49,7,8),
+                new CoordinateZM(11,51,7,8), new CoordinateZM(9,51,7,8), new CoordinateZM(9,49,7,8)
+            });
+            var hole = factory.CreateLinearRing(new Coordinate[]
+            {
+                new CoordinateZM(9.9,49.9,7,8), new CoordinateZM(10.1,49.9,7,8),
+                new CoordinateZM(10.1,50.1,7,8), new CoordinateZM(9.9,50.1,7,8), new CoordinateZM(9.9,49.9,7,8)
+            });
+            var geometry = factory.CreateMultiPolygon([factory.CreatePolygon(shell, [hole])]);
+            // With SRID, the writer emits EWKB flags; without it, ISO dimensional type codes.
+            var writer = new WKBWriter(bigEndian ? ByteOrder.BigEndian : ByteOrder.LittleEndian,
+                handleSRID: bigEndian, emitZ, emitM);
+            using (var connection = new SqliteConnection($"Data Source={Path.Combine(root, "defaults", "overture-country-divisions.db")};Pooling=false"))
+            {
+                connection.Open();
+                using var command = connection.CreateCommand();
+                command.CommandText = "UPDATE division_area SET geom_wkb=$wkb, bbox_ymin=49, bbox_ymax=51 WHERE id='aa'";
+                command.Parameters.AddWithValue("$wkb", writer.Write(geometry));
+                command.ExecuteNonQuery();
+            }
+            var logger = new RecordingLogger();
+            using var service = new OvertureDivisionsService(logger,
+                new OverturePlacesService(NullLogger<OverturePlacesService>.Instance, root, root), root, root,
+                code => code == "AA" ? "AAA" : "SPP", new MemoryResourcePolicy { LowMemoryMode = true });
+            Assert.AreEqual(BundledCountryLookupStatus.SpatialNoMatch, (await service.FindBundledCountryAsync(50,10)).Status);
+            Assert.AreEqual("AAA", (await service.FindBundledCountryAsync(50,10.1)).Iso3, "An exact hole boundary is covered.");
+            Assert.AreEqual("AAA", (await service.FindBundledCountryAsync(50,10.09995)).Iso3, "Tolerance includes the nearby hole boundary.");
+            Assert.AreEqual("AAA", (await service.FindBundledCountryAsync(50,10.2)).Iso3);
+            Assert.IsNull(logger.Exception, logger.Exception?.ToString());
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [TestMethod]
+    public async Task DiskIndex_RecoversCorruptCacheAndCoordinatesSeparateServiceInstances()
+    {
+        var root = CreateFixture();
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "country-polygon-parts.db"), "interrupted or damaged local cache");
+            using var first = CreateService(root, lowMemory: true);
+            using var second = CreateService(root, lowMemory: true);
+            var results = await Task.WhenAll(
+                first.FindBundledCountryAsync(PointLat, PointLon),
+                second.FindBundledCountryAsync(PointLat, PointLon));
+            Assert.IsTrue(results.All(result => result.Iso3 == "AAA"));
+            using var index = new SqliteConnection($"Data Source={Path.Combine(root, "country-polygon-parts.db")};Mode=ReadOnly;Pooling=false");
+            index.Open();
+            using var check = index.CreateCommand();
+            check.CommandText = "SELECT COUNT(*) FROM part";
+            Assert.AreEqual(3L, check.ExecuteScalar(), "Both instances must share one complete rebuilt index.");
+            Assert.AreEqual(0, Directory.GetFiles(root, "country-polygon-parts.*.tmp").Length);
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
     private static void RenameFixture(string root)
     {
         using var connection = new SqliteConnection($"Data Source={Path.Combine(root, "defaults", "overture-country-divisions.db")};Pooling=false");
