@@ -225,6 +225,10 @@ So the controls on the City Resolver page stay simple:
 
 ### Bundled defaults vs your overrides
 
+The bundled US profile tries county names after all its city-like place types. For example, a coordinate without a city match can resolve to `Monroe County, Florida` rather than `Florida, Florida`. A matching airport boundary can still override that name when airport matching is enabled. This does not add missing towns, parks, or islands to the source data.
+
+Your explicit global or US override can replace that order. To keep county as a fallback, add `county` last in your preferred place types. Check representative coordinates in Lookup before saving a custom order. Existing Immich names are not changed automatically; use Preview Location Corrections before a targeted reset and rerun.
+
 The app ships with built-in default rules. Your own settings sit on top of them:
 
 - bundled global default

@@ -11,6 +11,8 @@ Technical implementation notes live in [CHANGELOG.md](https://github.com/immich-
 
 ## Unreleased
 
+- Use county names as a fallback for US photos where Overture has no preferred city-like match, instead of falling back directly to a state or a nearby airport.
+
 - Refresh the built-in airport data. Use Lookup to compare airport matches before reprocessing existing photos.
 
 - Country detection now keeps supported territories as their own country identity instead of replacing them with the administering country.
