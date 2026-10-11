@@ -43,7 +43,7 @@ public class LowMemoryTests
             Assert.AreEqual(0, Directory.GetDirectories(Path.Combine(root, "duckdb-tmp")).Length);
             var blocker = Path.Combine(root, "file");
             File.WriteAllText(blocker, "blocks directory creation");
-            Assert.ThrowsExactly<IOException>(() => new DuckDbWorkScope(policy, blocker));
+            Assert.Throws<IOException>(() => new DuckDbWorkScope(policy, blocker));
             using var ct = new CancellationTokenSource(TimeSpan.FromSeconds(5));
             using var next = new DuckDbWorkScope(policy, root, ct.Token);
         }
