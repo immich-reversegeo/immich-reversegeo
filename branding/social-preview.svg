@@ -1,0 +1,61 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1280" height="640" viewBox="0 0 1280 640" fill="none">
+  <title>Immich ReverseGeo — Better location names for your photos</title>
+  <defs>
+    <linearGradient id="background" x1="0" y1="0" x2="1280" y2="640" gradientUnits="userSpaceOnUse">
+      <stop stop-color="#0F172A"/>
+      <stop offset="1" stop-color="#111E38"/>
+    </linearGradient>
+    <radialGradient id="glow">
+      <stop stop-color="#2563EB" stop-opacity=".19"/>
+      <stop offset="1" stop-color="#2563EB" stop-opacity="0"/>
+    </radialGradient>
+    <pattern id="grid" width="64" height="64" patternUnits="userSpaceOnUse">
+      <path d="M64 0H0V64" stroke="#93C5FD" stroke-opacity=".065"/>
+    </pattern>
+    <linearGradient id="map-fade" x1="680" y1="0" x2="1280" y2="0" gradientUnits="userSpaceOnUse">
+      <stop stop-color="white" stop-opacity="0"/>
+      <stop offset=".4" stop-color="white"/>
+    </linearGradient>
+    <mask id="map-mask"><rect width="1280" height="640" fill="url(#map-fade)"/></mask>
+    <clipPath id="irg-head-social"><circle cx="256" cy="210" r="155"/></clipPath>
+  </defs>
+  <rect width="1280" height="640" fill="url(#background)"/>
+  <ellipse cx="995" cy="290" rx="410" ry="380" fill="url(#glow)"/>
+  <g mask="url(#map-mask)">
+    <rect width="1280" height="640" fill="url(#grid)"/>
+    <g stroke="#93C5FD" stroke-opacity=".12" stroke-width="2">
+      <path d="M715-30C670 95 865 91 815 211S716 388 823 443 906 584 849 677"/>
+      <path d="M767-30C715 92 917 118 864 232S774 364 871 414 965 560 910 677"/>
+      <path d="M1227-30C1100 73 1257 167 1166 242S1087 370 1160 435 1160 580 1084 677"/>
+      <path d="M1282-30C1153 83 1308 181 1217 256S1132 355 1207 423 1211 590 1134 677"/>
+      <path d="M665 535C848 502 888 583 1030 519S1232 502 1310 541"/>
+    </g>
+  </g>
+  <g font-family="Segoe UI, Inter, Arial, sans-serif">
+    <rect x="80" y="80" width="128" height="34" rx="17" fill="#93C5FD" fill-opacity=".09" stroke="#93C5FD" stroke-opacity=".22"/>
+    <text x="144" y="103" text-anchor="middle" font-size="16" font-weight="600" fill="#B8D8FF" letter-spacing="1.4">SELF-HOSTED</text>
+    <text x="76" y="229" font-size="84" font-weight="700" fill="#F1F5F9" letter-spacing="-3">Immich</text>
+    <text x="76" y="324" font-size="84" font-weight="700" fill="#F1F5F9" letter-spacing="-3">ReverseGeo</text>
+    <text x="80" y="397" font-size="30" fill="#B8C9E2">Better location names for your photos.</text>
+    <path d="M80 447H144" stroke="#60A5FA" stroke-width="4" stroke-linecap="round"/>
+    <text x="80" y="493" font-size="23" fill="#93C5FD">GPS</text>
+    <path d="M137 485H168M161 478L168 485 161 492" stroke="#647B9C" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    <text x="189" y="493" font-size="23" fill="#CBD5E1">City · State · Country</text>
+    <text x="80" y="565" font-size="18" fill="#7890B2">immich-reversegeo.github.io</text>
+  </g>
+  <ellipse cx="1000" cy="481" rx="87" ry="15" fill="#020617" fill-opacity=".35"/>
+  <!-- Existing project logo, preserved as vector geometry. -->
+  <g transform="translate(770 99) scale(.9)">
+    <path d="M200 355L312 355 256 465Z" fill="#1E3A8A"/>
+    <g clip-path="url(#irg-head-social)">
+      <path d="M256 210L256 55A155 155 0 0 1 403.4 162.1Z" fill="#FA2921"/>
+      <path d="M256 210L403.4 162.1A155 155 0 0 1 347.1 335.4Z" fill="#FFB400"/>
+      <path d="M256 210L347.1 335.4A155 155 0 0 1 164.9 335.4Z" fill="#18C249"/>
+      <path d="M256 210L164.9 335.4A155 155 0 0 1 108.6 162.1Z" fill="#1E83F7"/>
+      <path d="M256 210L108.6 162.1A155 155 0 0 1 256 55Z" fill="#ED79B5"/>
+    </g>
+    <circle cx="256" cy="210" r="62" fill="white"/>
+    <circle cx="256" cy="210" r="32" fill="#1E293B"/>
+    <circle cx="256" cy="210" r="16" fill="#1E83F7"/>
+  </g>
+</svg>
