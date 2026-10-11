@@ -189,6 +189,12 @@ else
         <span class="hint">Uses one processing worker, batches of at most 25 assets, and less memory for downloads. Country boundaries are read from disk as needed. Processing can be slower. Save before starting a run; work already in progress keeps its current limits.</span>
     </div>
     <div class="form-group">
+        <label>Release country index after idle (minutes)
+            <input type="number" min="0" max="1440" @bind="_cfg.Processing.CountryIndexIdleMinutes" />
+        </label>
+        <span class="hint">In normal mode, releases cached country boundaries after this many minutes without a country lookup. Default: 5. Use 0 to keep them cached. The next lookup rebuilds the index; RAM is reclaimed when garbage collection runs. Low-memory mode does not retain this index.</span>
+    </div>
+    <div class="form-group">
         <label>Batch Size <input type="number" @bind="_cfg.Processing.BatchSize" /></label>
     </div>
     <div class="form-group">

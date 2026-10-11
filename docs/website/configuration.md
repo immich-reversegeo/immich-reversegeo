@@ -55,6 +55,7 @@ The Settings page lets you control:
 - when it runs, using simple presets or a custom cron expression
 - batch size, delay, and parallelism
 - low-memory mode for hosts with limited RAM
+- how long country boundaries stay cached in RAM when idle
 - whether airport infrastructure can override the city name
 - whether GADM administrative areas are enabled as an optional source
 - whether GADM should be preferred over cached Overture divisions
@@ -99,6 +100,8 @@ The mode:
 - uses one DuckDB worker and a 256 MiB buffer budget for remote queries and Overture cache creation
 - reads matching country polygons from disk instead of retaining the worldwide country index in RAM
 
+The first country lookup prepares a small disk index from the bundled data under `/data/country-polygon-parts.db`. Later lookups read only nearby polygon parts, including their original boundaries and holes. This requires no network download and rebuilds automatically after bundled data changes. If the index cannot be prepared, the app keeps using the original disk lookup, which can be slower.
+
 Your saved batch size and parallelism stay unchanged and are used again when you disable the mode. Work already in progress finishes with its existing limits; the next processing run uses the new batch and worker limits.
 
 Expect slower processing and more disk reads. This is not a total RAM cap: the web app, geometry checks, and native libraries use additional memory. Temporary DuckDB spill files live under `/data/duckdb-tmp`. Memory shown by your host may stay elevated after a run while the runtime keeps freed memory available for reuse.
@@ -106,6 +109,14 @@ Expect slower processing and more disk reads. This is not a total RAM cap: the w
 Use Lookup on a few known coordinates first, then compare memory use during a processing pass. Compare the first pass that creates country caches separately from later passes that reuse them. This mode changes resource use, not location matching rules, and does not repair missing or incorrect boundary data.
 
 In both modes, processing checks skipped IDs one batch at a time rather than loading the entire skipped history into RAM.
+
+### Releasing idle country boundaries
+
+**Release country index after idle (minutes)** controls normal mode's cached country boundaries. The default is **5 minutes** without a country lookup. Use **0** to keep them cached, or a value from **1 to 1440** minutes to release them after idle time. Save the setting to apply it.
+
+Releasing the index makes its memory available for garbage collection; the host's RAM figure may fall later. The next country lookup rebuilds the index, so its first result can take longer. Active country lookups are allowed to finish. Low-memory mode reads from disk and does not retain this index.
+
+Use Lookup on a known coordinate before and after the idle period to check the result and rebuild delay. This setting reduces retained country memory; it is not a total RAM cap and does not repair incorrect location data.
 
 ### GADM administrative areas
 

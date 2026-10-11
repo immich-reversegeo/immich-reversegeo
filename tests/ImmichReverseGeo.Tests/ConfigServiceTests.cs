@@ -289,4 +289,21 @@ public class ConfigServiceTests
         Assert.AreEqual("testuser", db.Username);
         Assert.AreEqual("testdb", db.Database);
     }
+
+    [TestMethod]
+    public async Task CountryIndexIdleTimeout_RoundTripsAndUpdatesRuntimePolicy()
+    {
+        var policy = new MemoryResourcePolicy();
+        var service = new ConfigService(NullLogger<ConfigService>.Instance, _tempDir, policy);
+        Assert.AreEqual(5, (await service.GetConfigAsync()).Processing.CountryIndexIdleMinutes);
+        await service.UpdateConfigAsync(config => config.Processing.CountryIndexIdleMinutes = 15);
+        Assert.AreEqual(15, policy.CountryIndexIdleMinutes);
+        Assert.AreEqual(15, (await service.GetConfigAsync()).Processing.CountryIndexIdleMinutes);
+        await service.UpdateConfigAsync(config => config.Processing.CountryIndexIdleMinutes = 0);
+        Assert.AreEqual(0, policy.CountryIndexIdleMinutes);
+        policy.CountryIndexIdleMinutes = -1;
+        Assert.AreEqual(0, policy.CountryIndexIdleMinutes);
+        policy.CountryIndexIdleMinutes = int.MaxValue;
+        Assert.AreEqual(1440, policy.CountryIndexIdleMinutes);
+    }
 }
