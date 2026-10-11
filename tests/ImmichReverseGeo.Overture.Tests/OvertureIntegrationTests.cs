@@ -162,10 +162,7 @@ public class OvertureIntegrationTests
     [TestMethod]
     public async Task OvertureDivisions_BundledCountryLookup_VaticanCity_ReturnsVaticanCity()
     {
-        var sourceDb = Path.GetFullPath(Path.Combine(
-            AppContext.BaseDirectory,
-            "..", "..", "..", "..",
-            "src", "ImmichReverseGeo.Web", "bundled-data", "defaults", "overture-country-divisions.db"));
+        var sourceDb = GetBundledTestDataPath("overture-country-divisions.db");
 
         if (!File.Exists(sourceDb))
         {
@@ -259,54 +256,6 @@ public class OvertureIntegrationTests
     }
 
     [TestMethod]
-    public async Task OvertureDivisions_BundledCountryLookup_TerritoryEdges_ReportCurrentCoverage()
-    {
-        var sourceDb = GetBundledTestDataPath("overture-country-divisions.db");
-
-        if (!File.Exists(sourceDb))
-        {
-            Assert.Inconclusive($"Bundled country divisions DB not found at {sourceDb}");
-            return;
-        }
-
-        var cases = new[]
-        {
-            new { Name = "Greenland", Lat = 64.1814, Lon = -51.6941, ExpectedIso3 = "GRL" },
-            new { Name = "Faroe Islands", Lat = 62.0079, Lon = -6.7900, ExpectedIso3 = "FRO" },
-            new { Name = "Jersey", Lat = 49.1868, Lon = -2.1066, ExpectedIso3 = "JEY" },
-            new { Name = "Guernsey", Lat = 49.4566, Lon = -2.5815, ExpectedIso3 = "GGY" },
-            new { Name = "Isle of Man", Lat = 54.1523, Lon = -4.4861, ExpectedIso3 = "IMN" }
-        };
-
-        var tempRoot = Path.Combine(Path.GetTempPath(), Guid.NewGuid().ToString("N"));
-        Directory.CreateDirectory(Path.Combine(tempRoot, "defaults"));
-        File.Copy(sourceDb, Path.Combine(tempRoot, "defaults", "overture-country-divisions.db"), overwrite: true);
-
-        try
-        {
-            var service = CreateBundledCountryService(tempRoot);
-
-            foreach (var testCase in cases)
-            {
-                var result = await service.FindBundledCountryAsync(testCase.Lat, testCase.Lon);
-                TestContext.WriteLine(
-                    $"{testCase.Name}: expected {testCase.ExpectedIso3}, actual {result.Iso3 ?? "<no match>"} ({result.CountryName ?? "no country"})");
-            }
-        }
-        finally
-        {
-            try
-            {
-                Directory.Delete(tempRoot, recursive: true);
-            }
-            catch
-            {
-            }
-        }
-    }
-
-    [TestMethod]
-    [Ignore("Known bundled country lookup gaps for split territories. Enable when country resolver coverage is improved.")]
     [DataRow(64.1814, -51.6941, "GRL", "Greenland", "GL", DisplayName = "Greenland resolves to GRL")]
     [DataRow(62.0079, -6.7900, "FRO", "Faroe Islands", "FO", DisplayName = "Faroe Islands resolves to FRO")]
     [DataRow(49.1868, -2.1066, "JEY", "Jersey", "JE", DisplayName = "Jersey resolves to JEY")]
