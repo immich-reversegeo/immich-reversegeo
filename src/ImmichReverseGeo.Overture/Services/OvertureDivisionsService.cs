@@ -465,12 +465,13 @@ public class OvertureDivisionsService : IDisposable
     {
         var index = new STRtree<BundledCountryArea>();
 
-        using var conn = new SqliteConnection($"Data Source={bundledPath};Pooling=false");
-        conn.Open();
+        using var conn = CountryPolygonDiskIndex.OpenReadOnly(bundledPath);
+        using var snapshot = conn.BeginTransaction(deferred: true);
         var adminLevelColumn = HasColumn(conn, "division_area", "admin_level") ? "admin_level" : "NULL AS admin_level";
         var hasAlpha3Column = HasColumn(conn, "division_area", "alpha3");
         var alpha3Column = hasAlpha3Column ? "alpha3" : "NULL AS alpha3";
         using var cmd = conn.CreateCommand();
+        cmd.Transaction = snapshot;
         cmd.CommandText = $"""
             SELECT
                 id,
@@ -482,28 +483,27 @@ public class OvertureDivisionsService : IDisposable
                 {alpha3Column},
                 is_land,
                 is_territorial,
-                geom_wkb,
                 bbox_xmin,
                 bbox_ymin,
                 bbox_xmax,
-                bbox_ymax
+                bbox_ymax,
+                rowid
             FROM division_area
+            WHERE geom_wkb IS NOT NULL
             """;
 
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
         {
-            if (reader.IsDBNull(9))
-            {
-                continue;
-            }
-
-            var geometry = BundledCountryWkbReader.Read(OvertureDataAccess.ReadBlobValue(reader.GetValue(9)));
+            // Buffer small decoder reads without allocating a copy of the country's entire WKB.
+            using var blob = new SqliteBlob(conn, "division_area", "geom_wkb", reader.GetInt64(13), readOnly: true);
+            using var buffered = new BufferedStream(blob, 64 * 1024);
+            var geometry = BundledCountryWkbReader.Read(buffered);
             var preparedGeometry = PreparedGeometryFactory.Prepare(geometry);
-            var xmin = reader.GetDouble(10);
-            var ymin = reader.GetDouble(11);
-            var xmax = reader.GetDouble(12);
-            var ymax = reader.GetDouble(13);
+            var xmin = reader.GetDouble(9);
+            var ymin = reader.GetDouble(10);
+            var xmax = reader.GetDouble(11);
+            var ymax = reader.GetDouble(12);
 
             var alpha2 = OvertureDataAccess.ReadNullableString(reader, 5);
             // Older artifacts have no Alpha-3 column. Resolve their existing code through the catalog.

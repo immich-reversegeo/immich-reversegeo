@@ -634,6 +634,35 @@ public class BundledCountryLookupTests
         }
     }
 
+    [TestMethod]
+    public async Task NormalIndexLoading_DoesNotAllocateAnEntireWkbCopy()
+    {
+        var root = CreateFixture();
+        try
+        {
+            long wkbBytes;
+            using (var connection = new SqliteConnection($"Data Source={Path.Combine(root, "defaults", "overture-country-divisions.db")};Mode=ReadOnly;Pooling=false"))
+            {
+                connection.Open();
+                using var command = connection.CreateCommand();
+                command.CommandText = "SELECT SUM(length(geom_wkb)) FROM division_area";
+                wkbBytes = (long)command.ExecuteScalar()!;
+            }
+            using var service = CreateService(root);
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            // Outside every envelope: load the geometries without lazily building point indexes.
+            var result = await service.FindBundledCountryAsync(89, 0);
+            var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            Assert.AreEqual(BundledCountryLookupStatus.SpatialNoMatch, result.Status);
+            Assert.IsTrue(allocated < wkbBytes + 512 * 1024,
+                $"Loading {wkbBytes:N0} WKB bytes allocated {allocated:N0} bytes; a full input copy appears to be retained alongside decoded coordinates.");
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
     private static void RenameFixture(string root)
     {
         using var connection = new SqliteConnection($"Data Source={Path.Combine(root, "defaults", "overture-country-divisions.db")};Pooling=false");
