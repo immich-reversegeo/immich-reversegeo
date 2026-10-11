@@ -89,9 +89,9 @@ Most users should stay on the preset schedule options. Custom cron expressions c
 
 ### Airport matching
 
-When enabled, airport matching uses an airport name only if the coordinate falls inside its mapped polygon boundary, including the boundary edge. Point-only airports and airports with missing or invalid boundaries are excluded. A nearby airport or overlapping bounding box is not enough, even when the city is missing; the app keeps the administrative result and its usual state/country fallback.
+When enabled, airport matching uses an airport name only if the coordinate falls inside its mapped polygon boundary or within 5 m of its edge. This small tolerance accommodates minor GPS and mapping differences. Point-only airports and airports with missing or invalid boundaries are excluded. A nearby airport or overlapping bounding box is not enough, even when the city is missing; the app keeps the administrative result and its usual state/country fallback.
 
-Use Lookup to check a known airport photo and a nearby photo first. The airport trace distinguishes inside boundary, outside boundary, and boundary unavailable. Missing or inaccurate polygons can prevent airport matching. Turn airport matching off if you prefer city or commune names. Existing Immich names are not rewritten automatically; use Preview Location Corrections before a targeted reset and rerun.
+Use Lookup to check a known airport photo and a nearby photo first. The airport trace distinguishes a boundary match with the 5 m tolerance, outside boundary, and boundary unavailable. Missing or inaccurate polygons can prevent airport matching. Turn airport matching off if you prefer city or commune names. Existing Immich names are not rewritten automatically; use Preview Location Corrections before a targeted reset and rerun.
 
 ### Low-memory mode
 

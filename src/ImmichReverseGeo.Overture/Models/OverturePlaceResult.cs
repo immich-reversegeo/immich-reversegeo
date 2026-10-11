@@ -49,7 +49,7 @@ public record OvertureInfrastructureResult(
     bool HasMappedBoundary = false)
 {
     public bool IsBoundaryMatch => HasMappedBoundary && GeometryContainsPoint;
-    public string BoundaryStatus => !HasMappedBoundary ? "boundary unavailable" : GeometryContainsPoint ? "inside boundary" : "outside boundary";
+    public string BoundaryStatus => !HasMappedBoundary ? "boundary unavailable" : GeometryContainsPoint ? "boundary match (5 m tolerance)" : "outside boundary";
 }
 
 public record OvertureInfrastructureLookupDiagnostics(
@@ -72,5 +72,5 @@ public record OvertureInfrastructureCandidateDiagnostic(
     string Decision,
     bool HasMappedBoundary = false)
 {
-    public string BoundaryStatus => !HasMappedBoundary ? "boundary unavailable" : GeometryContainsPoint ? "inside boundary" : "outside boundary";
+    public string BoundaryStatus => !HasMappedBoundary ? "boundary unavailable" : GeometryContainsPoint ? "boundary match (5 m tolerance)" : "outside boundary";
 }

@@ -6,7 +6,7 @@ For a shorter user-facing summary, see [docs/website/changelog.md](./docs/websit
 
 ## Unreleased
 
-- Require valid Polygon/MultiPolygon coverage for airport candidates in bundled and live lookups. Exclude point-only and non-containing airports, preserve exact boundary-edge coverage, and share final location policy with Lookup. Expose boundary availability in diagnostics.
+- Require valid Polygon/MultiPolygon coverage for airport candidates in bundled and live lookups. Exclude point-only and non-containing airports, allow a 5 m locally scaled boundary tolerance, and share final location policy with Lookup. Expose boundary availability in diagnostics.
 
 - Add county as the last bundled USA city subtype preference, preserving existing city subtype ordering and smallest-area tie breaking. Explicit user profiles retain precedence.
 

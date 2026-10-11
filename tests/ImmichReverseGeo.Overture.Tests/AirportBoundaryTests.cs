@@ -12,14 +12,19 @@ public class AirportBoundaryTests
     [TestMethod]
     [DataRow("POLYGON ((0 0, 2 0, 2 2, 0 2, 0 0))", 1, 1, true, true)]
     [DataRow("POLYGON ((0 0, 2 0, 2 2, 0 2, 0 0))", 0, 1, true, true)]
-    [DataRow("POLYGON ((0 0, 2 0, 2 2, 0 2, 0 0))", -0.00001, 1, true, false)]
+    [DataRow("POLYGON ((0 0, 2 0, 2 2, 0 2, 0 0))", -0.00001, 1, true, true)]
+    [DataRow("POLYGON ((0 0, 2 0, 2 2, 0 2, 0 0))", -0.00006, 1, true, false)]
+    [DataRow("POLYGON ((0 0, 2 0, 2 2, 0 2, 0 0))", -0.00003, -0.00003, true, true)]
+    [DataRow("POLYGON ((0 0, 2 0, 2 2, 0 2, 0 0))", -0.00004, -0.00004, true, false)]
+    [DataRow("POLYGON ((0 74, 2 74, 2 76, 0 76, 0 74))", -0.0001, 75, true, true)]
+    [DataRow("POLYGON ((0 74, 2 74, 2 76, 0 76, 0 74))", -0.0003, 75, true, false)]
     [DataRow("POLYGON ((0 0, 4 0, 4 4, 0 4, 0 0), (1 1, 1 3, 3 3, 3 1, 1 1))", 2, 2, true, false)]
     [DataRow("MULTIPOLYGON (((0 0, 2 0, 2 2, 0 2, 0 0)))", 1, 1, true, true)]
     [DataRow("POINT (1 1)", 1, 1, false, false)]
     [DataRow("LINESTRING (0 1, 2 1)", 1, 1, false, false)]
     [DataRow("POLYGON EMPTY", 1, 1, false, false)]
     [DataRow("POLYGON ((0 0, 2 2, 0 2, 2 0, 0 0))", 1, 1, false, false)]
-    public void Boundary_RequiresValidAreaAndExactCoverage(string wkt, double x, double y, bool hasBoundary, bool contains)
+    public void Boundary_RequiresValidAreaAndLimitedMetreTolerance(string wkt, double x, double y, bool hasBoundary, bool contains)
     {
         var bytes = new WKBWriter().Write(new WKTReader().Read(wkt));
         var result = OvertureDataAccess.ReadAirportBoundary(bytes, new Point(x, y));
