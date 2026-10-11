@@ -3,6 +3,7 @@ using ImmichReverseGeo.Core.Models;
 using ImmichReverseGeo.Overture.Services;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Extensions.Logging;
 using NetTopologySuite.Geometries;
 using NetTopologySuite.IO;
 
@@ -279,6 +280,441 @@ public class BundledCountryLookupTests
                 "SP" => "SPP",
                 _ => null
             }, new MemoryResourcePolicy { LowMemoryMode = lowMemory });
+    }
+
+    [TestMethod]
+    public async Task IdleCountryIndex_UsesSlidingTimeoutAndRebuildsAfterRelease()
+    {
+        var root = CreateFixture();
+        try
+        {
+            var clock = new ManualClock();
+            var policy = new MemoryResourcePolicy { CountryIndexIdleMinutes = 1 };
+            using var service = CreateTimedService(root, policy, clock);
+            Assert.AreEqual("Aaland", (await service.FindBundledCountryAsync(PointLat, PointLon)).CountryName);
+            RenameFixture(root);
+            clock.Advance(TimeSpan.FromSeconds(59));
+            Assert.AreEqual("Aaland", (await service.FindBundledCountryAsync(PointLat, PointLon)).CountryName);
+            clock.Advance(TimeSpan.FromSeconds(59));
+            Assert.AreEqual("Aaland", (await service.FindBundledCountryAsync(PointLat, PointLon)).CountryName);
+            clock.Advance(TimeSpan.FromSeconds(61));
+            Assert.AreEqual("Reloaded", (await service.FindBundledCountryAsync(PointLat, PointLon)).CountryName);
+            service.Dispose();
+            Assert.IsTrue(clock.Timer!.IsDisposed);
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [TestMethod]
+    public async Task IdleTimeoutZero_KeepsIndexUntilSettingIsEnabled()
+    {
+        var root = CreateFixture();
+        try
+        {
+            var clock = new ManualClock();
+            var policy = new MemoryResourcePolicy { CountryIndexIdleMinutes = 0 };
+            using var service = CreateTimedService(root, policy, clock);
+            await service.FindBundledCountryAsync(PointLat, PointLon);
+            RenameFixture(root);
+            clock.Advance(TimeSpan.FromDays(1));
+            Assert.AreEqual("Aaland", (await service.FindBundledCountryAsync(PointLat, PointLon)).CountryName);
+            policy.CountryIndexIdleMinutes = 1;
+            clock.Advance(TimeSpan.FromMinutes(2));
+            Assert.AreEqual("Reloaded", (await service.FindBundledCountryAsync(PointLat, PointLon)).CountryName);
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [TestMethod]
+    public async Task IdleTimer_DoesNotEvictDuringAnActiveLookup()
+    {
+        var root = CreateFixture();
+        using var entered = new ManualResetEventSlim();
+        using var resume = new ManualResetEventSlim();
+        try
+        {
+            var pause = 0;
+            var clock = new ManualClock();
+            var policy = new MemoryResourcePolicy { CountryIndexIdleMinutes = 1 };
+            using var service = CreateTimedService(root, policy, clock, code =>
+            {
+                if (Interlocked.Exchange(ref pause, 0) == 1)
+                {
+                    entered.Set();
+                    Assert.IsTrue(resume.Wait(TimeSpan.FromSeconds(5)));
+                }
+                return code == "AA" ? "AAA" : "SPP";
+            });
+            await service.FindBundledCountryAsync(PointLat, PointLon);
+            RenameFixture(root);
+            pause = 1;
+            var pending = Task.Run(() => service.FindBundledCountryAsync(PointLat, PointLon));
+            Assert.IsTrue(entered.Wait(TimeSpan.FromSeconds(5)));
+            clock.Advance(TimeSpan.FromMinutes(2));
+            resume.Set();
+            await pending;
+            Assert.AreEqual("Aaland", (await service.FindBundledCountryAsync(PointLat, PointLon)).CountryName);
+            clock.Advance(TimeSpan.FromMinutes(2));
+            Assert.AreEqual("Reloaded", (await service.FindBundledCountryAsync(PointLat, PointLon)).CountryName);
+        }
+        finally
+        {
+            resume.Set();
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [TestMethod]
+    public async Task WarmDiskLookup_DoesNotReadDistantPolygonBytes()
+    {
+        var root = CreateFixture();
+        try
+        {
+            var logger = new RecordingLogger();
+            using var service = new OvertureDivisionsService(logger,
+                new OverturePlacesService(NullLogger<OverturePlacesService>.Instance, root, root), root, root,
+                code => code == "AA" ? "AAA" : "SPP", new MemoryResourcePolicy { LowMemoryMode = true });
+            await service.FindBundledCountryAsync(PointLat, PointLon);
+            Assert.IsNull(logger.Exception, logger.Exception?.ToString());
+            var allocatedBefore = GC.GetAllocatedBytesForCurrentThread();
+            for (var index = 0; index < 10; index++)
+            {
+                Assert.AreEqual("AAA", (await service.FindBundledCountryAsync(PointLat, PointLon)).Iso3);
+            }
+            var perLookup = (GC.GetAllocatedBytesForCurrentThread() - allocatedBefore) / 10;
+            Assert.IsTrue(perLookup < 512 * 1024, $"Warm disk lookup allocated {perLookup:N0} bytes, suggesting it decoded distant polygons.");
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [TestMethod]
+    public async Task DiskIndex_RebuildsWhenBundledDataChangesAndWhenDeleted()
+    {
+        var root = CreateFixture();
+        try
+        {
+            using var service = CreateService(root, lowMemory: true);
+            Assert.AreEqual("Aaland", (await service.FindBundledCountryAsync(PointLat, PointLon)).CountryName);
+            RenameFixture(root);
+            Assert.AreEqual("Reloaded", (await service.FindBundledCountryAsync(PointLat, PointLon)).CountryName);
+            File.Delete(Path.Combine(root, "country-polygon-parts.db"));
+            Assert.AreEqual("Reloaded", (await service.FindBundledCountryAsync(PointLat, PointLon)).CountryName);
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    private static OvertureDivisionsService CreateTimedService(string root, MemoryResourcePolicy policy, TimeProvider clock, Func<string, string?>? map = null) => new(
+        NullLogger<OvertureDivisionsService>.Instance,
+        new OverturePlacesService(NullLogger<OverturePlacesService>.Instance, root, root), root, root,
+        map ?? (code => code == "AA" ? "AAA" : "SPP"), policy, clock);
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task PolygonParts_PreserveOriginalEnvelopeRanking(bool lowMemory)
+    {
+        var root = CreateFixture();
+        try
+        {
+            var factory = new GeometryFactory(new PrecisionModel(), 4326);
+            var geometry = factory.CreateMultiPolygon([
+                CreateDenseBlob(factory, PointLon, PointLat, 0.1, 50),
+                CreateDenseBlob(factory, 179, 84, 0.1, 50)
+            ]);
+            using (var connection = new SqliteConnection($"Data Source={Path.Combine(root, "defaults", "overture-country-divisions.db")};Pooling=false"))
+            {
+                connection.Open();
+                InsertCountry(connection, new WKBWriter(), "overlap", "Overlap", "SP", "SPP", geometry);
+            }
+            using var service = CreateService(root, lowMemory);
+            Assert.AreEqual("AAA", (await service.FindBundledCountryAsync(PointLat, PointLon)).Iso3,
+                "The smaller part must not change the parent country's original spatial ranking.");
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [TestMethod]
+    [DataRow(false)]
+    [DataRow(true)]
+    public async Task PolygonParts_PreserveHolesAndBoundaryTolerance(bool lowMemory)
+    {
+        var root = CreateFixture();
+        try
+        {
+            var factory = new GeometryFactory(new PrecisionModel(), 4326);
+            var shell = factory.CreateLinearRing([new(9,49), new(11,49), new(11,51), new(9,51), new(9,49)]);
+            var hole = factory.CreateLinearRing([new(9.9,49.9), new(10.1,49.9), new(10.1,50.1), new(9.9,50.1), new(9.9,49.9)]);
+            var geometry = factory.CreateMultiPolygon([factory.CreatePolygon(shell, [hole])]);
+            using (var connection = new SqliteConnection($"Data Source={Path.Combine(root, "defaults", "overture-country-divisions.db")};Pooling=false"))
+            {
+                connection.Open();
+                using var command = connection.CreateCommand();
+                command.CommandText = "UPDATE division_area SET geom_wkb=$wkb, bbox_ymin=49, bbox_ymax=51 WHERE id='aa'";
+                command.Parameters.AddWithValue("$wkb", new WKBWriter().Write(geometry));
+                command.ExecuteNonQuery();
+            }
+            using var service = CreateService(root, lowMemory);
+            Assert.AreEqual(BundledCountryLookupStatus.SpatialNoMatch, (await service.FindBundledCountryAsync(50,10)).Status);
+            Assert.AreEqual("AAA", (await service.FindBundledCountryAsync(50,10.09995)).Iso3);
+            Assert.AreEqual("AAA", (await service.FindBundledCountryAsync(50,10.2)).Iso3);
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [TestMethod]
+    public async Task DiskIndex_CancellationReleasesPreparationAndConcurrentLookupsShareIt()
+    {
+        var root = CreateFixture();
+        try
+        {
+            var policy = new MemoryResourcePolicy { LowMemoryMode = true };
+            using var service = CreateTimedService(root, policy, new ManualClock());
+            using (var blockedWork = policy.Enter(CancellationToken.None))
+            using (var cancellation = new CancellationTokenSource())
+            {
+                var pending = service.FindBundledCountryAsync(PointLat, PointLon, cancellation.Token);
+                cancellation.Cancel();
+                await Assert.ThrowsAsync<OperationCanceledException>(() => pending.WaitAsync(TimeSpan.FromSeconds(5)));
+            }
+            var results = await Task.WhenAll(Enumerable.Range(0, 8)
+                .Select(_ => service.FindBundledCountryAsync(PointLat, PointLon)));
+            Assert.IsTrue(results.All(result => result.Iso3 == "AAA"));
+            Assert.AreEqual(0, Directory.GetFiles(root, "country-polygon-parts.*.tmp").Length);
+            using var index = new SqliteConnection($"Data Source={Path.Combine(root, "country-polygon-parts.db")};Pooling=false");
+            index.Open();
+            using var count = index.CreateCommand();
+            count.CommandText = "SELECT COUNT(*) FROM part";
+            Assert.AreEqual(3L, count.ExecuteScalar());
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [TestMethod]
+    public async Task UnwritableIndexDirectory_FallsBackWithoutChangingCountryResult()
+    {
+        var root = CreateFixture();
+        try
+        {
+            var unusableDirectory = Path.Combine(root, "not-a-directory");
+            File.WriteAllText(unusableDirectory, "fixture");
+            using var service = new OvertureDivisionsService(NullLogger<OvertureDivisionsService>.Instance,
+                new OverturePlacesService(NullLogger<OverturePlacesService>.Instance, root, root), unusableDirectory, root,
+                code => code == "AA" ? "AAA" : "SPP", new MemoryResourcePolicy { LowMemoryMode = true });
+            Assert.AreEqual("AAA", (await service.FindBundledCountryAsync(PointLat, PointLon)).Iso3);
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [TestMethod]
+    public async Task DiskIndex_IgnoresRowsWithMissingBoundsLikeTheOriginalQuery()
+    {
+        var root = CreateFixture();
+        try
+        {
+            using (var connection = new SqliteConnection($"Data Source={Path.Combine(root, "defaults", "overture-country-divisions.db")};Pooling=false"))
+            {
+                connection.Open();
+                using var command = connection.CreateCommand();
+                command.CommandText = "UPDATE division_area SET bbox_xmin=NULL WHERE id='sp'";
+                command.ExecuteNonQuery();
+            }
+            var logger = new RecordingLogger();
+            using var service = new OvertureDivisionsService(logger,
+                new OverturePlacesService(NullLogger<OverturePlacesService>.Instance, root, root), root, root,
+                code => code == "AA" ? "AAA" : "SPP", new MemoryResourcePolicy { LowMemoryMode = true });
+            Assert.AreEqual("AAA", (await service.FindBundledCountryAsync(PointLat, PointLon)).Iso3);
+            Assert.IsNull(logger.Exception, logger.Exception?.ToString());
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [TestMethod]
+    [DataRow(false, false, false)]
+    [DataRow(true, false, false)]
+    [DataRow(false, true, false)]
+    [DataRow(true, true, false)]
+    [DataRow(false, false, true)]
+    [DataRow(true, false, true)]
+    [DataRow(false, true, true)]
+    [DataRow(true, true, true)]
+    public async Task PolygonParts_ReadBothByteOrdersAndAdditionalOrdinates(bool bigEndian, bool emitZ, bool emitM)
+    {
+        var root = CreateFixture();
+        try
+        {
+            var factory = new GeometryFactory(new PrecisionModel(), 4326);
+            var shell = factory.CreateLinearRing(new Coordinate[]
+            {
+                new CoordinateZM(9,49,7,8), new CoordinateZM(11,49,7,8),
+                new CoordinateZM(11,51,7,8), new CoordinateZM(9,51,7,8), new CoordinateZM(9,49,7,8)
+            });
+            var hole = factory.CreateLinearRing(new Coordinate[]
+            {
+                new CoordinateZM(9.9,49.9,7,8), new CoordinateZM(10.1,49.9,7,8),
+                new CoordinateZM(10.1,50.1,7,8), new CoordinateZM(9.9,50.1,7,8), new CoordinateZM(9.9,49.9,7,8)
+            });
+            var geometry = factory.CreateMultiPolygon([factory.CreatePolygon(shell, [hole])]);
+            // With SRID, the writer emits EWKB flags; without it, ISO dimensional type codes.
+            var writer = new WKBWriter(bigEndian ? ByteOrder.BigEndian : ByteOrder.LittleEndian,
+                handleSRID: bigEndian, emitZ, emitM);
+            using (var connection = new SqliteConnection($"Data Source={Path.Combine(root, "defaults", "overture-country-divisions.db")};Pooling=false"))
+            {
+                connection.Open();
+                using var command = connection.CreateCommand();
+                command.CommandText = "UPDATE division_area SET geom_wkb=$wkb, bbox_ymin=49, bbox_ymax=51 WHERE id='aa'";
+                command.Parameters.AddWithValue("$wkb", writer.Write(geometry));
+                command.ExecuteNonQuery();
+            }
+            var logger = new RecordingLogger();
+            using var service = new OvertureDivisionsService(logger,
+                new OverturePlacesService(NullLogger<OverturePlacesService>.Instance, root, root), root, root,
+                code => code == "AA" ? "AAA" : "SPP", new MemoryResourcePolicy { LowMemoryMode = true });
+            Assert.AreEqual(BundledCountryLookupStatus.SpatialNoMatch, (await service.FindBundledCountryAsync(50,10)).Status);
+            Assert.AreEqual("AAA", (await service.FindBundledCountryAsync(50,10.1)).Iso3, "An exact hole boundary is covered.");
+            Assert.AreEqual("AAA", (await service.FindBundledCountryAsync(50,10.09995)).Iso3, "Tolerance includes the nearby hole boundary.");
+            Assert.AreEqual("AAA", (await service.FindBundledCountryAsync(50,10.2)).Iso3);
+            Assert.IsNull(logger.Exception, logger.Exception?.ToString());
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [TestMethod]
+    public async Task DiskIndex_RecoversCorruptCacheAndCoordinatesSeparateServiceInstances()
+    {
+        var root = CreateFixture();
+        try
+        {
+            File.WriteAllText(Path.Combine(root, "country-polygon-parts.db"), "interrupted or damaged local cache");
+            using var first = CreateService(root, lowMemory: true);
+            using var second = CreateService(root, lowMemory: true);
+            var results = await Task.WhenAll(
+                first.FindBundledCountryAsync(PointLat, PointLon),
+                second.FindBundledCountryAsync(PointLat, PointLon));
+            Assert.IsTrue(results.All(result => result.Iso3 == "AAA"));
+            using var index = new SqliteConnection($"Data Source={Path.Combine(root, "country-polygon-parts.db")};Mode=ReadOnly;Pooling=false");
+            index.Open();
+            using var check = index.CreateCommand();
+            check.CommandText = "SELECT COUNT(*) FROM part";
+            Assert.AreEqual(3L, check.ExecuteScalar(), "Both instances must share one complete rebuilt index.");
+            Assert.AreEqual(0, Directory.GetFiles(root, "country-polygon-parts.*.tmp").Length);
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [TestMethod]
+    public async Task NormalIndexLoading_DoesNotAllocateAnEntireWkbCopy()
+    {
+        var root = CreateFixture();
+        try
+        {
+            long wkbBytes;
+            using (var connection = new SqliteConnection($"Data Source={Path.Combine(root, "defaults", "overture-country-divisions.db")};Mode=ReadOnly;Pooling=false"))
+            {
+                connection.Open();
+                using var command = connection.CreateCommand();
+                command.CommandText = "SELECT SUM(length(geom_wkb)) FROM division_area";
+                wkbBytes = (long)command.ExecuteScalar()!;
+            }
+            using var service = CreateService(root);
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            // Outside every envelope: load the geometries without lazily building point indexes.
+            var result = await service.FindBundledCountryAsync(89, 0);
+            var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
+            Assert.AreEqual(BundledCountryLookupStatus.SpatialNoMatch, result.Status);
+            Assert.IsTrue(allocated < wkbBytes + 512 * 1024,
+                $"Loading {wkbBytes:N0} WKB bytes allocated {allocated:N0} bytes; a full input copy appears to be retained alongside decoded coordinates.");
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    private static void RenameFixture(string root)
+    {
+        using var connection = new SqliteConnection($"Data Source={Path.Combine(root, "defaults", "overture-country-divisions.db")};Pooling=false");
+        connection.Open();
+        using var command = connection.CreateCommand();
+        command.CommandText = "UPDATE division_area SET name='Reloaded' WHERE id='aa'";
+        command.ExecuteNonQuery();
+    }
+
+    private sealed class ManualClock : TimeProvider
+    {
+        private long _ticks;
+        public ManualTimer? Timer { get; private set; }
+        public override long TimestampFrequency => TimeSpan.TicksPerSecond;
+        public override long GetTimestamp() => Interlocked.Read(ref _ticks);
+        public override ITimer CreateTimer(TimerCallback callback, object? state, TimeSpan dueTime, TimeSpan period)
+        {
+            Timer = new ManualTimer(callback, state);
+            return Timer;
+        }
+        public void Advance(TimeSpan time)
+        {
+            Interlocked.Add(ref _ticks, time.Ticks);
+            Timer?.Fire();
+        }
+    }
+
+    private sealed class RecordingLogger : ILogger<OvertureDivisionsService>
+    {
+        public Exception? Exception { get; private set; }
+        public IDisposable? BeginScope<TState>(TState state) where TState : notnull => null;
+        public bool IsEnabled(LogLevel level) => true;
+        public void Log<TState>(LogLevel level, EventId id, TState state, Exception? exception, Func<TState, Exception?, string> formatter) => Exception = exception;
+    }
+
+    private sealed class ManualTimer(TimerCallback callback, object? state) : ITimer
+    {
+        public bool IsDisposed { get; private set; }
+        public bool Change(TimeSpan dueTime, TimeSpan period) => !IsDisposed;
+        public void Fire()
+        {
+            if (!IsDisposed)
+            {
+                callback(state);
+            }
+        }
+        public void Dispose() => IsDisposed = true;
+        public ValueTask DisposeAsync()
+        {
+            Dispose();
+            return ValueTask.CompletedTask;
+        }
     }
 
     /// <summary>

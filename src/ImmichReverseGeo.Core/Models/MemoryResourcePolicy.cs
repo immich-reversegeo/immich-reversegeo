@@ -9,6 +9,13 @@ public sealed class MemoryResourcePolicy
 {
     private readonly SemaphoreSlim _heavyWork = new(1, 1);
     private volatile bool _lowMemoryMode;
+    private int _countryIndexIdleMinutes = 5;
+
+    public int CountryIndexIdleMinutes
+    {
+        get => Volatile.Read(ref _countryIndexIdleMinutes);
+        set => Volatile.Write(ref _countryIndexIdleMinutes, Math.Clamp(value, 0, 1440));
+    }
 
     public bool LowMemoryMode
     {

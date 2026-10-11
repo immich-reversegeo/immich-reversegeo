@@ -16,3 +16,4 @@ reversegeo/
 .playwright-cli/
 
 /.local/immich-db/
+/.local/geographic-workload/

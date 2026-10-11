@@ -9,6 +9,7 @@ using ImmichReverseGeo.Overture.Models;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
 using NetTopologySuite;
+using NetTopologySuite.Algorithm.Locate;
 using NetTopologySuite.Geometries;
 using NetTopologySuite.Geometries.Implementation;
 using NetTopologySuite.Geometries.Prepared;
@@ -17,10 +18,10 @@ using NetTopologySuite.IO;
 
 namespace ImmichReverseGeo.Overture.Services;
 
-public class OvertureDivisionsService
+public class OvertureDivisionsService : IDisposable
 {
     private static readonly WKBReader WkbReader = new();
-    // Compact only the retained index. Disk lookups keep their faster transient decoder.
+    // Compact the retained index and streamed parts. The compatibility path keeps its original decoder.
     // Doubles preserve coordinate precision without one managed Coordinate object per vertex.
     private static readonly WKBReader BundledCountryWkbReader = new(new NtsGeometryServices(PackedCoordinateSequenceFactory.DoubleFactory));
     private static readonly GeometryFactory GeometryFactory = NtsGeometryServices.Instance.CreateGeometryFactory(srid: 4326);
@@ -32,7 +33,14 @@ public class OvertureDivisionsService
     private readonly Func<string, string?> _alpha2ToIso3;
     private readonly MemoryResourcePolicy _memoryPolicy;
     private readonly object _bundledCountryCacheLock = new();
-    private STRtree<BundledCountryArea>? _bundledCountryIndex;
+    private volatile STRtree<BundledCountryArea>? _bundledCountryIndex;
+    private readonly CountryPolygonDiskIndex _countryParts;
+    private readonly TimeProvider _timeProvider;
+    private readonly IdleCheck _idleCheck;
+    private long _lastCountryLookup;
+    private int _activeCountryLookups;
+    private int _diskIndexWarningLogged;
+    private bool _disposed;
 
     public OvertureDivisionsService(
         ILogger<OvertureDivisionsService> logger,
@@ -40,7 +48,8 @@ public class OvertureDivisionsService
         string dataDir,
         string bundledDataDir,
         Func<string, string?> alpha2ToIso3,
-        MemoryResourcePolicy? memoryPolicy = null)
+        MemoryResourcePolicy? memoryPolicy = null,
+        TimeProvider? timeProvider = null)
     {
         _logger = logger;
         _overturePlacesService = overturePlacesService;
@@ -48,10 +57,17 @@ public class OvertureDivisionsService
         _bundledDataDir = bundledDataDir;
         _alpha2ToIso3 = alpha2ToIso3;
         _memoryPolicy = memoryPolicy ?? new MemoryResourcePolicy();
+        _countryParts = new CountryPolygonDiskIndex(dataDir, _memoryPolicy);
+        _timeProvider = timeProvider ?? TimeProvider.System;
+        _lastCountryLookup = _timeProvider.GetTimestamp();
         _memoryPolicy.LowMemoryEnabled += ReleaseBundledCountryIndex;
+        // A weak callback lets short-lived test/lookup services be collected as well.
+        _idleCheck = new IdleCheck(this);
+        _idleCheck.Timer = _timeProvider.CreateTimer(static state => ((IdleCheck)state!).Tick(), _idleCheck,
+            TimeSpan.FromSeconds(30), TimeSpan.FromSeconds(30));
     }
 
-    public Task<BundledCountryLookupResult> FindBundledCountryAsync(
+    public async Task<BundledCountryLookupResult> FindBundledCountryAsync(
         double lat,
         double lon,
         CancellationToken ct = default)
@@ -59,45 +75,151 @@ public class OvertureDivisionsService
         var bundledPath = Path.Combine(_bundledDataDir, "defaults", "overture-country-divisions.db");
         if (!File.Exists(bundledPath))
         {
-            return Task.FromResult(BundledCountryLookupResult.SpatialNoMatch(
-                "Bundled country database is unavailable."));
+            return BundledCountryLookupResult.SpatialNoMatch("Bundled country database is unavailable.");
         }
-
-        ct.ThrowIfCancellationRequested();
-        var best = _memoryPolicy.LowMemoryMode
-            ? FindBundledCountryFromDisk(bundledPath, lat, lon, ct)
-            : FindBundledCountryFromMemory(bundledPath, lat, lon);
-        if (best is null)
+        lock (_bundledCountryCacheLock)
         {
-            return Task.FromResult(BundledCountryLookupResult.SpatialNoMatch());
+            ObjectDisposedException.ThrowIf(_disposed, this);
+            _activeCountryLookups++;
         }
-
-        if (string.IsNullOrWhiteSpace(best.Country))
+        try
         {
-            return Task.FromResult(BundledCountryLookupResult.IdentityMappingFailure(
-                best.Name,
-                null,
-                best.Id,
-                "Matched bundled geometry has no Alpha-2 identity."));
-        }
+            ct.ThrowIfCancellationRequested();
+            var best = _memoryPolicy.LowMemoryMode
+                ? await FindBundledCountryFromPartsAsync(bundledPath, lat, lon, ct)
+                : FindBundledCountryFromMemory(bundledPath, lat, lon);
+            if (best is null)
+            {
+                return BundledCountryLookupResult.SpatialNoMatch();
+            }
 
-        var mappedAlpha3 = _alpha2ToIso3(best.Country);
-        if (string.IsNullOrWhiteSpace(best.Alpha3)
-            || string.IsNullOrWhiteSpace(mappedAlpha3)
-            || !string.Equals(best.Alpha3, mappedAlpha3, StringComparison.OrdinalIgnoreCase))
-        {
-            return Task.FromResult(BundledCountryLookupResult.IdentityMappingFailure(
+            if (string.IsNullOrWhiteSpace(best.Country))
+            {
+                return BundledCountryLookupResult.IdentityMappingFailure(
+                    best.Name,
+                    null,
+                    best.Id,
+                    "Matched bundled geometry has no Alpha-2 identity.");
+            }
+
+            var mappedAlpha3 = _alpha2ToIso3(best.Country);
+            if (string.IsNullOrWhiteSpace(best.Alpha3)
+                || string.IsNullOrWhiteSpace(mappedAlpha3)
+                || !string.Equals(best.Alpha3, mappedAlpha3, StringComparison.OrdinalIgnoreCase))
+            {
+                return BundledCountryLookupResult.IdentityMappingFailure(
+                    best.Name,
+                    best.Country,
+                    best.Id,
+                    $"Matched bundled identity '{best.Country}' has missing or inconsistent Alpha-3 mapping.");
+            }
+
+            return BundledCountryLookupResult.Matched(
+                mappedAlpha3,
                 best.Name,
                 best.Country,
-                best.Id,
-                $"Matched bundled identity '{best.Country}' has missing or inconsistent Alpha-3 mapping."));
+                best.Id);
         }
+        finally
+        {
+            lock (_bundledCountryCacheLock)
+            {
+                _activeCountryLookups--;
+                _lastCountryLookup = _timeProvider.GetTimestamp();
+            }
+        }
+    }
 
-        return Task.FromResult(BundledCountryLookupResult.Matched(
-            mappedAlpha3,
-            best.Name,
-            best.Country,
-            best.Id));
+    private async Task<OvertureDivisionResult?> FindBundledCountryFromPartsAsync(string path, double lat, double lon, CancellationToken ct)
+    {
+        try
+        {
+            var index = await _countryParts.EnsureAsync(path, ct);
+            return QueryBundledCountryParts(path, index, lat, lon, false, ct)
+                ?? QueryBundledCountryParts(path, index, lat, lon, true, ct);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SqliteException or InvalidCastException or NotSupportedException)
+        {
+            if (Interlocked.Exchange(ref _diskIndexWarningLogged, 1) == 0)
+            {
+                _logger.LogWarning(ex, "Country polygon disk index is unavailable; using the original bundled country lookup.");
+            }
+            return FindBundledCountryFromDisk(path, lat, lon, ct);
+        }
+    }
+
+    private OvertureDivisionResult? QueryBundledCountryParts(string sourcePath, CountryPolygonDiskIndex.IndexInfo index, double lat, double lon, bool useTolerance, CancellationToken ct)
+    {
+        using var connection = CountryPolygonDiskIndex.OpenReadOnly(index.Path);
+        using var source = CountryPolygonDiskIndex.OpenReadOnly(sourcePath);
+        using var sourceSnapshot = source.BeginTransaction(deferred: true);
+        using var command = connection.CreateCommand();
+        command.CommandText = """
+            SELECT c.id, c.name, c.subtype, c.class_name, c.admin_level, c.country, c.is_land, c.is_territorial,
+                   c.source_rowid, c.bbox_xmin, c.bbox_ymin, c.bbox_xmax, c.bbox_ymax, c.alpha3, p.byte_offset, p.byte_length
+            FROM part_bounds b JOIN part p ON p.id=b.id JOIN country c ON c.source_rowid=p.source_rowid
+            WHERE b.xmax >= $xmin AND b.xmin <= $xmax AND b.ymax >= $ymin AND b.ymin <= $ymax
+              AND c.bbox_xmax >= $xmin AND c.bbox_xmin <= $xmax AND c.bbox_ymax >= $ymin AND c.bbox_ymin <= $ymax
+            ORDER BY c.source_rowid, p.id
+            """;
+        var envelope = BuildToleranceEnvelope(lon, lat);
+        command.Parameters.AddWithValue("$xmin", envelope.MinX);
+        command.Parameters.AddWithValue("$xmax", envelope.MaxX);
+        command.Parameters.AddWithValue("$ymin", envelope.MinY);
+        command.Parameters.AddWithValue("$ymax", envelope.MaxY);
+        var point = GeometryFactory.CreatePoint(new Coordinate(lon, lat));
+        var tolerance = GeometryFactory.ToGeometry(envelope);
+        using var reader = command.ExecuteReader();
+        OvertureDivisionResult? bestMapped = null;
+        OvertureDivisionResult? bestUnmapped = null;
+        var matchedRows = new HashSet<long>();
+        while (reader.Read())
+        {
+            ct.ThrowIfCancellationRequested();
+            var row = reader.GetInt64(8);
+            if (matchedRows.Contains(row))
+            {
+                continue;
+            }
+            using var blob = new SqliteBlob(source, "division_area", "geom_wkb", row, readOnly: true);
+            blob.Seek(reader.GetInt64(14), SeekOrigin.Begin);
+            var wkb = new byte[reader.GetInt32(15)];
+            blob.ReadExactly(wkb);
+            var geometry = BundledCountryWkbReader.Read(wkb);
+            var coversPoint = geometry is Polygon
+                ? SimplePointInAreaLocator.IsContained(point.Coordinate, geometry)
+                : geometry.Covers(point);
+            if (!(useTolerance ? geometry.Intersects(tolerance) : coversPoint))
+            {
+                continue;
+            }
+            matchedRows.Add(row);
+            var xmin = reader.GetDouble(9);
+            var ymin = reader.GetDouble(10);
+            var xmax = reader.GetDouble(11);
+            var ymax = reader.GetDouble(12);
+            var alpha2 = OvertureDataAccess.ReadNullableString(reader, 5);
+            var mappedAlpha3 = string.IsNullOrWhiteSpace(alpha2) ? null : _alpha2ToIso3(alpha2);
+            var alpha3 = index.HasAlpha3 ? OvertureDataAccess.ReadNullableString(reader, 13) : mappedAlpha3;
+            // Rank using the ORIGINAL parent envelope, not the smaller part's envelope.
+            var candidate = new OvertureDivisionResult(
+                reader.GetString(0), reader.GetString(1), OvertureDataAccess.ReadNullableString(reader, 2),
+                OvertureDataAccess.ReadNullableString(reader, 3), reader.IsDBNull(4) ? null : reader.GetInt32(4), alpha2, alpha3,
+                OvertureDataAccess.ReadSqliteBool(reader, 6), OvertureDataAccess.ReadSqliteBool(reader, 7),
+                lon >= xmin && lon <= xmax && lat >= ymin && lat <= ymax, true, Math.Abs((xmax - xmin) * (ymax - ymin)));
+            if (!string.IsNullOrWhiteSpace(mappedAlpha3))
+            {
+                if (bestMapped is null || OvertureDivisionsLogic.ShouldPreferDivisionCandidate(candidate, bestMapped))
+                {
+                    bestMapped = candidate;
+                }
+            }
+            else if (bestUnmapped is null || OvertureDivisionsLogic.ShouldPreferDivisionCandidate(candidate, bestUnmapped))
+            {
+                bestUnmapped = candidate;
+            }
+        }
+        return bestMapped ?? bestUnmapped;
     }
 
     private OvertureDivisionResult? FindBundledCountryFromMemory(string bundledPath, double lat, double lon)
@@ -262,6 +384,53 @@ public class OvertureDivisionsService
         }
     }
 
+    private void ReleaseIdleCountryIndex()
+    {
+        var released = false;
+        lock (_bundledCountryCacheLock)
+        {
+            var minutes = _memoryPolicy.CountryIndexIdleMinutes;
+            if (!_disposed && minutes > 0 && _activeCountryLookups == 0 && _bundledCountryIndex is not null
+                && _timeProvider.GetElapsedTime(_lastCountryLookup) >= TimeSpan.FromMinutes(minutes))
+            {
+                _bundledCountryIndex = null;
+                released = true;
+            }
+        }
+        if (released)
+        {
+            _logger.LogInformation("Released the idle country boundary index; it will rebuild on the next lookup.");
+        }
+    }
+
+    public void Dispose()
+    {
+        lock (_bundledCountryCacheLock)
+        {
+            _disposed = true;
+            _bundledCountryIndex = null;
+        }
+        _memoryPolicy.LowMemoryEnabled -= ReleaseBundledCountryIndex;
+        _idleCheck.Timer?.Dispose();
+    }
+
+    private sealed class IdleCheck(OvertureDivisionsService owner)
+    {
+        private readonly WeakReference<OvertureDivisionsService> _owner = new(owner);
+        public ITimer? Timer { get; set; }
+        public void Tick()
+        {
+            if (_owner.TryGetTarget(out var target))
+            {
+                target.ReleaseIdleCountryIndex();
+            }
+            else
+            {
+                Timer?.Dispose();
+            }
+        }
+    }
+
     private static Envelope BuildToleranceEnvelope(double lon, double lat) => new(
         lon - OvertureDataAccess.BoundaryToleranceDegrees,
         lon + OvertureDataAccess.BoundaryToleranceDegrees,
@@ -296,12 +465,13 @@ public class OvertureDivisionsService
     {
         var index = new STRtree<BundledCountryArea>();
 
-        using var conn = new SqliteConnection($"Data Source={bundledPath};Pooling=false");
-        conn.Open();
+        using var conn = CountryPolygonDiskIndex.OpenReadOnly(bundledPath);
+        using var snapshot = conn.BeginTransaction(deferred: true);
         var adminLevelColumn = HasColumn(conn, "division_area", "admin_level") ? "admin_level" : "NULL AS admin_level";
         var hasAlpha3Column = HasColumn(conn, "division_area", "alpha3");
         var alpha3Column = hasAlpha3Column ? "alpha3" : "NULL AS alpha3";
         using var cmd = conn.CreateCommand();
+        cmd.Transaction = snapshot;
         cmd.CommandText = $"""
             SELECT
                 id,
@@ -313,28 +483,27 @@ public class OvertureDivisionsService
                 {alpha3Column},
                 is_land,
                 is_territorial,
-                geom_wkb,
                 bbox_xmin,
                 bbox_ymin,
                 bbox_xmax,
-                bbox_ymax
+                bbox_ymax,
+                rowid
             FROM division_area
+            WHERE geom_wkb IS NOT NULL
             """;
 
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
         {
-            if (reader.IsDBNull(9))
-            {
-                continue;
-            }
-
-            var geometry = BundledCountryWkbReader.Read(OvertureDataAccess.ReadBlobValue(reader.GetValue(9)));
+            // Buffer small decoder reads without allocating a copy of the country's entire WKB.
+            using var blob = new SqliteBlob(conn, "division_area", "geom_wkb", reader.GetInt64(13), readOnly: true);
+            using var buffered = new BufferedStream(blob, 64 * 1024);
+            var geometry = BundledCountryWkbReader.Read(buffered);
             var preparedGeometry = PreparedGeometryFactory.Prepare(geometry);
-            var xmin = reader.GetDouble(10);
-            var ymin = reader.GetDouble(11);
-            var xmax = reader.GetDouble(12);
-            var ymax = reader.GetDouble(13);
+            var xmin = reader.GetDouble(9);
+            var ymin = reader.GetDouble(10);
+            var xmax = reader.GetDouble(11);
+            var ymax = reader.GetDouble(12);
 
             var alpha2 = OvertureDataAccess.ReadNullableString(reader, 5);
             // Older artifacts have no Alpha-3 column. Resolve their existing code through the catalog.

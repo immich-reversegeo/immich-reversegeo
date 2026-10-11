@@ -105,6 +105,7 @@ try
 {
     var startupConfig = await app.Services.GetRequiredService<ConfigService>().GetConfigAsync();
     app.Services.GetRequiredService<MemoryResourcePolicy>().LowMemoryMode = startupConfig.Processing.LowMemoryMode;
+    app.Services.GetRequiredService<MemoryResourcePolicy>().CountryIndexIdleMinutes = startupConfig.Processing.CountryIndexIdleMinutes;
 }
 catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
 {
