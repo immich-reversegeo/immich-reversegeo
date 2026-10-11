@@ -189,6 +189,19 @@ else
         <span class="hint">Uses one processing worker, batches of at most 25 assets, and less memory for downloads. Country boundaries are read from disk as needed. Processing can be slower. Save before starting a run; work already in progress keeps its current limits.</span>
     </div>
     <div class="form-group">
+        <label><input type="checkbox" @bind="_cfg.Processing.UseBoundedCountryCache" /> Limit country boundary cache</label>
+        <span class="hint">Uses less RAM for country matching while keeping your processing parallelism. Lookups can be slower than the default full index. Low-memory mode overrides this option and reads boundaries without retaining them.</span>
+    </div>
+    @if (_cfg.Processing.UseBoundedCountryCache)
+    {
+        <div class="form-group">
+            <label>Country boundary cache budget (MiB)
+                <input type="number" min="1" max="1024" @bind="_cfg.Processing.CountryCacheMiB" />
+            </label>
+            <span class="hint">Default: 256. Range: 1–1024. This estimates cached geometry size, not total RAM. Active lookups and garbage collection can use additional memory. Save to apply; changing the cache settings releases the existing country cache.</span>
+        </div>
+    }
+    <div class="form-group">
         <label>Release country index after idle (minutes)
             <input type="number" min="0" max="1440" @bind="_cfg.Processing.CountryIndexIdleMinutes" />
         </label>

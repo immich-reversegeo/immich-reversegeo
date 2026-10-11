@@ -306,4 +306,32 @@ public class ConfigServiceTests
         policy.CountryIndexIdleMinutes = int.MaxValue;
         Assert.AreEqual(1440, policy.CountryIndexIdleMinutes);
     }
+    [TestMethod]
+    public async Task BoundedCountryCache_RoundTripsAndUpdatesRuntimePolicy()
+    {
+        var policy = new MemoryResourcePolicy();
+        var service = new ConfigService(NullLogger<ConfigService>.Instance, _tempDir, policy);
+        var original = (await service.GetConfigAsync()).Processing;
+        Assert.IsFalse(original.UseBoundedCountryCache);
+        Assert.AreEqual(256, original.CountryCacheMiB);
+        await service.UpdateConfigAsync(config =>
+        {
+            config.Processing.UseBoundedCountryCache = true;
+            config.Processing.CountryCacheMiB = 64;
+        });
+        var loaded = await new ConfigService(NullLogger<ConfigService>.Instance, _tempDir).GetConfigAsync();
+        Assert.IsTrue(loaded.Processing.UseBoundedCountryCache);
+        Assert.AreEqual(64, loaded.Processing.CountryCacheMiB);
+        Assert.IsTrue(policy.UseBoundedCountryCache);
+        Assert.AreEqual(64, policy.CountryCacheMiB);
+        Assert.AreEqual(original.EffectiveParallelism, loaded.Processing.EffectiveParallelism);
+        Assert.AreEqual(original.EffectiveBatchSize, loaded.Processing.EffectiveBatchSize);
+        await service.UpdateConfigAsync(config => config.Processing.UseBoundedCountryCache = false);
+        Assert.IsFalse(policy.UseBoundedCountryCache);
+        policy.CountryCacheMiB = -1;
+        Assert.AreEqual(1, policy.CountryCacheMiB);
+        policy.CountryCacheMiB = int.MaxValue;
+        Assert.AreEqual(1024, policy.CountryCacheMiB);
+    }
+
 }

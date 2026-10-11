@@ -40,9 +40,9 @@ public class OvertureDivisionsService : IDisposable
     private long _lastCountryLookup;
     private int _activeCountryLookups;
     private int _diskIndexWarningLogged;
-    private bool _disposed;
-    private readonly ExperimentalCountryPartCache? _experimentalCache;
-    public object? ExperimentalCountryCacheStatistics => _experimentalCache?.Statistics;
+    private volatile bool _disposed;
+    private readonly CountryPartCache _countryCache;
+    public object CountryCacheStatistics => _countryCache.Statistics;
 
     public OvertureDivisionsService(
         ILogger<OvertureDivisionsService> logger,
@@ -51,9 +51,7 @@ public class OvertureDivisionsService : IDisposable
         string bundledDataDir,
         Func<string, string?> alpha2ToIso3,
         MemoryResourcePolicy? memoryPolicy = null,
-        TimeProvider? timeProvider = null,
-        long experimentalCountryCacheBytes = 0,
-        bool experimentalPrepareCountryParts = true)
+        TimeProvider? timeProvider = null)
     {
         _logger = logger;
         _overturePlacesService = overturePlacesService;
@@ -61,11 +59,13 @@ public class OvertureDivisionsService : IDisposable
         _bundledDataDir = bundledDataDir;
         _alpha2ToIso3 = alpha2ToIso3;
         _memoryPolicy = memoryPolicy ?? new MemoryResourcePolicy();
-        _experimentalCache = experimentalCountryCacheBytes > 0 ? new ExperimentalCountryPartCache(experimentalCountryCacheBytes, experimentalPrepareCountryParts) : null;
+        _countryCache = new CountryPartCache(() => !_disposed && !_memoryPolicy.LowMemoryMode && _memoryPolicy.UseBoundedCountryCache
+            ? (long)_memoryPolicy.CountryCacheMiB * 1024 * 1024 : 0);
         _countryParts = new CountryPolygonDiskIndex(dataDir, _memoryPolicy);
         _timeProvider = timeProvider ?? TimeProvider.System;
         _lastCountryLookup = _timeProvider.GetTimestamp();
         _memoryPolicy.LowMemoryEnabled += ReleaseBundledCountryIndex;
+        _memoryPolicy.CountryCacheSettingsChanged += ReleaseBundledCountryIndex;
         // A weak callback lets short-lived test/lookup services be collected as well.
         _idleCheck = new IdleCheck(this);
         _idleCheck.Timer = _timeProvider.CreateTimer(static state => ((IdleCheck)state!).Tick(), _idleCheck,
@@ -90,7 +90,7 @@ public class OvertureDivisionsService : IDisposable
         try
         {
             ct.ThrowIfCancellationRequested();
-            var best = _memoryPolicy.LowMemoryMode || _experimentalCache is not null
+            var best = _memoryPolicy.LowMemoryMode || _memoryPolicy.UseBoundedCountryCache
                 ? await FindBundledCountryFromPartsAsync(bundledPath, lat, lon, ct)
                 : FindBundledCountryFromMemory(bundledPath, lat, lon);
             if (best is null)
@@ -196,14 +196,11 @@ public class OvertureDivisionsService : IDisposable
                 blob.ReadExactly(wkb);
                 return BundledCountryWkbReader.Read(wkb);
             }
-            var cached = !_memoryPolicy.LowMemoryMode ? _experimentalCache?.Get(index, (row, offset), length, ReadPart) : null;
-            var geometry = cached?.Geometry ?? ReadPart();
-            var coversPoint = cached?.Prepared is { } prepared
-                ? prepared.Covers(point)
-                : geometry is Polygon
+            var geometry = _countryCache.Get(index, (row, offset), length, ReadPart);
+            var coversPoint = geometry is Polygon
                 ? SimplePointInAreaLocator.IsContained(point.Coordinate, geometry)
                 : geometry.Covers(point);
-            if (!(useTolerance ? cached?.Prepared?.Intersects(tolerance) ?? geometry.Intersects(tolerance) : coversPoint))
+            if (!(useTolerance ? geometry.Intersects(tolerance) : coversPoint))
             {
                 continue;
             }
@@ -395,7 +392,7 @@ public class OvertureDivisionsService : IDisposable
         lock (_bundledCountryCacheLock)
         {
             _bundledCountryIndex = null;
-            _experimentalCache?.Clear();
+            _countryCache.Clear();
         }
     }
 
@@ -405,11 +402,11 @@ public class OvertureDivisionsService : IDisposable
         lock (_bundledCountryCacheLock)
         {
             var minutes = _memoryPolicy.CountryIndexIdleMinutes;
-            if (!_disposed && minutes > 0 && _activeCountryLookups == 0 && (_bundledCountryIndex is not null || _experimentalCache?.HasEntries == true)
+            if (!_disposed && minutes > 0 && _activeCountryLookups == 0 && (_bundledCountryIndex is not null || _countryCache.HasEntries)
                 && _timeProvider.GetElapsedTime(_lastCountryLookup) >= TimeSpan.FromMinutes(minutes))
             {
                 _bundledCountryIndex = null;
-                _experimentalCache?.Clear();
+                _countryCache.Clear();
                 released = true;
             }
         }
@@ -425,9 +422,10 @@ public class OvertureDivisionsService : IDisposable
         {
             _disposed = true;
             _bundledCountryIndex = null;
-            _experimentalCache?.Clear();
+            _countryCache.Clear();
         }
         _memoryPolicy.LowMemoryEnabled -= ReleaseBundledCountryIndex;
+        _memoryPolicy.CountryCacheSettingsChanged -= ReleaseBundledCountryIndex;
         _idleCheck.Timer?.Dispose();
     }
 
@@ -470,7 +468,7 @@ public class OvertureDivisionsService : IDisposable
             }
 
             var index = LoadBundledCountryIndex(bundledPath);
-            if (!_memoryPolicy.LowMemoryMode)
+            if (!_memoryPolicy.LowMemoryMode && !_memoryPolicy.UseBoundedCountryCache)
             {
                 _bundledCountryIndex = index;
             }
