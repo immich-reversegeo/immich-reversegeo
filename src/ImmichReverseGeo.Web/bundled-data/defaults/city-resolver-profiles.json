@@ -4,6 +4,10 @@
     "tieBreakMode": "smallest-area"
   },
   "countryOverrides": {
+    "USA": {
+      "preferredSubtypes": ["locality", "borough", "localadmin", "macrohood", "neighborhood", "microhood", "county"],
+      "tieBreakMode": "smallest-area"
+    },
     "DEU": {
       "preferredSubtypes": ["county", "locality", "localadmin", "borough", "macrohood", "neighborhood", "microhood"],
       "tieBreakMode": "largest-area"
