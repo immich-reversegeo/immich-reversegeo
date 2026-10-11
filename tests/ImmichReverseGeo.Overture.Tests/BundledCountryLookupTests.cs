@@ -663,6 +663,72 @@ public class BundledCountryLookupTests
         }
     }
 
+    [TestMethod]
+    [DataRow(1)]
+    [DataRow(8)]
+    public async Task BoundedCache_PreservesResultsAcrossConcurrencyAndSourceReplacement(int budgetMiB)
+    {
+        var root = CreateFixture();
+        try
+        {
+            using var service = new OvertureDivisionsService(NullLogger<OvertureDivisionsService>.Instance,
+                new OverturePlacesService(NullLogger<OverturePlacesService>.Instance, root, root), root, root,
+                code => code == "AA" ? "AAA" : "SPP", new MemoryResourcePolicy { UseBoundedCountryCache = true, CountryCacheMiB = budgetMiB });
+            var matches = await Task.WhenAll(Enumerable.Range(0, 8)
+                .Select(_ => Task.Run(() => service.FindBundledCountryAsync(PointLat, PointLon))));
+            Assert.IsTrue(matches.All(result => result.Iso3 == "AAA"));
+            Assert.AreEqual(BundledCountryLookupStatus.SpatialNoMatch, (await service.FindBundledCountryAsync(89, 0)).Status);
+            Assert.AreEqual("AAA", (await service.FindBundledCountryAsync(50, 11.00005)).Iso3);
+            RenameFixture(root);
+            Assert.AreEqual("Reloaded", (await service.FindBundledCountryAsync(PointLat, PointLon)).CountryName);
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
+    [TestMethod]
+    public async Task BoundedCache_IsReleasedOnIdleAndSettingsChanges()
+    {
+        var root = CreateFixture();
+        try
+        {
+            var policy = new MemoryResourcePolicy { CountryIndexIdleMinutes = 1, UseBoundedCountryCache = true, CountryCacheMiB = 8 };
+            var clock = new ManualClock();
+            using var service = new OvertureDivisionsService(NullLogger<OvertureDivisionsService>.Instance,
+                new OverturePlacesService(NullLogger<OverturePlacesService>.Instance, root, root), root, root,
+                code => code == "AA" ? "AAA" : "SPP", policy, clock);
+            int Entries() => System.Text.Json.JsonSerializer.SerializeToElement(service.CountryCacheStatistics)
+                .GetProperty("entries").GetInt32();
+            await service.FindBundledCountryAsync(PointLat, PointLon);
+            Assert.IsTrue(Entries() > 0);
+            clock.Advance(TimeSpan.FromMinutes(2));
+            Assert.AreEqual(0, Entries());
+            Assert.AreEqual("AAA", (await service.FindBundledCountryAsync(PointLat, PointLon)).Iso3);
+            Assert.IsTrue(Entries() > 0);
+            policy.CountryCacheMiB = 1;
+            Assert.AreEqual(0, Entries());
+            await service.FindBundledCountryAsync(PointLat, PointLon);
+            Assert.IsTrue(Entries() > 0);
+            policy.UseBoundedCountryCache = false;
+            Assert.AreEqual(0, Entries());
+            Assert.AreEqual("AAA", (await service.FindBundledCountryAsync(PointLat, PointLon)).Iso3);
+            Assert.AreEqual(0, Entries());
+            policy.UseBoundedCountryCache = true;
+            await service.FindBundledCountryAsync(PointLat, PointLon);
+            Assert.IsTrue(Entries() > 0);
+            policy.LowMemoryMode = true;
+            Assert.AreEqual(0, Entries());
+            Assert.AreEqual("AAA", (await service.FindBundledCountryAsync(PointLat, PointLon)).Iso3);
+            Assert.AreEqual(0, Entries());
+        }
+        finally
+        {
+            TryDeleteDirectory(root);
+        }
+    }
+
     private static void RenameFixture(string root)
     {
         using var connection = new SqliteConnection($"Data Source={Path.Combine(root, "defaults", "overture-country-divisions.db")};Pooling=false");

@@ -11,6 +11,37 @@ public sealed class MemoryResourcePolicy
     private volatile bool _lowMemoryMode;
     private int _countryIndexIdleMinutes = 5;
 
+    private volatile bool _useBoundedCountryCache;
+    private int _countryCacheMiB = 256;
+
+    public bool UseBoundedCountryCache
+    {
+        get => _useBoundedCountryCache;
+        set
+        {
+            if (_useBoundedCountryCache != value)
+            {
+                _useBoundedCountryCache = value;
+                CountryCacheSettingsChanged?.Invoke();
+            }
+        }
+    }
+
+    public int CountryCacheMiB
+    {
+        get => Volatile.Read(ref _countryCacheMiB);
+        set
+        {
+            var clamped = Math.Clamp(value, 1, 1024);
+            if (Interlocked.Exchange(ref _countryCacheMiB, clamped) != clamped)
+            {
+                CountryCacheSettingsChanged?.Invoke();
+            }
+        }
+    }
+
+    public event Action? CountryCacheSettingsChanged;
+
     public int CountryIndexIdleMinutes
     {
         get => Volatile.Read(ref _countryIndexIdleMinutes);

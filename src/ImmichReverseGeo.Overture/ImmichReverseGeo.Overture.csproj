@@ -15,4 +15,8 @@
     <ProjectReference Include="..\\ImmichReverseGeo.Core\\ImmichReverseGeo.Core.csproj" />
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="ImmichReverseGeo.Overture.Tests" />
+  </ItemGroup>
+
 </Project>

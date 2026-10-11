@@ -110,6 +110,16 @@ Use Lookup on a few known coordinates first, then compare memory use during a pr
 
 In both modes, processing checks skipped IDs one batch at a time rather than loading the entire skipped history into RAM.
 
+### Limiting the country boundary cache
+
+Enable **Limit country boundary cache** under Settings → Processing to reduce country matching memory while keeping your normal worker and batch settings. It reads country boundary parts from disk and retains recently used parts, instead of keeping the full prepared country index in RAM. Leave it off for the fastest repeated lookups.
+
+Start with the default **256 MiB** budget. Values from **1 to 1024 MiB** are supported. A smaller budget causes more disk reads and repeated geometry decoding. Parts larger than the budget are checked without caching them. Save to apply; changing this option or its budget releases the existing country cache.
+
+The budget estimates retained geometry size. It is **not a total RAM cap**: active lookups, the web app, administrative boundaries, downloads, and native libraries also use memory. Evicted geometry becomes available for garbage collection, so the host's RAM figure may fall later. The idle release setting below also applies to this cache. Low-memory mode takes precedence and does not retain country boundary parts.
+
+Use Lookup on a few known coordinates, then compare memory and processing time on your library. Compare the first pass separately from later passes. This option preserves country matching rules; it cannot repair incorrect or missing boundary data.
+
 ### Releasing idle country boundaries
 
 Normal mode reads country data directly from disk while building its in-memory index, reducing temporary memory use during loading. The completed index stays cached for fast repeated lookups.

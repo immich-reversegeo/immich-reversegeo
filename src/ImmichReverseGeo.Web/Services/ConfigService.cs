@@ -72,6 +72,8 @@ public class ConfigService(ILogger<ConfigService> logger, string? configDir = nu
         {
             memoryPolicy.LowMemoryMode = config.Processing.LowMemoryMode;
             memoryPolicy.CountryIndexIdleMinutes = config.Processing.CountryIndexIdleMinutes;
+            memoryPolicy.UseBoundedCountryCache = config.Processing.UseBoundedCountryCache;
+            memoryPolicy.CountryCacheMiB = config.Processing.CountryCacheMiB;
         }
     }
 

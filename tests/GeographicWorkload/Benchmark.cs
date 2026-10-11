@@ -47,7 +47,11 @@ internal static partial class Program
         var config = new ProcessingConfig { LowMemoryMode = mode == "low", MaxDegreeOfParallelism = mode == "normal" ? 4 : 1 };
         var codes = new CountryCodeService(bundled);
         var places = new OverturePlacesService(NullLogger<OverturePlacesService>.Instance, data, bundled, policy);
-        var divisions = new OvertureDivisionsService(NullLogger<OvertureDivisionsService>.Instance, places, data, bundled, codes.Alpha2ToIso3, policy);
+        var cacheMiB = int.TryParse(Environment.GetEnvironmentVariable("COUNTRY_CACHE_MIB"), out var requestedMiB) ? requestedMiB : 0;
+        Require(cacheMiB is >= 0 and <= 1024, "COUNTRY_CACHE_MIB must be 0 (default cache) or 1 through 1024.");
+        config.UseBoundedCountryCache = policy.UseBoundedCountryCache = cacheMiB > 0;
+        config.CountryCacheMiB = policy.CountryCacheMiB = cacheMiB > 0 ? cacheMiB : 256;
+        using var divisions = new OvertureDivisionsService(NullLogger<OvertureDivisionsService>.Instance, places, data, bundled, codes.Alpha2ToIso3, policy);
         var cache = new OvertureDivisionCacheService(NullLogger<OvertureDivisionCacheService>.Instance, storage, codes.Iso3ToAlpha2, policy);
         var resolver = new AssetLocationResolverService(new AdministrativeAreaResolverService(
             NullLogger<AdministrativeAreaResolverService>.Instance,
@@ -170,6 +174,7 @@ internal static partial class Program
                 var metrics = new
                 {
                     pass, points = indices.Length, errors, seconds = timer.Elapsed.TotalSeconds,
+                    countryCache = divisions.CountryCacheStatistics,
                     cpuSeconds = (process.TotalProcessorTime - cpuBefore).TotalSeconds,
                     allocatedBytes = GC.GetTotalAllocatedBytes(true) - allocatedBefore,
                     peakRssBytes = Math.Max(process.WorkingSet64, passSamples.Select(sample => sample.RssBytes).DefaultIfEmpty().Max()),
@@ -209,7 +214,8 @@ internal static partial class Program
         {
             sampleCts.Cancel();
             await sampling;
-            var report = new { mode, scope, profile, gcMode, eligiblePoints, selectedCountry, revision, config, countrySha256 = countryHash, workers = config.EffectiveParallelism, idleSeconds,
+            var report = new { mode, scope, profile, gcMode, eligiblePoints, selectedCountry, revision, config, cacheMiB,
+                countryCache = divisions.CountryCacheStatistics, countrySha256 = countryHash, workers = config.EffectiveParallelism, idleSeconds,
                 runtime = System.Runtime.InteropServices.RuntimeInformation.FrameworkDescription,
                 processorCount = Environment.ProcessorCount, datasetSha256 = Convert.ToHexString(SHA256.HashData(manifestBytes)),
                 cacheSha256 = cacheHash, passes, samples };
