@@ -128,8 +128,9 @@ Why this source is used:
 What it does not do:
 
 - it is not a general-purpose places database
-- airports mapped only as points, missing or invalid boundaries, and coordinates more than 5 m outside an airport boundary are excluded, even when no city is available
-- proximity and bounding-box overlap alone do not establish an airport match
+- by default, point-only airports, missing or invalid boundaries, and coordinates more than 5 m outside an airport boundary are excluded
+- the optional point-only fallback can fill an empty city within 100 m, but cannot confirm airport grounds or replace an administrative city/county
+- proximity and bounding-box overlap alone do not confirm airport grounds
 
 Origin:
 

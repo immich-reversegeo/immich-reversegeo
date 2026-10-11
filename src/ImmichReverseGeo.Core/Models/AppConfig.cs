@@ -30,6 +30,7 @@ public class ProcessingConfig
     public int BatchDelayMs { get; set; } = 100;
     public int MaxDegreeOfParallelism { get; set; } = 4;
     public bool UseAirportInfrastructure { get; set; } = true;
+    public bool UsePointOnlyAirportFallback { get; set; } = false;
     public bool UseGadmAdministrativeAreas { get; set; } = false;
     public bool PreferGadmAdministrativeAreas { get; set; } = false;
     public bool UseGadmTerritoryFallbacks { get; set; } = true;

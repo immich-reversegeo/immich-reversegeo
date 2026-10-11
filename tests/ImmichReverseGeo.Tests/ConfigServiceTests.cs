@@ -46,7 +46,17 @@ public class ConfigServiceTests
         Assert.AreEqual(50, cfg.Processing.BatchSize);
         Assert.IsFalse(cfg.Processing.LowMemoryMode);
         Assert.IsTrue(cfg.Processing.UseAirportInfrastructure);
+        Assert.IsFalse(cfg.Processing.UsePointOnlyAirportFallback);
         Assert.AreEqual(0, cfg.Processing.CityResolver.CountryOverrides.Count);
+    }
+
+    [TestMethod]
+    public async Task LegacyConfig_PointOnlyFallbackRemainsOff()
+    {
+        Directory.CreateDirectory(_tempDir);
+        await File.WriteAllTextAsync(Path.Combine(_tempDir, "settings.json"), """{"processing":{"useAirportInfrastructure":true}}""");
+        var service = new ConfigService(NullLogger<ConfigService>.Instance, configDir: _tempDir);
+        Assert.IsFalse((await service.GetConfigAsync()).Processing.UsePointOnlyAirportFallback);
     }
 
     [TestMethod]
@@ -56,12 +66,14 @@ public class ConfigServiceTests
         var cfg = await svc.GetConfigAsync();
         cfg.Processing.BatchSize = 99;
         cfg.Processing.UseAirportInfrastructure = false;
+        cfg.Processing.UsePointOnlyAirportFallback = true;
         await svc.SaveConfigAsync(cfg);
 
         var svc2 = new ConfigService(NullLogger<ConfigService>.Instance, configDir: _tempDir);
         var loaded = await svc2.GetConfigAsync();
         Assert.AreEqual(99, loaded.Processing.BatchSize);
         Assert.IsFalse(loaded.Processing.UseAirportInfrastructure);
+        Assert.IsTrue(loaded.Processing.UsePointOnlyAirportFallback);
     }
 
     [TestMethod]

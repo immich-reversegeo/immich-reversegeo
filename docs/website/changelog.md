@@ -11,6 +11,8 @@ Technical implementation notes live in [CHANGELOG.md](https://github.com/immich-
 
 ## Unreleased
 
+- Optionally fill a missing city with a point-only airport within 100 m. The new setting defaults off and never replaces a resolved city or county.
+
 - Airport names now require a mapped boundary matching the photo coordinates, with a 5 m tolerance for minor GPS or mapping differences. Nearby and point-only airports no longer fill missing city names; use Lookup to inspect excluded airport candidates.
 
 - Use county names as a fallback for US photos where Overture has no preferred city-like match, instead of falling back directly to a state or a nearby airport.

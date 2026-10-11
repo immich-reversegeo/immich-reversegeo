@@ -219,8 +219,15 @@ else
     </div>
     <div class="form-group">
         <label><input type="checkbox" @bind="_cfg.Processing.UseAirportInfrastructure" /> Use airport names when photos match mapped airport boundaries</label>
-        <span class="hint">Allows a 5 m tolerance around mapped boundaries. Airports mapped only as points are excluded. Turn this off if you prefer commune or city names on airport grounds.</span>
+        <span class="hint">Allows a 5 m tolerance around mapped boundaries. Point-only airports are excluded unless the optional fallback below is enabled. Turn this off if you prefer commune or city names on airport grounds.</span>
     </div>
+    @if (_cfg.Processing.UseAirportInfrastructure)
+    {
+        <div class="form-group">
+            <label><input type="checkbox" @bind="_cfg.Processing.UsePointOnlyAirportFallback" /> Allow point-only airports within 100 m when no city or county is found</label>
+            <span class="hint">Off by default. Proximity does not confirm airport grounds, and the mapped point may be far from the terminal. This fallback never replaces a resolved administrative city or county.</span>
+        </div>
+    }
     <div class="form-group">
         <label><input type="checkbox" @bind="_cfg.Processing.UseGadmAdministrativeAreas" /> Enable GADM administrative areas as an optional source</label>
         <span class="hint">Uses on-demand GADM country caches for state and city matching when enabled.</span>

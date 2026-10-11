@@ -33,6 +33,18 @@ public class AirportBoundaryTests
     }
 
     [TestMethod]
+    [DataRow("POINT (1 1)", true)]
+    [DataRow("POINT EMPTY", false)]
+    [DataRow("LINESTRING (0 0, 1 1)", false)]
+    [DataRow("POLYGON ((0 0, 2 0, 2 2, 0 2, 0 0))", false)]
+    public void PointFallback_RequiresActualPointGeometry(string wkt, bool expected)
+    {
+        Assert.AreEqual(expected, OvertureDataAccess.IsAirportPointGeometry(new WKBWriter().Write(new WKTReader().Read(wkt))));
+        Assert.IsFalse(OvertureDataAccess.IsAirportPointGeometry(null));
+        Assert.IsFalse(OvertureDataAccess.IsAirportPointGeometry([1, 2, 3]));
+    }
+
+    [TestMethod]
     public void Boundary_MissingOrMalformedGeometryCannotMatch()
     {
         Assert.AreEqual((false, false), OvertureDataAccess.ReadAirportBoundary(null, new Point(0, 0)));
@@ -84,8 +96,9 @@ public class AirportBoundaryTests
             Assert.IsNull(result.Error);
             Assert.AreEqual("inside", result.BestMatch?.Id);
             Assert.AreEqual("outside boundary", result.Candidates.Single(c => c.Id == "outside").BoundaryStatus);
-            Assert.AreEqual("boundary unavailable", result.Candidates.Single(c => c.Id == "point").BoundaryStatus);
+            Assert.AreEqual("point-only airport", result.Candidates.Single(c => c.Id == "point").BoundaryStatus);
             Assert.IsFalse(result.Candidates.Single(c => c.Id == "point").Selected);
+            Assert.IsTrue(result.Candidates.Single(c => c.Id == "point").IsPointOnly);
 
             var miss = await service.FindNearestInfrastructureWithDiagnosticsAsync(0.04, 0.04, "USA");
             Assert.IsNull(miss.Error);
