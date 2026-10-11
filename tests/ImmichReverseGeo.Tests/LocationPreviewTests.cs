@@ -75,12 +75,21 @@ public class LocationPreviewTests
     }
 
     [TestMethod]
-    public void FinalLocation_MissingCityUsesAirportThenStateThenCountry()
+    public void FinalLocation_MissingCityRejectsNearbyAirportAndUsesStateThenCountry()
     {
         var admin = new GeoResult("France", "Region", null);
-        Assert.AreEqual("Airport", AssetLocationResolverService.FinalizeLocation(admin, Airport(false)).City);
+        Assert.AreEqual("Region", AssetLocationResolverService.FinalizeLocation(admin, Airport(false)).City);
         Assert.AreEqual("Region", AssetLocationResolverService.FinalizeLocation(admin, null).City);
         Assert.AreEqual("Monaco", AssetLocationResolverService.FinalizeLocation(new GeoResult("Monaco", null, null), null).City);
+    }
+
+    [TestMethod]
+    public void FinalLocation_UnboundedAirportCannotOverrideEvenWithContainmentFlag()
+    {
+        var admin = new GeoResult("France", "Region", "City");
+        var unbounded = Airport(true) with { HasMappedBoundary = false };
+        Assert.AreEqual(admin, AssetLocationResolverService.FinalizeLocation(admin, unbounded));
+        Assert.AreEqual("Region", AssetLocationResolverService.FinalizeLocation(admin with { City = null }, unbounded).City);
     }
 
     private static LocationPreviewAsset Asset(GeoResult existing) => new(Guid.NewGuid(), 48.0, 2.0, existing);
@@ -127,5 +136,5 @@ public class LocationPreviewTests
     }
 
     private static OvertureInfrastructureResult Airport(bool containsPoint) =>
-        new("airport", "Airport", "airport", null, null, 100, true, containsPoint, []);
+        new("airport", "Airport", "airport", null, null, 100, true, containsPoint, [], HasMappedBoundary: true);
 }
