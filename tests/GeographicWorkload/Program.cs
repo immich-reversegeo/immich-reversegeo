@@ -17,7 +17,7 @@ internal static partial class Program
         {
             if (args.Length < 3)
             {
-                throw new ArgumentException("Usage: GeographicWorkload <import|generate|seed|report|reset> <repository-root> <local-state-directory>");
+                throw new ArgumentException("Usage: GeographicWorkload <import|generate|seed|report|reset|benchmark|prepare-benchmark-cache> <repository-root> <local-state-directory>");
             }
             var root = Path.GetFullPath(args[1]);
             var state = Path.GetFullPath(args[2]);
@@ -47,6 +47,8 @@ internal static partial class Program
                 case "seed": await SeedAsync(state); break;
                 case "report": await ReportAsync(state); break;
                 case "reset": await ResetAsync(state); break;
+                case "benchmark": await BenchmarkAsync(root, state, args.Skip(3).ToArray()); break;
+                case "prepare-benchmark-cache": await PrepareBenchmarkCacheAsync(root, state); break;
                 default: throw new ArgumentException("Unknown action.");
             }
             return 0;

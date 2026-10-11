@@ -73,3 +73,31 @@ For each run, record:
 - output differences on required-country cases and a reviewed subset of city/reference cases
 
 Start with a few known countries before the full worldwide pass. First-time administrative cache creation across hundreds of countries can consume substantial disk/network capacity. Seeding the library does not download those caches or prove that every location name is correct. Normal CI compiles/tests code; it does not run this workload against production or launch these stacks.
+
+### Resolver benchmark
+
+The harness also has a read-only resolver benchmark. It does not change Immich rows, contact production, or trigger the UI. Run each mode sequentially in a fresh process to avoid contention. Stop the dedicated UI before building on Windows, then restart it afterward.
+
+```powershell
+# Recommended: matches the app's server GC, preserves the dedicated UI's running state.
+pwsh -NoProfile -File tests/GeographicWorkload/Run-ResolverBenchmarks.ps1 -Country DEU -PointLimit 256 -IdleSeconds 30
+
+# Country-only comparison, including a workstation-GC diagnostic if needed.
+pwsh -NoProfile -File tests/GeographicWorkload/Run-ResolverBenchmarks.ps1 -Scope Country -GcMode Workstation
+
+# Explicitly prepare the Swiss cache, then compare full location resolution there.
+pwsh -NoProfile -File tests/GeographicWorkload/Run-ResolverBenchmarks.ps1 -Scope Location -Country CHE
+pwsh -NoProfile -File tests/GeographicWorkload/Compare-ResolverBenchmarks.ps1
+```
+
+`normal` uses four workers; `serial` uses the normal country index with one worker; `low` uses low-memory mode with one worker. Each invocation measures two identical passes in the same process, with the requested idle seconds after each. The point limit selects evenly spaced positions in the immutable shuffled manifest. Start bounded: worldwide low-memory lookups can be slow. The runner establishes a full normal-country selection before location runs.
+
+For individual invocations, the compiled harness accepts `benchmark <repository-root> <state-directory> <normal|serial|low> <country|location> <idle-seconds>`. Country scope accepts a point limit or `controls` to select every maintained country assertion. Location scope accepts `DEU`/`CHE` followed by a point limit. Individual location invocations need an earlier full `normal country 0` run. Explicit `prepare-benchmark-cache <repository-root> <state-directory>` prepares CHE using low-memory policy, with a 15-minute cancellation deadline. The runner restores its GC environment setting after execution.
+
+Location runs select actual country matches from that normal country output. `CHE` uses the explicitly prepared Swiss cache; `DEU` copies the existing developer `DEU.db`. The same source cache is copied into each mode's isolated benchmark storage. GADM is disabled, airport matching is enabled, and location runs refuse a missing/stale cache rather than implicitly downloading it. These are resolver measurements, not end-to-end database throughput. Explicit cache preparation is measured separately; network and remote release conditions can affect it.
+
+Ignored `benchmarks/` files contain 100 ms memory samples, allocation/GC/CPU counters, elapsed time, input hashes, and per-point outputs. Compare output arrays across modes and passes before interpreting timing. Process RSS includes native memory; managed memory includes collectible garbage until GC runs. A final forced-GC measurement is a diagnostic to distinguish garbage from retained objects, **not** evidence that normal idle time frees that memory. No forced collection occurs inside timed passes. The runtime's OS page cache is not flushed, so a fresh process does not mean cold disk I/O. Brief passes can be shorter than the sampling interval; endpoint samples help but sampled peaks are approximate.
+
+Normal/serial runs then switch the shared memory policy to low mode and perform a separately labeled diagnostic collection to verify that the country index becomes collectible. This is not a timed low-mode lookup pass or an automatic production cleanup policy. `Compare-ResolverBenchmarks.ps1` checks identical input hashes and output hashes across modes/repeated passes; it summarizes only the latest complete run of each profile. An interrupted run's samples are preserved but do not count as a completed result.
+
+The console's default workstation GC differs from the web app's server GC. The runner defaults to server GC, records the actual GC mode, and can run workstation GC explicitly for diagnosis. Compare memory-mode results within the same GC mode and host CPU limits. Results from this native console exclude the ASP.NET/Blazor host and database-processing overhead and do not establish a Docker/NAS memory limit.
