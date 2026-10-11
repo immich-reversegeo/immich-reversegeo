@@ -1,0 +1,48 @@
+<section class="settings-card">
+    <h3>City Name Replacements</h3>
+    <p class="section-intro">Replace a resolved city name in a selected country. Use the exact original city and optional state shown in Lookup. Leave state empty to match that name anywhere in the country.</p>
+    <p class="hint">A matching state-specific rule wins over a country-wide rule. Only one replacement is applied, after airport matching and city fallbacks. Save these settings, then use Lookup to check the final result.</p>
+    @if (Rules.Count > 0)
+    {
+        <div class="table-scroll">
+            <table class="data-table city-name-replacements">
+                <thead>
+                    <tr><th scope="col">Country</th><th scope="col">Original city</th><th scope="col">State (optional)</th><th scope="col">Replacement city</th><th scope="col">Action</th></tr>
+                </thead>
+                <tbody>
+                    @foreach (var rule in Rules)
+                    {
+                        <tr @key="rule">
+                            <td>
+                                <select class="form-control" @bind="rule.CountryIso3" aria-label="Country for city replacement">
+                                    <option value="">Choose country</option>
+                                    @foreach (var country in Countries)
+                                    {
+                                        <option value="@country.Iso3">@country.DisplayName (@country.Iso3)</option>
+                                    }
+                                </select>
+                            </td>
+                            <td><input class="form-control" @bind="rule.OriginalCity" @bind:event="oninput" aria-label="Original city name" /></td>
+                            <td><input class="form-control" @bind="rule.State" @bind:event="oninput" aria-label="State to match, optional" placeholder="Any state" /></td>
+                            <td><input class="form-control" @bind="rule.OverrideCity" @bind:event="oninput" aria-label="Replacement city name" /></td>
+                            <td><button type="button" class="btn btn-danger" @onclick="() => Rules.Remove(rule)">Remove</button></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    else
+    {
+        <p class="hint">No city name replacements configured.</p>
+    }
+    <button type="button" class="btn btn-secondary" @onclick="() => Rules.Add(new CityNameOverride())">Add City Name Replacement</button>
+</section>
+
+@code {
+    [Parameter, EditorRequired]
+    public List<CityNameOverride> Rules { get; set; } = [];
+
+    [Parameter, EditorRequired]
+    public IReadOnlyList<KnownCountryOption> Countries { get; set; } = [];
+}

@@ -7,6 +7,7 @@ For a shorter user-facing summary, see [docs/website/changelog.md](./docs/websit
 ## Unreleased
 
 - Fixed scheduler startup failures for cron expressions whose next run is beyond the timer-supported delay range. Scheduled waits now use cancellable intervals of at most one day and recheck the UTC deadline before starting processing.
+- Added country- and optional state-scoped city name replacements, with shared final-stage matching in processing and Lookup, state-specific precedence, duplicate validation and persistent configuration.
 
 - Added `DB_HOSTNAME` support for shared Immich environment settings, retaining nonblank `DB_HOST` precedence and the `database` default when both values are unset or blank.
 - Display dashboard and log timestamps in the browser's timezone. Preserve structured UTC log timestamps and include dates in UTC log downloads.

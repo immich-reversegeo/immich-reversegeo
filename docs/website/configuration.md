@@ -187,6 +187,21 @@ The app ships with built-in default rules. Your own settings sit on top of them:
 
 That means you only need to change the countries you care about.
 
+### City name replacements
+
+Use **City Name Replacements** on the City Resolver page when a resolved name is consistently wrong for your library. For example, replace `Mörtvik` with `Skogås` in Sweden without changing the resolver rules for other cities.
+
+1. Use Lookup for an affected coordinate and note the final city, state and country.
+2. Add a replacement with that country, the original city name and your preferred city name.
+3. Enter a state if the same city name exists in several parts of the country. Leave it empty to match the name anywhere in that country.
+4. Save the City Resolver settings, then repeat Lookup. The final city and trace show whether a replacement applied.
+
+Names match without regard to case or surrounding spaces. A matching state-specific rule wins over a country-wide rule. Each result receives only one replacement, after administrative resolution, airport matching and city fallbacks. Replacements work with both Overture and GADM results and change only the city name.
+
+This cannot fix incorrect coordinates, missing country coverage or missing boundary data. It does not change country or state values. A country-wide rule affects every occurrence of that original name in the country, so use a state when needed.
+
+Saving a replacement does not rewrite existing Immich locations. After checking Lookup, back up the database and use the targeted [Reset Specific Locations](./using-the-app.md#data-tools) action for affected assets before running processing again.
+
 ### Want to improve the bundled defaults for everyone?
 
 If you find a country setting that clearly works better, you can open a pull request.

@@ -1267,6 +1267,27 @@ input[type="text"].env-readonly {
 .cache-filters .input-group {
     min-width: 220px;
 }
+.city-name-replacements {
+    table-layout: fixed;
+    min-width: 36rem;
+}
+
+.city-name-replacements th {
+    white-space: normal;
+}
+
+.city-name-replacements th:last-child {
+    width: 7.5rem;
+}
+
+.city-name-replacements th:first-child {
+    width: 11rem;
+}
+
+.city-name-replacements .form-control {
+    min-width: 0;
+}
+
 .table-scroll {
     overflow-x: auto;
     border: 1px solid rgba(124, 135, 255, 0.16);

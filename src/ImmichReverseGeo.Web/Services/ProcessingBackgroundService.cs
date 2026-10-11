@@ -238,6 +238,9 @@ public class ProcessingBackgroundService(
             // 3. City fallback — prefer city, then state, then country for country-only microstates.
             geoResult = geoResult.WithFallbackCity();
 
+            // Apply one scoped name replacement after all location fallbacks.
+            geoResult = CityNameOverrides.Resolve(geoResult, iso3, cfg.Processing.CityResolver).GeoResult;
+
             // 4. Write back (only if we have country AND city)
             step = "WriteLocation";
             if (geoResult.HasMatch)

@@ -153,6 +153,30 @@ public class ConfigServiceTests
     }
 
     [TestMethod]
+    public async Task CityNameReplacements_RoundTripAndInvalidSavePreservesFile()
+    {
+        var svc = new ConfigService(NullLogger<ConfigService>.Instance, configDir: _tempDir);
+        var config = new AppConfig();
+        config.Processing.CityResolver.CityNameOverrides.Add(new CityNameOverride
+        {
+            CountryIso3 = " swe ", OriginalCity = "Mörtvik", State = " ", OverrideCity = "Skogås"
+        });
+        await svc.SaveConfigAsync(config);
+        var loaded = await svc.GetConfigAsync();
+        var rule = loaded.Processing.CityResolver.CityNameOverrides.Single();
+        Assert.AreEqual("SWE", rule.CountryIso3);
+        Assert.AreEqual("Skogås", rule.OverrideCity);
+        Assert.IsNull(rule.State);
+
+        loaded.Processing.CityResolver.CityNameOverrides.Add(new CityNameOverride
+        {
+            CountryIso3 = "SWE", OriginalCity = "Mörtvik", OverrideCity = "Conflicting replacement"
+        });
+        await Assert.ThrowsExactlyAsync<ArgumentException>(() => svc.SaveConfigAsync(loaded));
+        Assert.HasCount(1, (await svc.GetConfigAsync()).Processing.CityResolver.CityNameOverrides);
+    }
+
+    [TestMethod]
     public async Task GetConfig_LegacySettingsWithoutCityResolver_AddsCompatibleDefaults()
     {
         Directory.CreateDirectory(_tempDir);
@@ -183,6 +207,7 @@ public class ConfigServiceTests
         Assert.IsNotNull(loaded.Processing.CityResolver.DefaultProfile);
         Assert.IsNotNull(loaded.Processing.CityResolver.CountryOverrides);
         Assert.AreEqual(0, loaded.Processing.CityResolver.CountryOverrides.Count);
+        Assert.AreEqual(0, loaded.Processing.CityResolver.CityNameOverrides.Count);
         Assert.AreEqual(25, loaded.Processing.BatchSize);
         Assert.IsFalse(loaded.Processing.UseAirportInfrastructure);
         Assert.IsTrue(loaded.Processing.VerboseLogging);
