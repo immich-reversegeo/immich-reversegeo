@@ -112,6 +112,8 @@ In both modes, processing checks skipped IDs one batch at a time rather than loa
 
 ### Releasing idle country boundaries
 
+Normal mode reads country data directly from disk while building its in-memory index, reducing temporary memory use during loading. The completed index stays cached for fast repeated lookups.
+
 **Release country index after idle (minutes)** controls normal mode's cached country boundaries. The default is **5 minutes** without a country lookup. Use **0** to keep them cached, or a value from **1 to 1440** minutes to release them after idle time. Save the setting to apply it.
 
 Releasing the index makes its memory available for garbage collection; the host's RAM figure may fall later. The next country lookup rebuilds the index, so its first result can take longer. Active country lookups are allowed to finish. Low-memory mode reads from disk and does not retain this index.
