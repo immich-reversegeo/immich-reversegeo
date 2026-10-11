@@ -6,6 +6,12 @@ For a shorter user-facing summary, see [docs/website/changelog.md](./docs/websit
 
 ## Unreleased
 
+## 0.1.0 — 2026-10-11
+
+First versioned release; earlier development milestones remain listed below.
+
+- Reduce bundled country-index memory with streamed geometry loading, disk-backed low-memory lookup, and idle index release (five minutes by default). Add an opt-in bounded country-boundary cache with geometry-size budgeting; low-memory mode takes precedence. These settings do not cap total process memory.
+
 - Add county as the last bundled USA city subtype preference, preserving existing city subtype ordering and smallest-area tie breaking. Explicit user profiles retain precedence.
 
 - Refresh bundled airport infrastructure from Overture 2026-03-18.0 to 2026-09-23.1. Preserve the existing schema and airport resolution policy.
