@@ -145,7 +145,7 @@ public class BundledCountryLookupTests
             using (var conn = new SqliteConnection($"Data Source={Path.Combine(root, "defaults", "overture-country-divisions.db")}"))
             {
                 conn.Open();
-                InsertCountry(conn, new WKBWriter(), "nearby", "Nearby", "SP", nearby);
+                InsertCountry(conn, new WKBWriter(), "nearby", "Nearby", "SP", "SPP", nearby);
             }
 
             // AA covers this boundary point exactly. The smaller neighbour's bounding box
@@ -248,7 +248,7 @@ public class BundledCountryLookupTests
             using (var conn = new SqliteConnection($"Data Source={Path.Combine(root, "defaults", "overture-country-divisions.db")};Pooling=false"))
             {
                 conn.Open();
-                InsertCountry(conn, new WKBWriter(), "tiny", "Tiny country", "SP", tiny);
+                InsertCountry(conn, new WKBWriter(), "tiny", "Tiny country", "SP", "SPP", tiny);
             }
 
             var service = CreateService(root, lowMemory);
@@ -322,6 +322,7 @@ public class BundledCountryLookupTests
                     class_name TEXT,
                     admin_level INTEGER,
                     country TEXT,
+                    alpha3 TEXT,
                     is_land INTEGER,
                     is_territorial INTEGER,
                     geom_wkb BLOB,
@@ -336,8 +337,8 @@ public class BundledCountryLookupTests
             schema.ExecuteNonQuery();
         }
 
-        InsertCountry(conn, writer, "aa", "Aaland", "AA", compact);
-        InsertCountry(conn, writer, "sp", "Sprawlia", "SP", sprawling);
+        InsertCountry(conn, writer, "aa", "Aaland", "AA", "AAA", compact);
+        InsertCountry(conn, writer, "sp", "Sprawlia", "SP", "SPP", sprawling);
 
         return root;
     }
@@ -363,6 +364,7 @@ public class BundledCountryLookupTests
         string id,
         string name,
         string alpha2,
+        string alpha3,
         Geometry geometry)
     {
         var envelope = geometry.EnvelopeInternal;
@@ -370,15 +372,16 @@ public class BundledCountryLookupTests
         using var cmd = conn.CreateCommand();
         cmd.CommandText = """
             INSERT INTO division_area
-                (id, name, subtype, class_name, admin_level, country, is_land, is_territorial,
+                (id, name, subtype, class_name, admin_level, country, alpha3, is_land, is_territorial,
                  geom_wkb, bbox_xmin, bbox_ymin, bbox_xmax, bbox_ymax)
             VALUES
-                ($id, $name, 'country', NULL, 2, $country, 1, 0,
+                ($id, $name, 'country', NULL, 2, $country, $alpha3, 1, 0,
                  $wkb, $xmin, $ymin, $xmax, $ymax)
             """;
         cmd.Parameters.AddWithValue("$id", id);
         cmd.Parameters.AddWithValue("$name", name);
         cmd.Parameters.AddWithValue("$country", alpha2);
+        cmd.Parameters.AddWithValue("$alpha3", alpha3);
         cmd.Parameters.AddWithValue("$wkb", writer.Write(geometry));
         cmd.Parameters.AddWithValue("$xmin", envelope.MinX);
         cmd.Parameters.AddWithValue("$ymin", envelope.MinY);

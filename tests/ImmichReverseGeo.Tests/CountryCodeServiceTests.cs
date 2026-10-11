@@ -9,6 +9,17 @@ namespace ImmichReverseGeo.Tests;
 public class CountryCodeServiceTests
 {
     [TestMethod]
+    public void MandatoryCountryIdentities_MapBothDirectionsAndCanonicalNames()
+    {
+        var service = CountryCodeService.CreateForTest();
+        foreach (var fixture in CountryResolutionFixtureCatalog.MandatoryTerritories.DistinctBy(fixture => fixture.Alpha2))
+        {
+            Assert.AreEqual(fixture.Alpha2, service.Iso3ToAlpha2(fixture.Alpha3), fixture.Label);
+            Assert.AreEqual(fixture.Alpha3, service.Alpha2ToIso3(fixture.Alpha2), fixture.Label);
+            Assert.AreEqual(fixture.DisplayName, service.FindByAlpha2(fixture.Alpha2)?.DisplayName, fixture.Label);
+        }
+    }
+    [TestMethod]
     public void Iso3ToAlpha2_CHE_ReturnsCH()
     {
         var service = CountryCodeService.CreateForTest();

@@ -6,6 +6,12 @@ For a shorter user-facing summary, see [docs/website/changelog.md](./docs/websit
 
 ## Unreleased
 
+- Expanded the bundled Overture country artifact to include `dependency` boundaries and canonical Alpha-2, Alpha-3, and display-name identities.
+- Fixed offline country detection for Hong Kong and added validated distinct-territory coverage for Macao, Greenland, the Faroe Islands, the Crown Dependencies, selected US and UK territories, Aruba, Curaçao, the Åland Islands, Réunion, French Polynesia, and New Caledonia.
+- Preserve older bundled/custom databases without Alpha-3 columns through catalog-based inference; keep malformed modern identities visible instead of substituting an overlapping sovereign. Return the catalog's canonical Alpha-3 as the cache key after validation. No database migration is performed.
+- Prefer supported dependency boundaries over overlapping sovereign countries in bundled country lookup.
+- Add territory-resolution and downstream Overture/GADM routing tests, plus country-index size, memory, initialization, and warm-lookup performance budgets.
+
 - Route HKG/MAC GADM territory fallbacks to a shared CHN cache without standalone package requests. Preserve resolved country identity and require named geometry matches in processing and Lookup for these shared-dataset results, excluding GADM's deeper NA placeholder subdivisions.
 
 - Query the bundled country spatial index using the existing tolerance envelope so nearby points outside source bounding boxes can resolve. Preserve prepared-geometry exact matching before tolerance and actual bounding-box containment ranking.

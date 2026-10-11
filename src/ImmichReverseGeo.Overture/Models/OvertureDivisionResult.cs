@@ -9,6 +9,7 @@ public record OvertureDivisionResult(
     string? ClassName,
     int? AdminLevel,
     string? Country,
+    string? Alpha3,
     bool IsLand,
     bool IsTerritorial,
     bool BoundingBoxContainsPoint,

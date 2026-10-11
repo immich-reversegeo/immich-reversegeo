@@ -59,7 +59,8 @@ public class OvertureDivisionsService
         var bundledPath = Path.Combine(_bundledDataDir, "defaults", "overture-country-divisions.db");
         if (!File.Exists(bundledPath))
         {
-            return Task.FromResult(BundledCountryLookupResult.SpatialNoMatch("Bundled country database is unavailable."));
+            return Task.FromResult(BundledCountryLookupResult.SpatialNoMatch(
+                "Bundled country database is unavailable."));
         }
 
         ct.ThrowIfCancellationRequested();
@@ -71,17 +72,32 @@ public class OvertureDivisionsService
             return Task.FromResult(BundledCountryLookupResult.SpatialNoMatch());
         }
 
-        var iso3 = best.Country is null ? null : _alpha2ToIso3(best.Country);
-        if (iso3 is null)
+        if (string.IsNullOrWhiteSpace(best.Country))
+        {
+            return Task.FromResult(BundledCountryLookupResult.IdentityMappingFailure(
+                best.Name,
+                null,
+                best.Id,
+                "Matched bundled geometry has no Alpha-2 identity."));
+        }
+
+        var mappedAlpha3 = _alpha2ToIso3(best.Country);
+        if (string.IsNullOrWhiteSpace(best.Alpha3)
+            || string.IsNullOrWhiteSpace(mappedAlpha3)
+            || !string.Equals(best.Alpha3, mappedAlpha3, StringComparison.OrdinalIgnoreCase))
         {
             return Task.FromResult(BundledCountryLookupResult.IdentityMappingFailure(
                 best.Name,
                 best.Country,
                 best.Id,
-                "A country boundary matched, but its country code could not be resolved."));
+                $"Matched bundled identity '{best.Country}' has missing or inconsistent Alpha-3 mapping."));
         }
 
-        return Task.FromResult(BundledCountryLookupResult.Matched(iso3, best.Name, best.Country!, best.Id));
+        return Task.FromResult(BundledCountryLookupResult.Matched(
+            mappedAlpha3,
+            best.Name,
+            best.Country,
+            best.Id));
     }
 
     private OvertureDivisionResult? FindBundledCountryFromMemory(string bundledPath, double lat, double lon)
@@ -109,13 +125,14 @@ public class OvertureDivisionsService
         return SelectBestBundledCountry(candidates, lat, lon, country => country.PreparedGeometry.Intersects(tolerance));
     }
 
-    private static OvertureDivisionResult? SelectBestBundledCountry(
+    private OvertureDivisionResult? SelectBestBundledCountry(
         IList<BundledCountryArea> candidates,
         double lat,
         double lon,
         Func<BundledCountryArea, bool> matches)
     {
-        OvertureDivisionResult? best = null;
+        OvertureDivisionResult? bestMapped = null;
+        OvertureDivisionResult? bestUnmapped = null;
 
         foreach (var country in candidates)
         {
@@ -124,6 +141,10 @@ public class OvertureDivisionsService
                 continue;
             }
 
+            var boundingBoxContains = lon >= country.BoundingBoxXMin
+                                      && lon <= country.BoundingBoxXMax
+                                      && lat >= country.BoundingBoxYMin
+                                      && lat <= country.BoundingBoxYMax;
             var candidate = new OvertureDivisionResult(
                 country.Id,
                 country.Name,
@@ -131,37 +152,51 @@ public class OvertureDivisionsService
                 country.ClassName,
                 country.AdminLevel,
                 country.Country,
+                country.Alpha3,
                 country.IsLand,
                 country.IsTerritorial,
-                lon >= country.BoundingBoxXMin && lon <= country.BoundingBoxXMax
-                    && lat >= country.BoundingBoxYMin && lat <= country.BoundingBoxYMax,
+                boundingBoxContains,
                 true,
                 country.BoundingBoxArea);
 
-            if (best is null || OvertureDivisionsLogic.ShouldPreferDivisionCandidate(candidate, best))
+            var mappedAlpha3 = string.IsNullOrWhiteSpace(candidate.Country)
+                ? null
+                : _alpha2ToIso3(candidate.Country);
+            // Rank known countries spatially before validating their stored Alpha-3.
+            // A broken territory identity must surface as an error, not silently become its sovereign.
+            if (!string.IsNullOrWhiteSpace(mappedAlpha3))
             {
-                best = candidate;
+                if (bestMapped is null || OvertureDivisionsLogic.ShouldPreferDivisionCandidate(candidate, bestMapped))
+                {
+                    bestMapped = candidate;
+                }
+            }
+            else if (bestUnmapped is null || OvertureDivisionsLogic.ShouldPreferDivisionCandidate(candidate, bestUnmapped))
+            {
+                bestUnmapped = candidate;
             }
         }
 
-        return best;
+        return bestMapped ?? bestUnmapped;
     }
 
-    private static OvertureDivisionResult? FindBundledCountryFromDisk(string path, double lat, double lon, CancellationToken ct)
+    private OvertureDivisionResult? FindBundledCountryFromDisk(string path, double lat, double lon, CancellationToken ct)
     {
         var exact = QueryBundledCountryFromDisk(path, lat, lon, false, ct);
         return exact ?? QueryBundledCountryFromDisk(path, lat, lon, true, ct);
     }
 
-    private static OvertureDivisionResult? QueryBundledCountryFromDisk(string path, double lat, double lon, bool useTolerance, CancellationToken ct)
+    private OvertureDivisionResult? QueryBundledCountryFromDisk(string path, double lat, double lon, bool useTolerance, CancellationToken ct)
     {
         using var conn = new SqliteConnection($"Data Source={path};Pooling=false");
         conn.Open();
         var adminLevel = HasColumn(conn, "division_area", "admin_level") ? "admin_level" : "NULL";
+        var hasAlpha3 = HasColumn(conn, "division_area", "alpha3");
+        var alpha3Column = hasAlpha3 ? "alpha3" : "NULL";
         using var cmd = conn.CreateCommand();
         cmd.CommandText = $"""
             SELECT id, name, subtype, class_name, {adminLevel}, country, is_land, is_territorial,
-                   geom_wkb, bbox_xmin, bbox_ymin, bbox_xmax, bbox_ymax
+                   geom_wkb, bbox_xmin, bbox_ymin, bbox_xmax, bbox_ymax, {alpha3Column}
             FROM division_area
             WHERE bbox_xmax >= $xmin AND bbox_xmin <= $xmax
               AND bbox_ymax >= $ymin AND bbox_ymin <= $ymax
@@ -174,7 +209,8 @@ public class OvertureDivisionsService
         var point = GeometryFactory.CreatePoint(new Coordinate(lon, lat));
         var tolerance = GeometryFactory.ToGeometry(envelope);
         using var reader = cmd.ExecuteReader();
-        OvertureDivisionResult? best = null;
+        OvertureDivisionResult? bestMapped = null;
+        OvertureDivisionResult? bestUnmapped = null;
         while (reader.Read())
         {
             ct.ThrowIfCancellationRequested();
@@ -191,19 +227,31 @@ public class OvertureDivisionsService
             var ymin = reader.GetDouble(10);
             var xmax = reader.GetDouble(11);
             var ymax = reader.GetDouble(12);
+            var alpha2 = OvertureDataAccess.ReadNullableString(reader, 5);
+            var mappedAlpha3 = string.IsNullOrWhiteSpace(alpha2) ? null : _alpha2ToIso3(alpha2);
+            var alpha3 = hasAlpha3 ? OvertureDataAccess.ReadNullableString(reader, 13) : mappedAlpha3;
             var candidate = new OvertureDivisionResult(
                 reader.GetString(0), reader.GetString(1),
                 OvertureDataAccess.ReadNullableString(reader, 2), OvertureDataAccess.ReadNullableString(reader, 3),
-                reader.IsDBNull(4) ? null : reader.GetInt32(4), OvertureDataAccess.ReadNullableString(reader, 5),
+                reader.IsDBNull(4) ? null : reader.GetInt32(4), alpha2, alpha3,
                 OvertureDataAccess.ReadSqliteBool(reader, 6), OvertureDataAccess.ReadSqliteBool(reader, 7),
                 lon >= xmin && lon <= xmax && lat >= ymin && lat <= ymax, true,
                 Math.Abs((xmax - xmin) * (ymax - ymin)));
-            if (best is null || OvertureDivisionsLogic.ShouldPreferDivisionCandidate(candidate, best))
+            // Match the retained index: rank known identities before unmapped geometry,
+            // but preserve invalid stored Alpha-3 so a broken dependency stays an error.
+            if (!string.IsNullOrWhiteSpace(mappedAlpha3))
             {
-                best = candidate;
+                if (bestMapped is null || OvertureDivisionsLogic.ShouldPreferDivisionCandidate(candidate, bestMapped))
+                {
+                    bestMapped = candidate;
+                }
+            }
+            else if (bestUnmapped is null || OvertureDivisionsLogic.ShouldPreferDivisionCandidate(candidate, bestUnmapped))
+            {
+                bestUnmapped = candidate;
             }
         }
-        return best;
+        return bestMapped ?? bestUnmapped;
     }
 
     private void ReleaseBundledCountryIndex()
@@ -244,13 +292,15 @@ public class OvertureDivisionsService
         }
     }
 
-    private static STRtree<BundledCountryArea> LoadBundledCountryIndex(string bundledPath)
+    private STRtree<BundledCountryArea> LoadBundledCountryIndex(string bundledPath)
     {
         var index = new STRtree<BundledCountryArea>();
 
         using var conn = new SqliteConnection($"Data Source={bundledPath};Pooling=false");
         conn.Open();
         var adminLevelColumn = HasColumn(conn, "division_area", "admin_level") ? "admin_level" : "NULL AS admin_level";
+        var hasAlpha3Column = HasColumn(conn, "division_area", "alpha3");
+        var alpha3Column = hasAlpha3Column ? "alpha3" : "NULL AS alpha3";
         using var cmd = conn.CreateCommand();
         cmd.CommandText = $"""
             SELECT
@@ -260,6 +310,7 @@ public class OvertureDivisionsService
                 class_name,
                 {adminLevelColumn},
                 country,
+                {alpha3Column},
                 is_land,
                 is_territorial,
                 geom_wkb,
@@ -273,33 +324,40 @@ public class OvertureDivisionsService
         using var reader = cmd.ExecuteReader();
         while (reader.Read())
         {
-            if (reader.IsDBNull(8))
+            if (reader.IsDBNull(9))
             {
                 continue;
             }
 
-            var geometry = BundledCountryWkbReader.Read(OvertureDataAccess.ReadBlobValue(reader.GetValue(8)));
+            var geometry = BundledCountryWkbReader.Read(OvertureDataAccess.ReadBlobValue(reader.GetValue(9)));
             var preparedGeometry = PreparedGeometryFactory.Prepare(geometry);
-            var xmin = reader.GetDouble(9);
-            var ymin = reader.GetDouble(10);
-            var xmax = reader.GetDouble(11);
-            var ymax = reader.GetDouble(12);
+            var xmin = reader.GetDouble(10);
+            var ymin = reader.GetDouble(11);
+            var xmax = reader.GetDouble(12);
+            var ymax = reader.GetDouble(13);
 
+            var alpha2 = OvertureDataAccess.ReadNullableString(reader, 5);
+            // Older artifacts have no Alpha-3 column. Resolve their existing code through the catalog.
+            // A present but empty or inconsistent Alpha-3 remains an identity error.
+            var alpha3 = hasAlpha3Column
+                ? OvertureDataAccess.ReadNullableString(reader, 6)
+                : string.IsNullOrWhiteSpace(alpha2) ? null : _alpha2ToIso3(alpha2);
             var country = new BundledCountryArea(
                 reader.GetString(0),
                 reader.GetString(1),
                 OvertureDataAccess.ReadNullableString(reader, 2),
                 OvertureDataAccess.ReadNullableString(reader, 3),
                 reader.IsDBNull(4) ? null : reader.GetInt32(4),
-                OvertureDataAccess.ReadNullableString(reader, 5),
-                OvertureDataAccess.ReadSqliteBool(reader, 6),
+                alpha2,
+                alpha3,
                 OvertureDataAccess.ReadSqliteBool(reader, 7),
+                OvertureDataAccess.ReadSqliteBool(reader, 8),
                 geometry,
                 preparedGeometry,
-                reader.GetDouble(9),
-                reader.GetDouble(10),
-                reader.GetDouble(11),
-                reader.GetDouble(12),
+                xmin,
+                ymin,
+                xmax,
+                ymax,
                 Math.Abs((xmax - xmin) * (ymax - ymin)));
             index.Insert(new Envelope(xmin, xmax, ymin, ymax), country);
         }
@@ -442,6 +500,7 @@ public class OvertureDivisionsService
                 OvertureDataAccess.ReadNullableString(reader, 3),
                 reader.IsDBNull(4) ? null : reader.GetInt32(4),
                 OvertureDataAccess.ReadNullableString(reader, 5),
+                null,
                 OvertureDataAccess.ReadSqliteBool(reader, 6),
                 OvertureDataAccess.ReadSqliteBool(reader, 7),
                 bboxContains,
@@ -524,6 +583,7 @@ public class OvertureDivisionsService
                 OvertureDataAccess.ReadNullableString(reader, 3),
                 reader.IsDBNull(4) ? null : reader.GetInt32(4),
                 OvertureDataAccess.ReadNullableString(reader, 5),
+                null,
                 reader.GetBoolean(6),
                 reader.GetBoolean(7),
                 reader.GetBoolean(8),
@@ -577,6 +637,7 @@ public class OvertureDivisionsService
         string? ClassName,
         int? AdminLevel,
         string? Country,
+        string? Alpha3,
         bool IsLand,
         bool IsTerritorial,
         Geometry Geometry,
