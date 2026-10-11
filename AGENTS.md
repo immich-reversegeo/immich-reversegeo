@@ -2,7 +2,7 @@
 
 ## Project Overview
 
-**immich-reversegeo** is a self-hosted companion service (ASP.NET Core + Blazor Server) that improves Immich location metadata. It reads GPS-tagged assets from the Immich PostgreSQL database, resolves country and administrative areas from Overture Maps data, uses bundled Overture airport infrastructure where helpful, and writes city/state/country back to the `asset_exif` table.
+**Immich ReverseGeo** is a self-hosted companion service (ASP.NET Core + Blazor Server) that improves Immich location metadata. It reads GPS-tagged assets from the Immich PostgreSQL database, resolves country and administrative areas from Overture Maps data, uses bundled Overture airport infrastructure where helpful, and writes city/state/country back to the `asset_exif` table.
 
 ## Repo Conventions
 
@@ -49,7 +49,7 @@
 npm run start
 
 # Stop the running dev app before running tests (Windows locks the exe)
-# Run all tests
+# Run normal tests (excludes Integration and Performance)
 npm run test
 
 # Run integration tests explicitly
@@ -72,6 +72,8 @@ Test notes:
 - Prefer `npm run test` / `npm run test:integration` for normal runs.
 - If you call `dotnet test` directly, use `--project <path-to-csproj>` with this repo's MTP setup.
 - The root `.runsettings` excludes `Integration` and `Performance` by default; use `integration.runsettings` for explicit integration runs while still excluding `Performance`.
+- Run `git lfs pull` before tests or exports that read bundled databases; LFS pointer files produce SQLite 'file is not a database' errors.
+- Avoid concurrent test/build runs against the same output directory on Windows; running test executables can also lock rebuild outputs.
 
 ---
 
@@ -81,11 +83,12 @@ Test notes:
 src/ImmichReverseGeo.Web/
   Components/
     Layout/          MainLayout.razor, NavMenu.razor
-    Pages/           Dashboard.razor, Settings.razor, Data.razor, Logs.razor
+    Pages/           Dashboard.razor, Settings.razor, Data.razor, Lookup.razor, LocationPreview.razor, Logs.razor
   Services/
     ConfigService              Load/save AppConfig; read DB credentials from env vars
     AdministrativeAreaResolverService Shared source-ordering policy for Overture and optional GADM admin results
-    CountryCodeService         ISO country mapping and country list helpers
+    CountryCodeService         CountryIdentityCatalog-backed codes, names, and country list helpers
+    AssetLocationResolverService Shared final admin/airport/fallback resolution for processing and previews
     ImmichDbRepository         Npgsql queries against Immich PostgreSQL (tables: asset, asset_exif)
     ProcessingBackgroundService Hosted service; runs scheduled and on-demand processing
     ProcessingState            Singleton in-memory run state (counts, log ring buffer, OnChanged event)
@@ -130,7 +133,21 @@ docker-compose.yml   Reference snippet; joins immich_default network
 
 **DuckDB Azure on Linux:** For Overture Azure blob access in Linux containers, DuckDB's Azure extension should explicitly run `SET azure_transport_option_type='curl'` after `LOAD azure`. This was the real fix for the `Problem with the SSL CA cert (path? access rights?)` error in the local Docker image. Keep that bootstrap centralized and do not remove it casually during refactors.
 
-**Bundled country resolver:** `OvertureDivisionsService` keeps an in-memory spatial index and prepared geometries for bundled country polygons. If country behavior looks inconsistent, suspect stale app process state or stale bundled DB output first.
+**Country identity and administrative sources:** Use `CountryIdentityCatalog` for canonical codes, display names, and source aliases. Keep the resolved country identity separate from the administrative dataset; a shared or related country package must not relabel the country written to Immich.
+
+**Bundled country resolver:** `OvertureDivisionsService` caches an in-memory spatial index and prepared country/dependency geometries. Preserve exact `Covers` matching before tolerance, with prepared-geometry rectangle intersection instead of full-boundary `Geometry.Distance`. Reuse the existing deterministic candidate ordering rather than adding a second comparator. Restart after replacing bundled data; the index stays cached for the process lifetime.
+
+**Country artifact compatibility:** Databases without an `alpha3` column infer recognized codes through the catalog without file changes. If the column exists, missing/conflicting values on the selected candidate are identity errors. Rank recognized candidates before validating stored Alpha-3; do not replace a winning known territory with its sovereign solely to hide a bad stored identity. Use the canonical catalog Alpha-3 as the cache key.
+
+**Country artifact validation:** Exporter checks cover schema, identities, geometry, bounds, and exact coverage by the expected identity. They do not prove which overlapping candidate wins; retain runtime territory/mainland and routing tests using `CountryResolutionFixtureCatalog`. Reproduce with an explicit release and ignored output first; keep the shipped artifact until validation succeeds. Compare logical rows and geometry bytes when only timestamps differ. See [Overture divisions maintainer notes](docs/maintainer/OVERTURE_DIVISIONS.md) for resource budgets and benchmark methodology.
+
+**Allocation regressions:** Preserve the prepared-geometry allocation regression and validate meaningful memory limits when changing country lookup. Keep allocation fixes separate from dependency updates or GC tuning; runtime overrides should be backed by reproduced evidence.
+
+**Overture source aliases:** `OvertureCountrySourceCodes` supplies all source codes for a canonical cache, including BQ/XE/XS, FR/CP, and SJ/XJ. Preserve `_meta.sourceCountries` validation for affected caches, ordinary-country cache reuse, and replacement only after a new export succeeds.
+
+**GADM shared datasets:** With processing territory fallbacks enabled, HKG/MAC use one CHN administrative cache. Lookup also uses this shared source for investigation. Preserve HKG/MAC country identity, skip country-level and unnamed `NA` rows before decoding geometry, and require named administrative geometry matches. Preserve existing behavior for other countries and when processing territory fallbacks are disabled.
+
+**Data upgrades and retries:** New country coverage does not guarantee city/state coverage or automatically rewrite existing Immich names. Use Lookup first, clear previously skipped assets to retry old country misses, and use Preview Location Corrections before resetting existing names. Preview shares final resolution with processing without writing Immich metadata or changing skipped-asset tracking.
 
 **Cache download synchronization:** Source-specific Overture and GADM cache services each use shared per-country in-flight task maps so concurrent requests for the same country await the same download/export instead of racing ahead.
 
@@ -138,7 +155,7 @@ docker-compose.yml   Reference snippet; joins immich_default network
 
 **Schedule UX:** The Settings page uses `ScheduleEditorState` for the user-friendly schedule presets. Keep cron parsing/building logic there, not inline in Razor components.
 
-**Scheduled runs:** Scheduled triggers must not start a new run while another pass is already active. Preserve the `_runLock` / `MarkPending()` behavior in `ProcessingBackgroundService`.
+**Scheduled runs:** Scheduled triggers must not start a new run while another pass is already active. Preserve the `_runLock` / `MarkPending()` behavior in `ProcessingBackgroundService`. Use `ScheduledRunWaiter` for distant cron dates rather than one unbounded `Task.Delay`; retain cancellation and `TimeProvider` coverage.
 
 **Activity labels under parallel processing:** Use the scoped activity API on `ProcessingState` for long-running shared work like country-cache downloads. Direct set/clear calls will get stomped by concurrent assets.
 
@@ -146,7 +163,7 @@ docker-compose.yml   Reference snippet; joins immich_default network
 
 **Blazor "Connecting…" lag:** If `_circuitReady` stays false for more than ~3 seconds, suspect something blocking startup (e.g. synchronous DI factory in `AddSingleton`). Move it to `Task.Run` and await in `ExecuteAsync`.
 
-**Immich DB tables:** `asset` and `asset_exif`. The join column is `"assetId"` (camelCase, quoted). All three repository queries must use `asset_exif`, not the shorter `exif`.
+**Immich DB tables:** `asset` and `asset_exif`. The join column is `"assetId"` (camelCase, quoted). Repository queries must use `asset_exif`, not the shorter `exif`.
 
 **CSS:** All styles in `wwwroot/app.css`. Component `.razor.css` files are intentionally empty — do not add scoped styles there. Classes follow the lounge pattern: `settings-card`, `form-group`, `form-control`, `btn btn-primary`, `btn btn-secondary`, `alert alert-success/error`.
 
@@ -163,7 +180,7 @@ docker-compose.yml   Reference snippet; joins immich_default network
   overture-divisions/
     {ISO3}.db                  Overture per-country division cache (downloaded on demand)
   gadm-divisions/
-    {ISO3}.db                  Optional GADM per-country division cache (downloaded on demand)
+    {SOURCE_ISO3}.db           Optional GADM source cache (CHN.db is shared by HKG/MAC fallbacks)
   skipped.db                   SQLite: asset IDs with no resolvable location
 
 /config/                       (CONFIG_DIR env var, defaults to /config)
