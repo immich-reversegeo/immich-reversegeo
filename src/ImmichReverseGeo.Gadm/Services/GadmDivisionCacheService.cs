@@ -15,19 +15,22 @@ public class GadmDivisionCacheService
 {
     private readonly ILogger<GadmDivisionCacheService> _logger;
     private readonly string _dataDir;
+    private readonly MemoryResourcePolicy _memoryPolicy;
     private readonly ConcurrentDictionary<string, Lazy<Task>> _inflightDownloads = new();
     private readonly ConcurrentDictionary<string, byte> _readyCaches = new();
 
-    public GadmDivisionCacheService(ILogger<GadmDivisionCacheService> logger, StorageOptions dirs)
+    public GadmDivisionCacheService(ILogger<GadmDivisionCacheService> logger, StorageOptions dirs, MemoryResourcePolicy? memoryPolicy = null)
     {
         _logger = logger;
         _dataDir = dirs.DataDir;
+        _memoryPolicy = memoryPolicy ?? new MemoryResourcePolicy();
     }
 
-    public GadmDivisionCacheService(ILogger<GadmDivisionCacheService> logger, string dataDir)
+    public GadmDivisionCacheService(ILogger<GadmDivisionCacheService> logger, string dataDir, MemoryResourcePolicy? memoryPolicy = null)
     {
         _logger = logger;
         _dataDir = dataDir;
+        _memoryPolicy = memoryPolicy ?? new MemoryResourcePolicy();
     }
 
     public Dictionary<string, GadmDivisionStatus> GetStatus()
@@ -165,8 +168,9 @@ public class GadmDivisionCacheService
 
         try
         {
+            using var budget = await _memoryPolicy.EnterAsync(ct);
             await DownloadFileAsync(GadmDivisionsLogic.BuildCountryGeoPackageUrl(gadmCode), tmpDownloadPath, ct);
-            var rowCount = await Task.Run(() => GadmCacheExporter.ExportGeoPackageToSqlite(tmpDownloadPath, tmpDbPath, iso3), ct);
+            var rowCount = await Task.Run(() => GadmCacheExporter.ExportGeoPackageToSqlite(tmpDownloadPath, tmpDbPath, iso3, ct), ct);
             if (rowCount == 0)
             {
                 throw new InvalidOperationException($"No GADM rows were downloaded for {iso3}.");

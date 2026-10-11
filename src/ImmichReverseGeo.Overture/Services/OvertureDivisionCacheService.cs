@@ -16,24 +16,28 @@ public class OvertureDivisionCacheService
     private readonly ILogger<OvertureDivisionCacheService> _logger;
     private readonly string _dataDir;
     private readonly Func<string, string?> _iso3ToAlpha2;
+    private readonly MemoryResourcePolicy _memoryPolicy;
     private readonly ConcurrentDictionary<string, Lazy<Task>> _inflightDownloads = new();
     private readonly ConcurrentDictionary<string, byte> _readyCaches = new();
 
     public OvertureDivisionCacheService(
         ILogger<OvertureDivisionCacheService> logger,
         StorageOptions dirs,
-        Func<string, string?> iso3ToAlpha2)
+        Func<string, string?> iso3ToAlpha2,
+        MemoryResourcePolicy? memoryPolicy = null)
     {
         _logger = logger;
         _dataDir = dirs.DataDir;
         _iso3ToAlpha2 = iso3ToAlpha2;
+        _memoryPolicy = memoryPolicy ?? new MemoryResourcePolicy();
     }
 
-    public OvertureDivisionCacheService(ILogger<OvertureDivisionCacheService> logger, string dataDir, Func<string, string?> iso3ToAlpha2)
+    public OvertureDivisionCacheService(ILogger<OvertureDivisionCacheService> logger, string dataDir, Func<string, string?> iso3ToAlpha2, MemoryResourcePolicy? memoryPolicy = null)
     {
         _logger = logger;
         _dataDir = dataDir;
         _iso3ToAlpha2 = iso3ToAlpha2;
+        _memoryPolicy = memoryPolicy ?? new MemoryResourcePolicy();
     }
 
     public Dictionary<string, OvertureDivisionStatus> GetStatus()
@@ -169,7 +173,7 @@ public class OvertureDivisionCacheService
 
         try
         {
-            var rowCount = await Task.Run(() => ExportOvertureDivisions(tmpPath, alpha2), ct);
+            var rowCount = await Task.Run(() => ExportOvertureDivisions(tmpPath, alpha2, ct), ct);
             if (rowCount == 0)
             {
                 throw new InvalidOperationException($"No Overture division rows were downloaded for {iso3}.");
@@ -196,16 +200,16 @@ public class OvertureDivisionCacheService
         }
     }
 
-    private long ExportOvertureDivisions(string tmpPath, string alpha2)
+    private long ExportOvertureDivisions(string tmpPath, string alpha2, CancellationToken ct)
     {
-        var release = GetLatestOvertureReleaseForCache();
+        var release = GetLatestOvertureReleaseForCache(ct);
         var releaseUrl = string.Format(
             System.Globalization.CultureInfo.InvariantCulture,
             OvertureDivisionsLogic.DivisionAreaReleaseUrlTemplate,
             release);
 
-        using var duck = new DuckDBConnection("Data Source=:memory:");
-        duck.Open();
+        using var work = new DuckDbWorkScope(_memoryPolicy, _dataDir, ct);
+        var duck = work.Connection;
         OvertureDataAccess.LoadAzureAndSpatial(duck);
 
         using var selectCmd = duck.CreateCommand();
@@ -231,7 +235,7 @@ public class OvertureDivisionCacheService
             ";
         using var reader = selectCmd.ExecuteReader();
 
-        using var sqlite = new SqliteConnection($"Data Source={tmpPath}");
+        using var sqlite = new SqliteConnection($"Data Source={tmpPath};Pooling=false");
         sqlite.Open();
 
         using (var ddl = sqlite.CreateCommand())
@@ -308,6 +312,7 @@ public class OvertureDivisionCacheService
         long rows = 0;
         while (reader.Read())
         {
+            ct.ThrowIfCancellationRequested();
             pId.Value = reader.GetString(0);
             pName.Value = reader.GetString(1);
             pSubType.Value = reader.IsDBNull(2) ? DBNull.Value : reader.GetString(2);
@@ -329,11 +334,10 @@ public class OvertureDivisionCacheService
 
         tx.Commit();
         sqlite.Close();
-        SqliteConnection.ClearPool(sqlite);
         return rows;
     }
 
-    private static string GetLatestOvertureReleaseForCache() => OvertureReleaseCatalog.GetLatestRelease();
+    private string GetLatestOvertureReleaseForCache(CancellationToken ct) => OvertureReleaseCatalog.GetLatestRelease(_memoryPolicy, _dataDir, ct);
 
     private string GetDbPath(string iso3)
     {

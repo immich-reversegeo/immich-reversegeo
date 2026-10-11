@@ -1,5 +1,6 @@
 using System;
 using System.IO;
+using System.Text.Json;
 using ImmichReverseGeo.Core.Models;
 using ImmichReverseGeo.Gadm.Services;
 using ImmichReverseGeo.Overture.Services;
@@ -19,6 +20,7 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 builder.Services.AddHttpClient();
+builder.Services.AddSingleton<MemoryResourcePolicy>();
 
 var bundledDataDir = builder.Environment.IsDevelopment()
     ? Path.Combine(Directory.GetCurrentDirectory(), "bundled-data")
@@ -48,7 +50,8 @@ builder.Services.AddDataProtection()
 builder.Services.AddSingleton(sp =>
     new ConfigService(
         sp.GetRequiredService<ILogger<ConfigService>>(),
-        configDir));
+        configDir,
+        sp.GetRequiredService<MemoryResourcePolicy>()));
 builder.Services.AddSingleton<CountryCodeService>();
 builder.Services.AddSingleton(sp =>
 {
@@ -64,23 +67,27 @@ builder.Services.AddSingleton(sp =>
     new OvertureDivisionCacheService(
         sp.GetRequiredService<ILogger<OvertureDivisionCacheService>>(),
         sp.GetRequiredService<StorageOptions>(),
-        sp.GetRequiredService<CountryCodeService>().Iso3ToAlpha2));
+        sp.GetRequiredService<CountryCodeService>().Iso3ToAlpha2,
+        sp.GetRequiredService<MemoryResourcePolicy>()));
 builder.Services.AddSingleton(sp =>
     new OverturePlacesService(
         sp.GetRequiredService<ILogger<OverturePlacesService>>(),
         sp.GetRequiredService<StorageOptions>().DataDir,
-        sp.GetRequiredService<StorageOptions>().BundledDataDir));
+        sp.GetRequiredService<StorageOptions>().BundledDataDir,
+        sp.GetRequiredService<MemoryResourcePolicy>()));
 builder.Services.AddSingleton(sp =>
     new OvertureDivisionsService(
         sp.GetRequiredService<ILogger<OvertureDivisionsService>>(),
         sp.GetRequiredService<OverturePlacesService>(),
         sp.GetRequiredService<StorageOptions>().DataDir,
         sp.GetRequiredService<StorageOptions>().BundledDataDir,
-        alpha2 => sp.GetRequiredService<CountryCodeService>().Alpha2ToIso3(alpha2)));
+        alpha2 => sp.GetRequiredService<CountryCodeService>().Alpha2ToIso3(alpha2),
+        sp.GetRequiredService<MemoryResourcePolicy>()));
 builder.Services.AddSingleton(sp =>
     new GadmDivisionCacheService(
         sp.GetRequiredService<ILogger<GadmDivisionCacheService>>(),
-        sp.GetRequiredService<StorageOptions>()));
+        sp.GetRequiredService<StorageOptions>(),
+        sp.GetRequiredService<MemoryResourcePolicy>()));
 builder.Services.AddSingleton(sp =>
     new GadmDivisionsService(
         sp.GetRequiredService<ILogger<GadmDivisionsService>>(),
@@ -94,6 +101,15 @@ builder.Services.AddHostedService(sp => sp.GetRequiredService<ProcessingBackgrou
 // ── App ─────────────────────────────────────────────────────────────────────
 
 var app = builder.Build();
+try
+{
+    var startupConfig = await app.Services.GetRequiredService<ConfigService>().GetConfigAsync();
+    app.Services.GetRequiredService<MemoryResourcePolicy>().LowMemoryMode = startupConfig.Processing.LowMemoryMode;
+}
+catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
+{
+    app.Logger.LogError(ex, "Could not load memory settings at startup. Settings remain available for recovery.");
+}
 
 if (!app.Environment.IsDevelopment())
 {

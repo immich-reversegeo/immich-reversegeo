@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.IO;
 using System.Linq;
+using System.Threading;
 using System.Threading.Tasks;
 using ImmichReverseGeo.Core.Models;
 using Microsoft.Data.Sqlite;
@@ -66,6 +67,29 @@ public class SkippedAssetsRepository(ILogger<SkippedAssetsRepository> logger, st
         while (await reader.ReadAsync())
         {
             result.Add(Guid.Parse(reader.GetString(0)));
+        }
+
+        return result;
+    }
+
+    /// <summary>Loads only skipped IDs belonging to the current processing batch.</summary>
+    public async Task<HashSet<Guid>> GetMatchingAsync(IEnumerable<Guid> assetIds, CancellationToken ct = default)
+    {
+        var result = new HashSet<Guid>();
+        await using var conn = new SqliteConnection(ConnectionString);
+        await conn.OpenAsync(ct);
+        await using var cmd = conn.CreateCommand();
+        cmd.CommandText = "SELECT 1 FROM skipped_assets WHERE asset_id = $id";
+        var idParameter = cmd.Parameters.Add("$id", SqliteType.Text);
+        cmd.Prepare();
+        foreach (var id in assetIds)
+        {
+            ct.ThrowIfCancellationRequested();
+            idParameter.Value = id.ToString();
+            if (await cmd.ExecuteScalarAsync(ct) is not null)
+            {
+                result.Add(id);
+            }
         }
 
         return result;

@@ -54,6 +54,7 @@ The Settings page lets you control:
 - whether processing runs automatically
 - when it runs, using simple presets or a custom cron expression
 - batch size, delay, and parallelism
+- low-memory mode for hosts with limited RAM
 - whether airport infrastructure can override the city name
 - whether GADM administrative areas are enabled as an optional source
 - whether GADM should be preferred over cached Overture divisions
@@ -84,6 +85,25 @@ Most users should stay on the preset schedule options. Custom cron expressions c
     <p>You can enable GADM as an extra administrative boundary source, either as a fallback behind Overture or as the preferred admin source.</p>
   </div>
 </div>
+
+### Low-memory mode
+
+Enable **Low-memory mode** under Settings → Processing when RAM is limited, then save before starting a new run.
+
+The mode:
+
+- processes one asset at a time, in batches of at most 25
+- runs one expensive country download or remote query at a time, shared with Lookup
+- uses one DuckDB worker and a 256 MiB buffer budget for remote queries and Overture cache creation
+- reads matching country polygons from disk instead of retaining the worldwide country index in RAM
+
+Your saved batch size and parallelism stay unchanged and are used again when you disable the mode. Work already in progress finishes with its existing limits; the next processing run uses the new batch and worker limits.
+
+Expect slower processing and more disk reads. This is not a total RAM cap: the web app, geometry checks, and native libraries use additional memory. Temporary DuckDB spill files live under `/data/duckdb-tmp`. Memory shown by your host may stay elevated after a run while the runtime keeps freed memory available for reuse.
+
+Use Lookup on a few known coordinates first, then compare memory use during a processing pass. Compare the first pass that creates country caches separately from later passes that reuse them. This mode changes resource use, not location matching rules, and does not repair missing or incorrect boundary data.
+
+In both modes, processing checks skipped IDs one batch at a time rather than loading the entire skipped history into RAM.
 
 ### GADM administrative areas
 

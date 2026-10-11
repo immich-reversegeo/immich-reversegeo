@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 
 namespace ImmichReverseGeo.Web.Services;
 
-public class ConfigService(ILogger<ConfigService> logger, string? configDir = null)
+public class ConfigService(ILogger<ConfigService> logger, string? configDir = null, MemoryResourcePolicy? memoryPolicy = null)
 {
     private readonly string _configPath = Path.Combine(
         configDir ?? "/config", "settings.json");
@@ -41,6 +41,7 @@ public class ConfigService(ILogger<ConfigService> logger, string? configDir = nu
         try
         {
             await WriteConfigAsync(json);
+            ApplyMemoryPolicy(config);
         }
         finally
         {
@@ -57,10 +58,19 @@ public class ConfigService(ILogger<ConfigService> logger, string? configDir = nu
             var config = await ReadConfigAsync();
             update(config);
             await WriteConfigAsync(JsonSerializer.SerializeToUtf8Bytes(config, _json));
+            ApplyMemoryPolicy(config);
         }
         finally
         {
             _fileLock.Release();
+        }
+    }
+
+    private void ApplyMemoryPolicy(AppConfig config)
+    {
+        if (memoryPolicy is not null)
+        {
+            memoryPolicy.LowMemoryMode = config.Processing.LowMemoryMode;
         }
     }
 

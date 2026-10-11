@@ -93,4 +93,32 @@ public class SkippedAssetsRepositoryTests
         Assert.IsTrue(remaining.Contains(second));
         Assert.IsFalse(remaining.Contains(third));
     }
+
+    [TestMethod]
+    public async Task GetMatching_ReturnsOnlySkippedIdsFromBatch()
+    {
+        var repo = new SkippedAssetsRepository(NullLogger<SkippedAssetsRepository>.Instance, _tempDir);
+        await repo.InitialiseAsync();
+        var included = Guid.NewGuid();
+        var excluded = Guid.NewGuid();
+        var unknown = Guid.NewGuid();
+        await repo.AddAsync(included);
+        await repo.AddAsync(excluded);
+
+        var matching = await repo.GetMatchingAsync([included, unknown, included]);
+
+        CollectionAssert.AreEquivalent(new[] { included }, matching.ToArray());
+        Assert.AreEqual(0, (await repo.GetMatchingAsync([])).Count);
+    }
+
+    [TestMethod]
+    public async Task GetMatching_HonorsCancellation()
+    {
+        var repo = new SkippedAssetsRepository(NullLogger<SkippedAssetsRepository>.Instance, _tempDir);
+        await repo.InitialiseAsync();
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => repo.GetMatchingAsync([Guid.NewGuid()], cts.Token));
+    }
 }

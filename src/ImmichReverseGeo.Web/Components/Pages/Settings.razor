@@ -185,6 +185,10 @@ else
 <section class="settings-card">
     <h3>Processing</h3>
     <div class="form-group">
+        <label><input type="checkbox" @bind="_cfg.Processing.LowMemoryMode" /> Low-memory mode</label>
+        <span class="hint">Uses one processing worker, batches of at most 25 assets, and less memory for downloads. Country boundaries are read from disk as needed. Processing can be slower. Save before starting a run; work already in progress keeps its current limits.</span>
+    </div>
+    <div class="form-group">
         <label>Batch Size <input type="number" @bind="_cfg.Processing.BatchSize" /></label>
     </div>
     <div class="form-group">
@@ -192,7 +196,7 @@ else
     </div>
     <div class="form-group">
         <label>Max Parallelism <input type="number" min="1" max="32" @bind="_cfg.Processing.MaxDegreeOfParallelism" /></label>
-        <span class="hint">How many assets can be resolved in parallel within a batch. Start with 4 and increase carefully.</span>
+        <span class="hint">How many assets can be resolved in parallel within a batch. Start with 4 and increase carefully. Low-memory mode uses one worker without changing this saved value.</span>
     </div>
     <div class="form-group">
         <label><input type="checkbox" @bind="_cfg.Processing.UseAirportInfrastructure" /> Use bundled airport infrastructure to improve city matching when it fits</label>

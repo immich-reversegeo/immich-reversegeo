@@ -4,6 +4,7 @@ using System.IO;
 using System.Threading;
 using System.Threading.Tasks;
 using DuckDB.NET.Data;
+using ImmichReverseGeo.Core.Models;
 using ImmichReverseGeo.Overture.Models;
 using Microsoft.Data.Sqlite;
 using Microsoft.Extensions.Logging;
@@ -15,15 +16,17 @@ namespace ImmichReverseGeo.Overture.Services;
 public class OverturePlacesService
 {
     private readonly ILogger<OverturePlacesService> _logger;
+    private readonly MemoryResourcePolicy _memoryPolicy;
     private readonly string _dataDir;
     private readonly string _bundledDataDir;
     private readonly object _releaseLock = new();
     private string? _cachedRelease;
     private DateTime _cachedReleaseFetchedUtc;
 
-    public OverturePlacesService(ILogger<OverturePlacesService> logger, string dataDir, string bundledDataDir)
+    public OverturePlacesService(ILogger<OverturePlacesService> logger, string dataDir, string bundledDataDir, MemoryResourcePolicy? memoryPolicy = null)
     {
         _logger = logger;
+        _memoryPolicy = memoryPolicy ?? new MemoryResourcePolicy();
         _dataDir = dataDir;
         _bundledDataDir = bundledDataDir;
     }
@@ -37,8 +40,12 @@ public class OverturePlacesService
         try
         {
             var release = await GetLatestReleaseForOvertureAsync(ct);
-            var result = await Task.Run(() => QueryOverture(lat, lon, alpha2, release), ct);
+            var result = await Task.Run(() => QueryOverture(lat, lon, alpha2, release, ct), ct);
             return result with { Release = release, CountryFilter = alpha2 };
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -59,15 +66,19 @@ public class OverturePlacesService
     {
         try
         {
-            var cached = QueryBundledInfrastructure(lat, lon);
+            var cached = QueryBundledInfrastructure(lat, lon, ct);
             if (cached is not null)
             {
                 return cached;
             }
 
             var release = await GetLatestReleaseForOvertureAsync(ct);
-            var result = await Task.Run(() => QueryInfrastructure(lat, lon, release), ct);
+            var result = await Task.Run(() => QueryInfrastructure(lat, lon, release, ct), ct);
             return result with { Release = release };
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
         }
         catch (Exception ex)
         {
@@ -91,7 +102,7 @@ public class OverturePlacesService
             }
         }
 
-        var release = await Task.Run(GetLatestReleaseViaDuckDb, ct);
+        var release = await Task.Run(() => GetLatestReleaseViaDuckDb(ct), ct);
 
         lock (_releaseLock)
         {
@@ -102,9 +113,9 @@ public class OverturePlacesService
         return release;
     }
 
-    private static string GetLatestReleaseViaDuckDb() => OvertureReleaseCatalog.GetLatestRelease();
+    private string GetLatestReleaseViaDuckDb(CancellationToken ct) => OvertureReleaseCatalog.GetLatestRelease(_memoryPolicy, _dataDir, ct);
 
-    private OvertureLookupDiagnostics QueryOverture(double lat, double lon, string? alpha2, string release)
+    private OvertureLookupDiagnostics QueryOverture(double lat, double lon, string? alpha2, string release, CancellationToken ct)
     {
         var latBuffer = OverturePlacesLogic.SearchRadiusMetres / 111_320d;
         var lonBuffer = latBuffer / Math.Max(0.1, Math.Cos(lat * Math.PI / 180d));
@@ -114,8 +125,8 @@ public class OverturePlacesService
         var maxLon = lon + lonBuffer;
         var releaseUrl = string.Format(System.Globalization.CultureInfo.InvariantCulture, OverturePlacesLogic.PlacesReleaseUrlTemplate, release);
 
-        using var conn = new DuckDBConnection("Data Source=:memory:");
-        conn.Open();
+        using var work = new DuckDbWorkScope(_memoryPolicy, _dataDir, ct);
+        var conn = work.Connection;
         OvertureDataAccess.LoadAzureAndSpatial(conn);
 
         using var query = conn.CreateCommand();
@@ -141,7 +152,7 @@ public class OverturePlacesService
         return OverturePlacesLogic.BuildPlaceDiagnostics(places, release, alpha2);
     }
 
-    private OvertureInfrastructureLookupDiagnostics? QueryBundledInfrastructure(double lat, double lon)
+    private OvertureInfrastructureLookupDiagnostics? QueryBundledInfrastructure(double lat, double lon, CancellationToken ct)
     {
         var dbPath = Path.Combine(_bundledDataDir, "defaults", "overture-airports.db");
         if (!File.Exists(dbPath))
@@ -149,7 +160,7 @@ public class OverturePlacesService
             return null;
         }
 
-        using var conn = new SqliteConnection($"Data Source={dbPath}");
+        using var conn = new SqliteConnection($"Data Source={dbPath};Pooling=false");
         conn.Open();
         using var cmd = conn.CreateCommand();
 
@@ -187,6 +198,7 @@ public class OverturePlacesService
 
         while (reader.Read())
         {
+            ct.ThrowIfCancellationRequested();
             var candidateLat = reader.GetDouble(5);
             var candidateLon = reader.GetDouble(6);
             var distance = OverturePlacesLogic.HaversineMetres(lat, lon, candidateLat, candidateLon);
@@ -239,7 +251,7 @@ public class OverturePlacesService
         return new OvertureInfrastructureLookupDiagnostics(best, candidates, release);
     }
 
-    private OvertureInfrastructureLookupDiagnostics QueryInfrastructure(double lat, double lon, string release)
+    private OvertureInfrastructureLookupDiagnostics QueryInfrastructure(double lat, double lon, string release, CancellationToken ct)
     {
         var latBuffer = OverturePlacesLogic.InfrastructureSearchRadiusMetres / 111_320d;
         var lonBuffer = latBuffer / Math.Max(0.1, Math.Cos(lat * Math.PI / 180d));
@@ -252,8 +264,8 @@ public class OverturePlacesService
             OverturePlacesLogic.InfrastructureReleaseUrlTemplate,
             release);
 
-        using var conn = new DuckDBConnection("Data Source=:memory:");
-        conn.Open();
+        using var work = new DuckDbWorkScope(_memoryPolicy, _dataDir, ct);
+        var conn = work.Connection;
         OvertureDataAccess.LoadAzureAndSpatial(conn);
 
         using var query = conn.CreateCommand();
@@ -272,6 +284,7 @@ public class OverturePlacesService
         using var reader = query.ExecuteReader();
         while (reader.Read())
         {
+            ct.ThrowIfCancellationRequested();
             var candidateLat = reader.GetDouble(5);
             var candidateLon = reader.GetDouble(6);
             var distance = OverturePlacesLogic.HaversineMetres(lat, lon, candidateLat, candidateLon);

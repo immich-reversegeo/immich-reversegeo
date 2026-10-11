@@ -2,6 +2,7 @@ using System.IO;
 using System.Text.Json;
 using System;
 using System.Diagnostics;
+using System.Linq;
 using System.Threading;
 using System.Threading.Tasks;
 using Cronos;
@@ -125,10 +126,10 @@ public class ProcessingBackgroundService(
 
             state.AppendLog($"Run started. {total} assets to process.");
 
-            var skippedIds = await skipped.GetAllAsync();
-            if (skippedIds.Count > 0)
+            var skippedCount = await skipped.GetCountAsync();
+            if (skippedCount > 0)
             {
-                state.AppendLog($"Skipping {skippedIds.Count} previously unresolvable assets.");
+                state.AppendLog($"Skipping {skippedCount} previously unresolvable assets.");
             }
 
             var cursor = AssetCursor.Initial;
@@ -137,7 +138,7 @@ public class ProcessingBackgroundService(
 
             while (!ct.IsCancellationRequested)
             {
-                var batch = await db.GetUnprocessedBatchAsync(cursor, cfg.Processing.BatchSize, ct);
+                var batch = await db.GetUnprocessedBatchAsync(cursor, cfg.Processing.EffectiveBatchSize, ct);
                 if (batch.Count == 0)
                 {
                     break;
@@ -149,7 +150,8 @@ public class ProcessingBackgroundService(
 
                 cursor = new AssetCursor(batch[^1].CreatedAt, batch[^1].Id);
 
-                var maxParallelism = Math.Clamp(cfg.Processing.MaxDegreeOfParallelism, 1, 32);
+                var skippedIds = await skipped.GetMatchingAsync(batch.Select(asset => asset.Id), ct);
+                var maxParallelism = cfg.Processing.EffectiveParallelism;
                 await Parallel.ForEachAsync(
                     batch,
                     new ParallelOptions
