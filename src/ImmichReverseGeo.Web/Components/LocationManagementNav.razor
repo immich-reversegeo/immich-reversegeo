@@ -1,6 +1,10 @@
-<div class="btn-row location-management-nav" aria-label="Location management navigation">
-    <a class="text-link" href="/data/location-management">Location Management</a>
-    <a class="text-link" href="/data/location-management/scan">Scan &amp; Review</a>
-    <a class="text-link" href="/data/location-management/scans">Saved Scans</a>
-    <a class="text-link" href="/data/location-management/history">Change History</a>
-</div>
+<nav class="location-management-nav" aria-label="Location management sections">
+    <a href="/data/location-management" aria-current="@(ActiveSection == "overview" ? "page" : null)">Overview</a>
+    <a href="/data/location-management/scan" aria-current="@(ActiveSection == "scan" ? "page" : null)">Scan &amp; Review</a>
+    <a href="/data/location-management/scans" aria-current="@(ActiveSection == "scans" ? "page" : null)">Saved Scans</a>
+    <a href="/data/location-management/history" aria-current="@(ActiveSection == "history" ? "page" : null)">Change History</a>
+</nav>
+
+@code {
+    [Parameter] public string ActiveSection { get; set; } = "overview";
+}

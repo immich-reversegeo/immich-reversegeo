@@ -7,9 +7,9 @@
 @inject PreviewCircuitLifetime Lifetime
 @implements IDisposable
 
-<PageTitle>Change History - Immich ReverseGeo</PageTitle>
-<h2>Change History</h2>
-<LocationManagementNav />
+<PageTitle>@(Id is null ? "Change History" : "Change Details") - Immich ReverseGeo</PageTitle>
+<h2>@(Id is null ? "Change History" : "Change Details")</h2>
+<LocationManagementNav ActiveSection="history" />
 @if (_error is not null) { <p class="alert alert-error" role="alert">@_error</p> }
 @if (_loading) { <p role="status">Loading change history…</p> }
 else if (Id is null)
@@ -36,8 +36,17 @@ else if (_operation is null) { <p>This change operation was not found.</p> }
 else
 {
     <section class="settings-card wide-card">
-        <p>Started: <LocalTimestamp Timestamp="_operation.CreatedAt" />. Selected: @_operation.Total.</p>
-        <p role="status">Applied: @_operation.Applied; skipped: @_operation.Skipped; needs review: @_operation.NeedsReview; pending: @_operation.Pending; undone: @_operation.Undone; pending undo: @_operation.UndoPending.</p>
+        <a class="text-link" href="/data/location-management/history">← All changes</a>
+        <h3>@_operation.Total selected @(_operation.Total == 1 ? "asset" : "assets")</h3>
+        <p class="hint">Started <LocalTimestamp Timestamp="_operation.CreatedAt" /></p>
+        <dl class="location-change-summary" aria-label="Change results">
+            <div><dt>Changes applied</dt><dd>@_operation.Applied</dd></div>
+            @if (_operation.Skipped > 0) { <div><dt>Skipped</dt><dd>@_operation.Skipped</dd></div> }
+            @if (_operation.NeedsReview > 0) { <div><dt>Check in Immich</dt><dd>@_operation.NeedsReview</dd></div> }
+            @if (_operation.Pending > 0) { <div><dt>Waiting to apply</dt><dd>@_operation.Pending</dd></div> }
+            @if (_operation.Undone > 0) { <div><dt>Changes undone</dt><dd>@_operation.Undone</dd></div> }
+            @if (_operation.UndoPending > 0) { <div><dt>Waiting to undo</dt><dd>@_operation.UndoPending</dd></div> }
+        </dl>
         <p><a class="text-link" href="@($"/data/location-management/scans/{_operation.ScanId}")">Original saved scan</a> (if retained).</p>
         <p>Undo restores the saved previous names only when the applied names, coordinates, and metadata revision still match.
             Later edits are skipped. Needs review means the write outcome is uncertain: inspect that asset in Immich and run a new scan before making another change.</p>

@@ -53,6 +53,8 @@ Lookup distinguishes a point outside the bundled country coverage from a matched
 
 ### Location Management
 
+Use the tabs in **Location Management** to switch between Overview, Scan & Review, Saved Scans, and Change History. The highlighted tab shows your current section.
+
 Open **Data → Location Management → Scan & Review** to compare existing city, state, and country names with proposed values from your current processing settings. Scanning is read-only; applying selected changes is a separate confirmed action. Existing preview URLs and saved reports remain available.
 
 1. Choose pasted asset GUIDs, an exact existing city/state/country name, or the whole library.
