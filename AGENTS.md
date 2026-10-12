@@ -182,6 +182,7 @@ docker-compose.yml   Reference snippet; joins immich_default network
   gadm-divisions/
     {SOURCE_ISO3}.db           Optional GADM source cache (CHN.db is shared by HKG/MAC fallbacks)
   skipped.db                   SQLite: asset IDs with no resolvable location
+  location-previews.db         SQLite: saved preview selections, settings, and result snapshots
 
 /config/                       (CONFIG_DIR env var, defaults to /config)
   settings.json                AppConfig (schedule and processing settings)

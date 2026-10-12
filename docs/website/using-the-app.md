@@ -67,6 +67,14 @@ While preview runs, the page shows the current asset, lookup step or country-cac
 
 Settings are loaded once when you start the preview; start again after changing settings. Results may change if settings, source data, or coordinates change before processing.
 
+#### Saved previews
+
+Each completed asset result is saved automatically under **Data → Saved Previews**, including results checked before you cancel. Open a report later to compare the saved existing and proposed names, filter to differences, and copy GUIDs you have reviewed across pages. Viewing a saved report does not run new lookups or change Immich. Selections made with checkboxes are kept only while that report is open; the saved results remain available after a reload or app restart.
+
+Reports store the selection, processing settings, asset GUIDs, GPS coordinates, names, and lookup failures in `location-previews.db` under your `/data` volume. Preserve that volume to keep reports across container replacements. Reports stay until you delete them from the report page; deleting a report removes only its local snapshot. A report marked **More assets available**, **Cancelled**, or **Interrupted** covers only the assets already checked. After restarting, start a new preview to check any remaining assets.
+
+Saved values may be out of date if Immich metadata, coordinates, settings, or source data changed afterward. Run a new preview before deciding which assets to reset. If saving fails, the preview stops with an error; results already saved are retained.
+
 Deleted assets, GUIDs without an Immich metadata row, and assets missing either latitude or longitude are excluded from every preview query, including pasted GUIDs. Unresolved locations and lookup failures are shown separately and cannot be selected for correction. Preview can help find inconsistent names; it cannot recover missing GPS coordinates or guarantee that a proposed name is correct.
 
 ### Maintenance actions
