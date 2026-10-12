@@ -10,6 +10,7 @@
 @inject ProcessingState State
 @inject ILogger<LocationPreview> Logger
 @inject SavedLocationPreviewRepository SavedPreviews
+@inject PreviewCircuitLifetime CircuitLifetime
 @implements IDisposable
 
 <PageTitle>Preview Location Corrections - Immich ReverseGeo</PageTitle>
@@ -50,6 +51,22 @@
         </select>
         <span class="hint">Nearby coordinates groups photos into small map tiles to improve cache reuse. Sorting large libraries may take longer to load a page.</span>
     </div>
+    <div class="form-group">
+        <label for="preview-mode">Scan mode</label>
+        <select id="preview-mode" class="form-control" @bind="_scanMode" disabled="@(_busy || !_circuitReady)">
+            <option value="@LocationPreviewScanMode.ManualPages">Manual pages</option>
+            <option value="@LocationPreviewScanMode.Continuous">Continuous scan</option>
+        </select>
+        <span class="hint">Continuous scan advances automatically while this page stays open. Leaving or reloading stops it; completed results remain saved.</span>
+    </div>
+    @if (_scanMode == LocationPreviewScanMode.Continuous)
+    {
+        <div class="form-group">
+            <label for="preview-limit">Pause after this many new differences</label>
+            <input id="preview-limit" class="form-control" type="number" min="0" @bind="_pauseAfterDifferences" @bind:event="oninput" disabled="@(_busy || !_circuitReady)" />
+            <span class="hint">Use 0 to scan to the end. Continue Scan checks until the next group of differences is found.</span>
+        </div>
+    }
     <div class="btn-row">
         <button class="btn btn-primary" @onclick="StartAsync" disabled="@(_busy || !_circuitReady)">@(_circuitReady ? "Start Preview" : "Starting UI…")</button>
         @if (_busy)
@@ -97,11 +114,12 @@
     }
 </section>
 
-@if (_rows.Count > 0 || _review.Count > 0)
+@if (_rows.Count > 0 || _review.Count > 0 || _hasMore || (_scanner?.CheckedCount ?? 0) > 0)
 {
     <section class="settings-card wide-card">
         <h3>Preview results — page @_page</h3>
         <p>Selection: @SelectionLabel. Order: @OrderLabel. Start a new preview to use different inputs or updated settings.</p>
+        <p>@(_scanner?.CheckedCount ?? 0) checked in total; @(_scanner?.DifferentCount ?? 0) different. Active scan time: @_scanElapsed.Elapsed.ToString(@"hh\:mm\:ss").</p>
         <p>@_rows.Count checked on this page; @_rows.Count(row => row.HasChange) have different proposed values.
             Results use the settings loaded when you started this preview.</p>
         <p class="hint">@PageSummary Page elapsed: @_pageElapsed.Elapsed.ToString(@"hh\:mm\:ss").</p>
@@ -155,9 +173,9 @@
         @if (!_busy && _hasMore)
         {
             <div class="btn-row">
-                <button class="btn btn-secondary" @onclick="NextAsync">Preview Next 100</button>
+                <button class="btn btn-secondary" @onclick="NextAsync">@ContinueLabel</button>
             </div>
-            <p class="hint">The next page replaces these results. Select the assets you want to correct first; selected GUIDs are kept across pages.</p>
+            <p class="hint">Continuing replaces these live results. All completed results are available in the saved preview; selected GUIDs are kept.</p>
         }
         @if (!_busy && _review.Count > 0)
         {
@@ -181,15 +199,20 @@
     private bool _circuitReady;
     private bool _onlyChanges;
     private LocationPreviewOrder _order = LocationPreviewOrder.AssetId;
-    private bool _hasMore;
+    private bool _hasMore => _scanner?.HasMore ?? false;
     private bool _disposed;
-    private int _page;
-    private int _pageCount;
+    private int _page => _scanner?.BatchNumber ?? 0;
+    private int _pageCount => _scanner?.BatchSize ?? 0;
     private string? _message;
     private string? _error;
     private string? _saveError;
     private Guid? _savedPreviewId;
-    private LocationPreviewCursor? _after;
+    private LocationPreviewScanner? _scanner;
+    private LocationPreviewScanMode _scanMode;
+    private int _pauseAfterDifferences = 100;
+    private int _observedBatch;
+    private string ContinueLabel => _selection?.ScanMode == LocationPreviewScanMode.Continuous ? "Continue Scan" : "Preview Next 100";
+    private readonly Stopwatch _scanElapsed = new();
     private LocationPreviewSelection? _selection;
     private ProcessingConfig? _settings;
     private CancellationTokenSource? _cts;
@@ -198,7 +221,7 @@
     private Guid? _currentAssetId;
     private readonly Stopwatch _pageElapsed = new();
     private readonly Stopwatch _stageElapsed = new();
-    private readonly List<LocationPreviewRow> _rows = [];
+    private IReadOnlyList<LocationPreviewRow> _rows => _scanner?.Rows ?? Array.Empty<LocationPreviewRow>();
     private readonly LocationPreviewReview _review = new();
 
     private void SelectPageChanges()
@@ -225,14 +248,11 @@
 
     private string OrderLabel => _selection?.Order == LocationPreviewOrder.NearbyCoordinates ? "Nearby coordinates" : "Asset GUID";
 
-    private LocationPreviewCursor? LastCheckedCursor => _rows.LastOrDefault() is { } row
-        ? LocationPreviewCursor.FromAsset(row.Asset)
-        : null;
-
     protected override void OnAfterRender(bool firstRender)
     {
         if (firstRender)
         {
+            CircuitLifetime.Disconnected += Cancel;
             _circuitReady = true;
             StateHasChanged();
         }
@@ -251,8 +271,11 @@
         {
             selection = LocationPreviewSelection.Create(_scope, _input) with
             {
-                Order = _order
+                Order = _order,
+                ScanMode = _scanMode,
+                PauseAfterDifferences = _scanMode == LocationPreviewScanMode.Continuous ? _pauseAfterDifferences : 0
             };
+            _ = new LocationPreviewScanner(selection.ScanMode, selection.PauseAfterDifferences);
         }
         catch (ArgumentException ex)
         {
@@ -262,11 +285,10 @@
 
         _selection = selection;
         _message = null;
-        _rows.Clear();
+        _scanner = new LocationPreviewScanner(selection.ScanMode, selection.PauseAfterDifferences);
         _review.Clear();
-        _hasMore = false;
-        _after = null;
-        _page = 0;
+        _observedBatch = 0;
+        _scanElapsed.Reset();
         _savedPreviewId = null;
         _saveError = null;
         _previewId = Guid.NewGuid().ToString("N")[..8];
@@ -286,9 +308,7 @@
         _busy = true;
         _message = null;
         _error = null;
-        _rows.Clear();
-        _pageCount = 0;
-        _hasMore = false;
+        _scanElapsed.Start();
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
         var ct = _cts.Token;
@@ -315,69 +335,77 @@
             }
 
             ct.ThrowIfCancellationRequested();
-            var assets = await Db.GetLocationPreviewBatchAsync(_selection, _after, ct);
-            _pageCount = Math.Min(assets.Count, 100);
-            _page++;
-            LogPreview($"Page {_page}: checking {_pageCount} matching assets.");
-            foreach (var asset in assets.Take(100))
-            {
-                ct.ThrowIfCancellationRequested();
-                _currentAssetId = asset.Id;
-                SetStage("Resolving location…");
-                await InvokeAsync(StateHasChanged);
-                LocationPreviewRow completedRow;
-                try
+            var outcome = await _scanner!.RunAsync(
+                async (cursor, token) =>
                 {
-                    var proposed = asset.Latitude is not null && asset.Longitude is not null
-                        // Cached geometry and SQLite queries may complete synchronously.
-                        // Keep them off the circuit dispatcher so Cancel remains responsive.
-                        ? await Task.Run(() => Resolver.ResolveAsync(
-                            asset.Latitude.Value, asset.Longitude.Value, _settings!, progress, ct), ct)
-                        : null;
-                    ct.ThrowIfCancellationRequested();
-                    completedRow = new LocationPreviewRow(asset, proposed);
-                }
-                catch (OperationCanceledException) when (ct.IsCancellationRequested)
+                    var assets = await Db.GetLocationPreviewBatchAsync(_selection, cursor, token);
+                    LogPreview($"Page {_page}: checking {Math.Min(assets.Count, 100)} matching assets.");
+                    return assets;
+                },
+                async (asset, token) =>
                 {
-                    throw;
-                }
-                catch (Exception ex)
+                    _currentAssetId = asset.Id;
+                    SetStage("Resolving location…");
+                    await InvokeAsync(StateHasChanged);
+                    try
+                    {
+                        // Keep synchronous cached lookups off the circuit dispatcher.
+                        var proposed = await Task.Run(() => Resolver.ResolveAsync(
+                            asset.Latitude!.Value, asset.Longitude!.Value, _settings!, progress, token), token);
+                        token.ThrowIfCancellationRequested();
+                        return new LocationPreviewRow(asset, proposed);
+                    }
+                    catch (OperationCanceledException) when (token.IsCancellationRequested)
+                    {
+                        throw;
+                    }
+                    catch (Exception ex)
+                    {
+                        LogPreview($"[ERROR] Asset {asset.Id}: {ex.Message}");
+                        return new LocationPreviewRow(asset, null, ex.Message);
+                    }
+                },
+                async row =>
                 {
-                    completedRow = new LocationPreviewRow(asset, null, ex.Message);
-                    LogPreview($"[ERROR] Asset {asset.Id}: {ex.Message}");
-                }
+                    try
+                    {
+                        await SavedPreviews.AppendAsync(_savedPreviewId!.Value, row);
+                    }
+                    catch (Exception ex)
+                    {
+                        throw new InvalidOperationException($"Could not save the latest preview result: {ex.Message}", ex);
+                    }
+                },
+                async () =>
+                {
+                    if (_observedBatch != _page)
+                    {
+                        _observedBatch = _page;
+                        _pageElapsed.Restart();
+                        _currentAssetId = null;
+                        SetStage("Loading matching assets…");
+                    }
+                    if (!_disposed)
+                    {
+                        await InvokeAsync(StateHasChanged);
+                    }
+                }, ct);
 
-                // A completed result remains saved even if Cancel was clicked during the short write.
-                try
-                {
-                    await SavedPreviews.AppendAsync(_savedPreviewId!.Value, completedRow);
-                }
-                catch (Exception ex)
-                {
-                    throw new InvalidOperationException($"Could not save the latest preview result: {ex.Message}", ex);
-                }
-                _rows.Add(completedRow);
-                await InvokeAsync(StateHasChanged);
-            }
-
-            _hasMore = assets.Count > 100;
-            _after = LastCheckedCursor;
-            savedStatus = _hasMore ? "More assets available" : "Complete";
-            _message = _rows.Count == 0
-                ? "No matching active assets with both GPS coordinates found. Deleted assets and GUIDs without an Immich metadata row are excluded."
-                : _hasMore ? "Page complete. More matching assets are available." : "Preview complete. No more matching assets.";
-            LogPreview($"Page {_page} complete in {_pageElapsed.Elapsed.TotalSeconds:F1}s: {_rows.Count} checked; "
-                + $"{_rows.Count(row => row.HasChange)} different. {PageSummary} {_message}");
+            savedStatus = outcome.Paused ? "Paused" : _hasMore ? "More assets available" : "Complete";
+            _message = outcome.Paused
+                ? $"Paused after {outcome.NewDifferences} new differences. Review the saved results, then Continue Scan."
+                : _scanner.CheckedCount == 0
+                    ? "No matching active assets with both GPS coordinates found."
+                    : _hasMore ? "Page complete. More matching assets are available." : "Preview complete. No more matching assets.";
+            LogPreview($"{savedStatus}: {_scanner.CheckedCount} checked in total; {_scanner.DifferentCount} different. {_message}");
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
             savedStatus = "Cancelled";
-            _after = LastCheckedCursor ?? _after;
-            _hasMore = _after is not null;
             _message = _hasMore
-                ? "Preview cancelled. Review completed results, then use Preview Next 100 to continue after the last checked asset."
-                : "Preview cancelled before any assets were checked on this page. Start a new preview to check the selection again.";
-            LogPreview($"Cancelled after {_pageElapsed.Elapsed.TotalSeconds:F1}s: {_rows.Count} checked on this page. {PageSummary}");
+                ? $"Preview cancelled. Completed results are saved. Use {ContinueLabel} to continue after the last checked asset."
+                : "Preview cancelled. Completed results are saved.";
+            LogPreview($"Cancelled: {_scanner?.CheckedCount ?? 0} checked in total.");
         }
         catch (Exception ex)
         {
@@ -399,6 +427,7 @@
                 }
             }
             _currentAssetId = null;
+            _scanElapsed.Stop();
             _pageElapsed.Stop();
             _stageElapsed.Stop();
             pageCts.Cancel();
@@ -473,6 +502,7 @@
 
     public void Dispose()
     {
+        CircuitLifetime.Disconnected -= Cancel;
         _disposed = true;
         _cts?.Cancel();
         if (!_busy)

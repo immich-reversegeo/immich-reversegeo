@@ -19,6 +19,9 @@ var builder = WebApplication.CreateBuilder(args);
 
 // ── Services ────────────────────────────────────────────────────────────────
 
+builder.Services.AddScoped<PreviewCircuitLifetime>();
+builder.Services.AddScoped<Microsoft.AspNetCore.Components.Server.Circuits.CircuitHandler>(
+    sp => sp.GetRequiredService<PreviewCircuitLifetime>());
 builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 

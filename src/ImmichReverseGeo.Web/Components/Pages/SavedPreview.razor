@@ -24,6 +24,12 @@ else
         <p>Started: <LocalTimestamp Timestamp="_report.CreatedAt" />. Last saved: <LocalTimestamp Timestamp="_report.UpdatedAt" />.</p>
         <p>Status: @_report.Status. @_report.CheckedCount checked; @_report.DifferentCount different.</p>
         <p>Selection: @SelectionLabel. Order: @(_report.Selection.Order == LocationPreviewOrder.NearbyCoordinates ? "Nearby coordinates" : "Asset GUID").</p>
+        <p>Scan mode: @(_report.Selection.ScanMode == LocationPreviewScanMode.Continuous ? "Continuous" : "Manual pages").
+            @if (_report.Selection.ScanMode == LocationPreviewScanMode.Continuous)
+            {
+                <span>Pause after differences: @(_report.Selection.PauseAfterDifferences == 0 ? "No limit" : _report.Selection.PauseAfterDifferences.ToString()).</span>
+            }
+        </p>
         <p>These are saved snapshots, not live Immich values. Opening this report does not run lookups or change Immich.
             Start a new preview if you need current results. Only checked assets are saved; this report may cover part of the selection.</p>
         @if (_report.Error is not null)
