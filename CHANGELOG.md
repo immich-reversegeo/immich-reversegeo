@@ -6,6 +6,8 @@ For a shorter user-facing summary, see [docs/website/changelog.md](./docs/websit
 
 ## Unreleased
 
+- Add an opt-in point-only airport fallback within 100 m when no administrative city/county resolves. Keep mapped boundary matches preferred and suppress same-name point records when a known boundary is available.
+
 - Require valid Polygon/MultiPolygon coverage for airport candidates in bundled and live lookups. Exclude point-only and non-containing airports, allow a 5 m locally scaled boundary tolerance, and share final location policy with Lookup. Expose boundary availability in diagnostics.
 
 - Add county as the last bundled USA city subtype preference, preserving existing city subtype ordering and smallest-area tie breaking. Explicit user profiles retain precedence.

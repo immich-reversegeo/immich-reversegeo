@@ -207,8 +207,8 @@ public class OverturePlacesService
                                && lon <= reader.GetDouble(10)
                                && lat >= reader.GetDouble(9)
                                && lat <= reader.GetDouble(11);
-            var boundary = OvertureDataAccess.ReadAirportBoundary(
-                reader.IsDBNull(7) ? null : OvertureDataAccess.ReadBlobValue(reader.GetValue(7)), point);
+            var geometryBytes = reader.IsDBNull(7) ? null : OvertureDataAccess.ReadBlobValue(reader.GetValue(7));
+            var boundary = OvertureDataAccess.ReadAirportBoundary(geometryBytes, point);
 
             var candidate = new OvertureInfrastructureResult(
                 reader.GetString(0),
@@ -220,7 +220,8 @@ public class OverturePlacesService
                 bboxContains,
                 boundary.ContainsPoint,
                 [],
-                boundary.HasBoundary);
+                boundary.HasBoundary,
+                !boundary.HasBoundary && OvertureDataAccess.IsAirportPointGeometry(geometryBytes));
 
             var selected = false;
             var decision = candidate.IsBoundaryMatch ? "considered: weaker than current bundled best" : $"excluded: {candidate.BoundaryStatus}";
@@ -243,7 +244,8 @@ public class OverturePlacesService
                 candidate.Sources,
                 selected,
                 decision,
-                candidate.HasMappedBoundary));
+                candidate.HasMappedBoundary,
+                candidate.IsPointOnly));
         }
 
         using var meta = conn.CreateCommand();
@@ -290,8 +292,8 @@ public class OverturePlacesService
             var candidateLat = reader.GetDouble(5);
             var candidateLon = reader.GetDouble(6);
             var distance = OverturePlacesLogic.HaversineMetres(lat, lon, candidateLat, candidateLon);
-            var boundary = OvertureDataAccess.ReadAirportBoundary(
-                reader.IsDBNull(8) ? null : OvertureDataAccess.ReadBlobValue(reader.GetValue(8)), point);
+            var geometryBytes = reader.IsDBNull(8) ? null : OvertureDataAccess.ReadBlobValue(reader.GetValue(8));
+            var boundary = OvertureDataAccess.ReadAirportBoundary(geometryBytes, point);
             if (!boundary.ContainsPoint && distance > OverturePlacesLogic.InfrastructureSearchRadiusMetres)
             {
                 continue;
@@ -307,7 +309,8 @@ public class OverturePlacesService
                 reader.GetBoolean(7),
                 boundary.ContainsPoint,
                 OverturePlacesLogic.ParseSources(OvertureDataAccess.ReadNullableString(reader, 9)),
-                boundary.HasBoundary);
+                boundary.HasBoundary,
+                !boundary.HasBoundary && OvertureDataAccess.IsAirportPointGeometry(geometryBytes));
 
             var selected = false;
             var decision = candidate.IsBoundaryMatch ? "considered: weaker than current best" : $"excluded: {candidate.BoundaryStatus}";
@@ -339,7 +342,8 @@ public class OverturePlacesService
                 candidate.Sources,
                 selected,
                 decision,
-                candidate.HasMappedBoundary));
+                candidate.HasMappedBoundary,
+                candidate.IsPointOnly));
         }
 
         return new OvertureInfrastructureLookupDiagnostics(best, candidates, release);

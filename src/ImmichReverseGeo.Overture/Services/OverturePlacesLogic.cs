@@ -218,7 +218,6 @@ public static class OverturePlacesLogic
               AND COALESCE(class, '') NOT IN ('airport_gate', 'taxiway', 'runway', 'apron')
             ORDER BY (ST_GeometryType(geometry) IN ('POLYGON', 'MULTIPOLYGON')
                 AND ST_Covers(geometry, ST_Point({lon.ToString(CultureInfo.InvariantCulture)}, {lat.ToString(CultureInfo.InvariantCulture)}))) DESC,
-                (ST_GeometryType(geometry) IN ('POLYGON', 'MULTIPOLYGON')) DESC,
                 ST_Distance(geometry, ST_Point({lon.ToString(CultureInfo.InvariantCulture)}, {lat.ToString(CultureInfo.InvariantCulture)})) ASC, id
             LIMIT {QueryLimit}
             """;

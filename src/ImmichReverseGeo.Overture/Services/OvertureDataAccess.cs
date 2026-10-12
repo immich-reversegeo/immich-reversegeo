@@ -77,6 +77,24 @@ public static class OvertureDataAccess
         throw new InvalidCastException($"Unsupported blob value type '{value.GetType().FullName}'.");
     }
 
+    public static bool IsAirportPointGeometry(byte[]? wkb)
+    {
+        if (wkb is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            var geometry = WkbReader.Read(wkb);
+            return geometry is Point && !geometry.IsEmpty && geometry.IsValid;
+        }
+        catch (Exception ex) when (ex is ParseException or ArgumentException)
+        {
+            return false;
+        }
+    }
+
     public static (bool HasBoundary, bool ContainsPoint) ReadAirportBoundary(byte[]? wkb, Point point)
     {
         if (wkb is null)

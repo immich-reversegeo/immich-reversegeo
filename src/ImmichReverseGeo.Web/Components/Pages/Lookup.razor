@@ -163,6 +163,10 @@
                 <div class="result-row"><span class="result-key">BBox Contains Point</span><span class="result-val">@(_result.OvertureInfrastructure.BoundingBoxContainsPoint ? "yes" : "no")</span></div>
                 <div class="result-row"><span class="result-key">Airport Boundary</span><span class="result-val">@_result.OvertureInfrastructure.BoundaryStatus</span></div>
                 <div class="result-row"><span class="result-key">Distance</span><span class="result-val">@((int)_result.OvertureInfrastructure.DistanceMetres) m</span></div>
+                @if (_result.OvertureInfrastructure.IsPointOnly)
+                {
+                    <div class="result-note">Proximity fallback only. This does not confirm the photo was taken on airport grounds.</div>
+                }
             }
             else if (_result.Iso3 is not null)
             {
@@ -706,11 +710,31 @@
         r.FinalState = adminState;
         r.FinalStateSource = adminStateSource;
         r.FinalCountrySource = r.CountryName is not null ? "Bundled Overture country divisions" : null;
-        var final = AssetLocationResolverService.FinalizeLocation(
-            new GeoResult(r.CountryName, r.FinalState, adminCity), r.OvertureInfrastructure);
+        var adminResult = new GeoResult(r.CountryName, r.FinalState, adminCity);
+        var allowPointOnly = r.AirportInfrastructureEnabled && cfg.Processing.UsePointOnlyAirportFallback;
+        if (r.OvertureInfrastructureDiagnostics is not null)
+        {
+            r.OvertureInfrastructure = AssetLocationResolverService.SelectAirport(
+                adminResult, r.OvertureInfrastructureDiagnostics, allowPointOnly);
+            if (r.OvertureInfrastructure?.IsPointOnly == true)
+            {
+                var selectedId = r.OvertureInfrastructure.Id;
+                r.OvertureInfrastructureDiagnostics = r.OvertureInfrastructureDiagnostics with
+                {
+                    BestMatch = r.OvertureInfrastructure,
+                    Candidates = r.OvertureInfrastructureDiagnostics.Candidates.Select(c => c.Id == selectedId
+                        ? c with { Selected = true, Decision = "selected: opt-in point-only fallback within 100 m" }
+                        : c).ToList()
+                };
+                r.Trace.Add($"Point-only airport proximity fallback: {r.OvertureInfrastructure.Name} at {r.OvertureInfrastructure.DistanceMetres:F1} m; airport grounds are unconfirmed.");
+            }
+        }
+        var final = AssetLocationResolverService.FinalizeLocation(adminResult, r.OvertureInfrastructure, allowPointOnly);
         r.FinalCity = final.City;
         r.FinalCitySource = r.OvertureInfrastructure?.IsBoundaryMatch == true
             ? "Bundled airport infrastructure (mapped boundary match)"
+            : r.OvertureInfrastructure?.IsPointOnly == true
+                ? "Point-only airport proximity fallback (within 100 m)"
             : adminCity is not null
                 ? adminCitySource
                 : r.FinalState is not null
