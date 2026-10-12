@@ -217,6 +217,42 @@ public sealed class SavedLocationPreviewRepository
         }
     }
 
+    public async Task<IReadOnlyList<LocationPreviewRow>> GetSelectedRowsAsync(Guid id, IReadOnlyCollection<Guid> assetIds)
+    {
+        var ids = System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Distinct(assetIds));
+        if (ids.Length is < 1 or > 1000)
+        {
+            throw new ArgumentException("Select between 1 and 1,000 assets.");
+        }
+        await _gate.WaitAsync();
+        try
+        {
+            await using var connection = await OpenAsync(CancellationToken.None);
+            await using var command = connection.CreateCommand();
+            var parameters = new List<string>();
+            for (var index = 0; index < ids.Length; index++)
+            {
+                var name = "$asset" + index;
+                parameters.Add(name);
+                command.Parameters.AddWithValue(name, ids[index].ToString());
+            }
+            command.CommandText = $"SELECT row_json FROM preview_rows WHERE preview_id=$id AND asset_id IN ({string.Join(',', parameters)}) ORDER BY row_id";
+            command.Parameters.AddWithValue("$id", id.ToString());
+            var result = new List<LocationPreviewRow>();
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                result.Add(JsonSerializer.Deserialize<LocationPreviewRow>(reader.GetString(0))!);
+            }
+            return result;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+
     public async Task<bool> ContainsAssetAsync(Guid id, Guid assetId, CancellationToken ct = default)
     {
         await _gate.WaitAsync(ct);

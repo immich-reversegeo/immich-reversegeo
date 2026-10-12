@@ -11,6 +11,8 @@ Technical implementation notes live in [CHANGELOG.md](https://github.com/immich-
 
 ## Unreleased
 
+- Added **Location Management**: scan and review names, apply selected corrections from live or saved scans, and use Change History to inspect results or undo unchanged applied metadata. Section tabs highlight the current page; history shows clear result counts and remaining undo work. Previous preview links still work. See [Using the App](./using-the-app.md#location-management) and the [technical changelog](https://github.com/immich-reversegeo/immich-reversegeo/blob/master/CHANGELOG.md).
+
 ## 0.1.0 — 2026-10-12
 
 This first versioned release brings location previews, improved country and city matching, refreshed airport data, and lower retained country-boundary memory. Earlier development milestones remain listed below.

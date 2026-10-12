@@ -1,24 +1,26 @@
 @page "/data/saved-previews"
+@page "/data/location-management/scans"
 @rendermode InteractiveServer
 @inject SavedLocationPreviewRepository Saved
 
-<PageTitle>Saved Previews - Immich ReverseGeo</PageTitle>
-<h2>Saved Previews</h2>
+<PageTitle>Saved Scans - Immich ReverseGeo</PageTitle>
+<h2>Saved Scans</h2>
+<LocationManagementNav ActiveSection="scans" />
 <section class="settings-card wide-card">
-    <p>Preview results are saved automatically as each asset is checked. Open a report to compare its saved names without running another lookup.</p>
+    <p>Scan results are saved automatically as each asset is checked. Open a report to compare its saved names without running another lookup.</p>
     <p>Reports are snapshots. Immich metadata and resolver settings may have changed since they were saved.</p>
-    <a class="text-link" href="/data/location-preview">Start a new preview</a>
+    <a class="text-link" href="/data/location-management/scan">Start a new scan</a>
     @if (_error is not null)
     {
         <p class="alert alert-error" role="alert">@_error</p>
     }
     @if (_loading)
     {
-        <p role="status">Loading saved previews…</p>
+        <p role="status">Loading saved scans…</p>
     }
     else if (_reports.Count == 0)
     {
-        <p>No saved previews on this page.</p>
+        <p>No saved scans on this page.</p>
     }
     else
     {
@@ -34,7 +36,7 @@
                             <td>@report.Status</td>
                             <td>@report.CheckedCount</td>
                             <td>@report.DifferentCount</td>
-                            <td><a class="text-link" href="@($"/data/saved-previews/{report.Id}")">View</a></td>
+                            <td><a class="text-link" href="@($"/data/location-management/scans/{report.Id}")">View</a></td>
                         </tr>
                     }
                 </tbody>
@@ -66,7 +68,7 @@
         }
         catch (Exception ex)
         {
-            _error = $"Could not load saved previews: {ex.Message}";
+            _error = $"Could not load saved scans: {ex.Message}";
         }
         finally
         {

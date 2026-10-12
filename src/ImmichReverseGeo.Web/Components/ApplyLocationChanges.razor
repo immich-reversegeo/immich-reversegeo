@@ -1,0 +1,171 @@
+@using System.Threading
+@inject LocationManagementService Management
+@inject LocationChangeRepository Changes
+@inject PreviewCircuitLifetime Lifetime
+@implements IDisposable
+
+<section class="settings-card location-apply-panel">
+    <h3>Apply Selected Changes</h3>
+    <p>Apply the exact names from this scan. Changed coordinates or existing names are skipped. Select up to 1,000 differences per operation.</p>
+    @if (_reviewed is null)
+    {
+        <button class="btn btn-primary" @onclick="ReviewAsync" disabled="@(Disabled || _busy || SelectedIds.Count == 0)">Review @SelectedIds.Count Selected Changes</button>
+    }
+    else
+    {
+        <p>@_reviewed.Count assets will be checked against the existing names and GPS coordinates saved in this scan.</p>
+        <LocationChangeTable Rows="_reviewed.Skip((_page - 1) * 100).Take(100)" />
+        <div class="btn-row">
+            <button class="btn btn-secondary" disabled="@(_busy || _page == 1)" @onclick="() => _page--">Previous 100</button>
+            <button class="btn btn-secondary" disabled="@(_busy || _page * 100 >= _reviewed.Count)" @onclick="() => _page++">Next 100</button>
+        </div>
+        <p>Take an Immich database backup before continuing. Change History saves the previous names for guarded undo;
+            it does not replace a database backup.</p>
+        <label><input type="checkbox" @bind="_acknowledged" disabled="@_busy" /> I have reviewed these changes and understand that they update Immich.</label>
+        <div class="btn-row">
+            <button class="btn btn-primary" @onclick="ApplyAsync" disabled="@(Disabled || _busy || !_acknowledged)">Confirm Apply @_reviewed.Count Changes</button>
+            <button class="btn btn-secondary" @onclick="ClearReview" disabled="@_busy">Back to Selection</button>
+        </div>
+    }
+    @if (_busy && _operationId is not null)
+    {
+        <p role="status">Applying selected changes…</p>
+        <button class="btn btn-secondary" @onclick="Cancel">Cancel Remaining Work</button>
+    }
+    @if (_summary is not null)
+    {
+        <p role="status">Applied: @_summary.Applied; skipped: @_summary.Skipped; needs review: @_summary.NeedsReview; pending: @_summary.Pending.</p>
+    }
+    @if (_operationId is not null)
+    {
+        <p><a class="text-link" href="@($"/data/location-management/history/{_operationId}")">View this operation and undo selected changes</a>.</p>
+    }
+    @if (_error is not null)
+    {
+        <p class="alert alert-error" role="alert">@_error</p>
+    }
+</section>
+
+@code {
+    [Parameter] public Guid? ScanId { get; set; }
+    [Parameter] public IReadOnlyList<Guid> SelectedIds { get; set; } = [];
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public EventCallback<bool> BusyChanged { get; set; }
+    [Parameter] public EventCallback<IReadOnlyList<LocationChangeItem>> ResultsChanged { get; set; }
+    private IReadOnlyList<LocationPreviewRow>? _reviewed;
+    private Guid[] _reviewedIds = [];
+    private Guid? _reviewedScanId;
+    private Guid? _operationId;
+    private Guid? _loadedScanId;
+    private LocationChangeOperation? _summary;
+    private CancellationTokenSource? _cts;
+    private bool _busy;
+    private bool _acknowledged;
+    private bool _disposed;
+    private int _page = 1;
+    private string? _error;
+
+    protected override void OnInitialized() => Lifetime.Disconnected += Cancel;
+    protected override void OnParametersSet()
+    {
+        if (!_busy && _loadedScanId != ScanId)
+        {
+            _loadedScanId = ScanId;
+            ClearReview();
+            _operationId = null;
+            _summary = null;
+        }
+    }
+
+    private async Task ReviewAsync()
+    {
+        if (_busy || Disabled || ScanId is not { } id) { return; }
+        _error = null;
+        _busy = true;
+        await BusyChanged.InvokeAsync(true);
+        try
+        {
+            _reviewedIds = SelectedIds.Distinct().ToArray();
+            var reviewed = await Management.ReviewAsync(id, _reviewedIds);
+            if (_disposed || ScanId != id)
+            {
+                return;
+            }
+            _reviewed = reviewed;
+            _reviewedScanId = id;
+            _page = 1;
+            _acknowledged = false;
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally
+        {
+            _busy = false;
+            if (!_disposed)
+            {
+                await BusyChanged.InvokeAsync(false);
+            }
+        }
+    }
+
+    private async Task ApplyAsync()
+    {
+        if (_busy || Disabled || !_acknowledged || _reviewed is null
+            || _reviewedScanId is not { } id || ScanId != id)
+        {
+            return;
+        }
+        _busy = true;
+        _operationId = null;
+        _summary = null;
+        _error = null;
+        await BusyChanged.InvokeAsync(true);
+        _cts = new CancellationTokenSource();
+        try
+        {
+            _operationId = await Management.CreateApplyAsync(id, _reviewedIds);
+            await InvokeAsync(StateHasChanged);
+            await Management.RunAsync(_operationId.Value, undo: false, updated: RefreshSummaryAsync, ct: _cts.Token);
+        }
+        catch (Exception ex) { _error = ex.Message; }
+        finally
+        {
+            if (_operationId is { } operation)
+            {
+                try
+                {
+                    await RefreshSummaryAsync();
+                    if (!_disposed && ScanId == id) { await ResultsChanged.InvokeAsync(await Changes.GetItemsAsync(operation)); }
+                }
+                catch (Exception ex) { _error = "Could not refresh change results: " + ex.Message; }
+            }
+            _busy = false;
+            _cts.Dispose();
+            _cts = null;
+            ClearReview();
+            if (!_disposed) { await BusyChanged.InvokeAsync(false); }
+        }
+    }
+
+    private async Task RefreshSummaryAsync()
+    {
+        if (_operationId is not { } id) { return; }
+        _summary = (await Changes.GetOperationsAsync(id: id)).SingleOrDefault();
+        if (!_disposed) { await InvokeAsync(StateHasChanged); }
+    }
+
+    private void ClearReview()
+    {
+        _reviewed = null;
+        _reviewedIds = [];
+        _reviewedScanId = null;
+        _acknowledged = false;
+        _page = 1;
+    }
+    private void Cancel() => _cts?.Cancel();
+    public void Dispose()
+    {
+        _disposed = true;
+        Lifetime.Disconnected -= Cancel;
+        Cancel();
+    }
+}
