@@ -20,12 +20,20 @@ public enum LocationPreviewOrder
     NearbyCoordinates
 }
 
+public enum LocationPreviewScanMode
+{
+    ManualPages,
+    Continuous
+}
+
 public sealed record LocationPreviewSelection(
     LocationPreviewScope Scope,
     Guid[] AssetIds,
     string? Value)
 {
     public LocationPreviewOrder Order { get; init; }
+    public LocationPreviewScanMode ScanMode { get; init; }
+    public int PauseAfterDifferences { get; init; }
 
     public static LocationPreviewSelection Create(LocationPreviewScope scope, string? input)
     {
