@@ -2,9 +2,13 @@
 @rendermode InteractiveServer
 @using System.Linq
 @using System.Threading
+@using System.Diagnostics
+@using Microsoft.Extensions.Logging
 @inject ImmichDbRepository Db
 @inject ConfigService Config
 @inject AssetLocationResolverService Resolver
+@inject ProcessingState State
+@inject ILogger<LocationPreview> Logger
 @implements IDisposable
 
 <PageTitle>Preview Location Corrections - Immich ReverseGeo</PageTitle>
@@ -14,7 +18,7 @@
 <section class="settings-card">
     <p>Compare the names stored in Immich with the results from your current processing settings.
         Preview does not change Immich data or the skip list. It may download country caches.
-        Deleted assets and GUIDs without an Immich metadata row are excluded.</p>
+        Deleted assets, GUIDs without an Immich metadata row, and assets missing either GPS coordinate are excluded.</p>
     <p>A different result is a suggestion, not proof that the existing name is wrong.
         Check unfamiliar results in <a class="text-link" href="/lookup">Lookup</a> before deciding which assets to reset.</p>
     <div class="form-group">
@@ -34,9 +38,17 @@
             <textarea id="preview-input" class="form-control reset-textarea" @bind="_input" @bind:event="oninput" disabled="@(_busy || !_circuitReady)"></textarea>
             <span class="hint">@(_scope == LocationPreviewScope.AssetIds
                 ? "Paste up to 1,000 GUIDs, separated by commas, spaces, or new lines."
-                : "Enter the exact city, state, or country name stored in Immich. All assets with that value are included.")</span>
+                : "Enter the exact city, state, or country name stored in Immich. Assets with that value and both GPS coordinates are included.")</span>
         </div>
     }
+    <div class="form-group">
+        <label for="preview-order">Order by</label>
+        <select id="preview-order" class="form-control" @bind="_order" disabled="@(_busy || !_circuitReady)">
+            <option value="@LocationPreviewOrder.AssetId">Asset GUID</option>
+            <option value="@LocationPreviewOrder.NearbyCoordinates">Nearby coordinates</option>
+        </select>
+        <span class="hint">Nearby coordinates groups photos into small map tiles to improve cache reuse. Sorting large libraries may take longer to load a page.</span>
+    </div>
     <div class="btn-row">
         <button class="btn btn-primary" @onclick="StartAsync" disabled="@(_busy || !_circuitReady)">@(_circuitReady ? "Start Preview" : "Starting UI…")</button>
         @if (_busy)
@@ -47,9 +59,23 @@
     <p class="hint">Starting a new preview clears your selected GUIDs. Selections are kept when you move to the next page.</p>
     @if (_busy)
     {
-        <p role="status">@(_pageCount == 0 ? "Loading matching assets…" : $"Checking asset {Math.Min(_rows.Count + 1, _pageCount)} of {_pageCount}.")
-            The first lookup for a country may take longer while its cache downloads.</p>
+        <div class="preview-progress" role="status">
+            <p>@(_pageCount == 0 ? "Loading matching assets…" : $"Checking asset {Math.Min(_rows.Count + 1, _pageCount)} of {_pageCount}.")
+                Page elapsed: @_pageElapsed.Elapsed.ToString(@"hh\:mm\:ss").</p>
+            @if (_pageCount > 0)
+            {
+                <progress value="@_rows.Count" max="@_pageCount" aria-label="Assets checked on this page"></progress>
+            }
+            <p>@_stage <span class="hint">(@_stageElapsed.Elapsed.ToString(@"hh\:mm\:ss"))</span></p>
+            @if (_currentAssetId is not null)
+            {
+                <p class="hint">Current asset: <code>@_currentAssetId</code></p>
+            }
+            <p class="hint">Country preparation can take several minutes the first time; its cache is reused afterward.
+                The progress bar counts assets checked, not download progress.</p>
+        </div>
     }
+    <p class="hint">Preview starts, country-cache waits, failures, and page summaries appear in <a class="text-link" href="/logs" target="_blank" rel="noopener">Logs</a>.</p>
     @if (_message is not null)
     {
         <p role="status">@_message</p>
@@ -64,10 +90,15 @@
 {
     <section class="settings-card wide-card">
         <h3>Preview results — page @_page</h3>
-        <p>Selection: @SelectionLabel. Start a new preview to use different inputs or updated settings.</p>
+        <p>Selection: @SelectionLabel. Order: @OrderLabel. Start a new preview to use different inputs or updated settings.</p>
         <p>@_rows.Count checked on this page; @_rows.Count(row => row.HasChange) have different proposed values.
             Results use the settings loaded when you started this preview.</p>
+        <p class="hint">@PageSummary Page elapsed: @_pageElapsed.Elapsed.ToString(@"hh\:mm\:ss").</p>
         <label><input type="checkbox" @bind="_onlyChanges" /> Show only different values</label>
+        @if (_onlyChanges && !_rows.Any(row => row.HasChange))
+        {
+            <p class="hint">No different values @(_busy ? "found yet" : "found") on this page. Uncheck Show only different values to inspect all results.</p>
+        }
         @if (!_busy && (_rows.Any(row => row.HasChange) || _review.Count > 0))
         {
             <div class="btn-row">
@@ -137,16 +168,22 @@
     private bool _busy;
     private bool _circuitReady;
     private bool _onlyChanges;
+    private LocationPreviewOrder _order = LocationPreviewOrder.AssetId;
     private bool _hasMore;
     private bool _disposed;
     private int _page;
     private int _pageCount;
     private string? _message;
     private string? _error;
-    private Guid? _afterId;
+    private LocationPreviewCursor? _after;
     private LocationPreviewSelection? _selection;
     private ProcessingConfig? _settings;
     private CancellationTokenSource? _cts;
+    private string _previewId = string.Empty;
+    private string _stage = string.Empty;
+    private Guid? _currentAssetId;
+    private readonly Stopwatch _pageElapsed = new();
+    private readonly Stopwatch _stageElapsed = new();
     private readonly List<LocationPreviewRow> _rows = [];
     private readonly LocationPreviewReview _review = new();
 
@@ -161,12 +198,22 @@
     private string SelectionLabel => _selection?.Scope switch
     {
         LocationPreviewScope.AssetIds => $"{_selection.AssetIds.Length} asset GUID(s)",
-        LocationPreviewScope.All => "Whole library",
+        LocationPreviewScope.All => "Whole library (GPS only)",
         LocationPreviewScope.City => $"Existing city: {_selection.Value}",
         LocationPreviewScope.State => $"Existing state: {_selection.Value}",
         LocationPreviewScope.Country => $"Existing country: {_selection.Value}",
         _ => string.Empty
     };
+
+    private string PageSummary => $"Unchanged: {_rows.Count(row => row.Status == "Unchanged")}; "
+        + $"unresolved: {_rows.Count(row => row.Status == "No resolvable location")}; "
+        + $"failed: {_rows.Count(row => row.Error is not null)}.";
+
+    private string OrderLabel => _selection?.Order == LocationPreviewOrder.NearbyCoordinates ? "Nearby coordinates" : "Asset GUID";
+
+    private LocationPreviewCursor? LastCheckedCursor => _rows.LastOrDefault() is { } row
+        ? LocationPreviewCursor.FromAsset(row.Asset)
+        : null;
 
     protected override void OnAfterRender(bool firstRender)
     {
@@ -188,7 +235,10 @@
         LocationPreviewSelection selection;
         try
         {
-            selection = LocationPreviewSelection.Create(_scope, _input);
+            selection = LocationPreviewSelection.Create(_scope, _input) with
+            {
+                Order = _order
+            };
         }
         catch (ArgumentException ex)
         {
@@ -201,8 +251,10 @@
         _rows.Clear();
         _review.Clear();
         _hasMore = false;
-        _afterId = null;
+        _after = null;
         _page = 0;
+        _previewId = Guid.NewGuid().ToString("N")[..8];
+        LogPreview($"Started: {SelectionLabel}. Order: {OrderLabel}. Immich data will not be changed.");
         await PreviewPageAsync(reloadSettings: true);
     }
 
@@ -224,6 +276,14 @@
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
         var ct = _cts.Token;
+        var pageCts = _cts;
+        _currentAssetId = null;
+        _pageElapsed.Restart();
+        SetStage("Loading matching assets…");
+        var refreshTask = RefreshElapsedAsync(ct);
+        var progress = new LocationPreviewProgress(
+            message => UpdateProgress(pageCts, () => SetStage(message)),
+            message => LogPreview(message));
         try
         {
             if (reloadSettings)
@@ -232,19 +292,23 @@
             }
 
             ct.ThrowIfCancellationRequested();
-            var assets = await Db.GetLocationPreviewBatchAsync(_selection, _afterId, ct);
+            var assets = await Db.GetLocationPreviewBatchAsync(_selection, _after, ct);
             _pageCount = Math.Min(assets.Count, 100);
             _page++;
+            LogPreview($"Page {_page}: checking {_pageCount} matching assets.");
             foreach (var asset in assets.Take(100))
             {
                 ct.ThrowIfCancellationRequested();
+                _currentAssetId = asset.Id;
+                SetStage("Resolving location…");
+                await InvokeAsync(StateHasChanged);
                 try
                 {
                     var proposed = asset.Latitude is not null && asset.Longitude is not null
                         // Cached geometry and SQLite queries may complete synchronously.
                         // Keep them off the circuit dispatcher so Cancel remains responsive.
                         ? await Task.Run(() => Resolver.ResolveAsync(
-                            asset.Latitude.Value, asset.Longitude.Value, _settings!, ct: ct), ct)
+                            asset.Latitude.Value, asset.Longitude.Value, _settings!, progress, ct), ct)
                         : null;
                     ct.ThrowIfCancellationRequested();
                     _rows.Add(new LocationPreviewRow(asset, proposed));
@@ -256,32 +320,104 @@
                 catch (Exception ex)
                 {
                     _rows.Add(new LocationPreviewRow(asset, null, ex.Message));
+                    LogPreview($"[ERROR] Asset {asset.Id}: {ex.Message}");
                 }
 
                 await InvokeAsync(StateHasChanged);
             }
 
             _hasMore = assets.Count > 100;
-            _afterId = _rows.LastOrDefault()?.Asset.Id;
+            _after = LastCheckedCursor;
             _message = _rows.Count == 0
-                ? "No matching active assets found. GUIDs without an Immich metadata row are not included."
+                ? "No matching active assets with both GPS coordinates found. Deleted assets and GUIDs without an Immich metadata row are excluded."
                 : _hasMore ? "Page complete. More matching assets are available." : "Preview complete. No more matching assets.";
+            LogPreview($"Page {_page} complete in {_pageElapsed.Elapsed.TotalSeconds:F1}s: {_rows.Count} checked; "
+                + $"{_rows.Count(row => row.HasChange)} different. {PageSummary} {_message}");
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
-            _afterId = _rows.LastOrDefault()?.Asset.Id ?? _afterId;
-            _hasMore = _afterId is not null;
+            _after = LastCheckedCursor ?? _after;
+            _hasMore = _after is not null;
             _message = _hasMore
                 ? "Preview cancelled. Review completed results, then use Preview Next 100 to continue after the last checked asset."
                 : "Preview cancelled before any assets were checked on this page. Start a new preview to check the selection again.";
+            LogPreview($"Cancelled after {_pageElapsed.Elapsed.TotalSeconds:F1}s: {_rows.Count} checked on this page. {PageSummary}");
         }
         catch (Exception ex)
         {
             _error = $"Could not load preview: {ex.Message}";
+            LogPreview($"[ERROR] {_error}");
         }
         finally
         {
+            _currentAssetId = null;
+            _pageElapsed.Stop();
+            _stageElapsed.Stop();
+            pageCts.Cancel();
+            await refreshTask;
+            pageCts.Dispose();
+            _cts = null;
             _busy = false;
+        }
+    }
+
+    private void SetStage(string message)
+    {
+        _stage = message;
+        _stageElapsed.Restart();
+    }
+
+    private void UpdateProgress(CancellationTokenSource pageCts, Action update)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+
+        _ = InvokeAsync(() =>
+        {
+            if (!_disposed && _busy && ReferenceEquals(_cts, pageCts))
+            {
+                update();
+                StateHasChanged();
+            }
+        });
+    }
+
+    private void LogPreview(string message)
+    {
+        var line = $"[Preview {_previewId}] {message}";
+        State.AppendLog(line);
+        if (message.Contains("[ERROR]", StringComparison.Ordinal))
+        {
+            Logger.LogError("{PreviewEvent}", line);
+        }
+        else if (message.Contains("[WARN]", StringComparison.Ordinal))
+        {
+            Logger.LogWarning("{PreviewEvent}", line);
+        }
+        else
+        {
+            Logger.LogInformation("{PreviewEvent}", line);
+        }
+    }
+
+    private async Task RefreshElapsedAsync(CancellationToken ct)
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(ct))
+            {
+                if (_disposed)
+                {
+                    return;
+                }
+                await InvokeAsync(StateHasChanged);
+            }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
         }
     }
 
@@ -291,6 +427,9 @@
     {
         _disposed = true;
         _cts?.Cancel();
-        _cts?.Dispose();
+        if (!_busy)
+        {
+            _cts?.Dispose();
+        }
     }
 }

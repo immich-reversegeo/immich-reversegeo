@@ -54,16 +54,20 @@ Lookup distinguishes a point outside the bundled country coverage from a matched
 Open **Data → Preview Location Corrections** to compare existing city, state, and country names with proposed values from your current processing settings.
 
 1. Choose pasted asset GUIDs, an exact existing city/state/country name, or the whole library.
-2. Start the preview. It checks up to 100 assets per page and may download country caches. It does not write to Immich or change the skip list.
+2. Start the preview. It checks up to 100 assets per page and may download country caches. Every scope includes only assets with both GPS coordinates. It does not write to Immich or change the skip list.
 3. Review the existing and proposed values. Use **Show only different values** to focus on changes. Different does not necessarily mean better: test unfamiliar results in Lookup using the coordinates shown in the table.
 4. Select only the assets you want to correct. The GUID list includes your selections across reviewed pages. Copy those GUIDs and take an [Immich database backup](https://docs.immich.app/administration/backup-and-restore/) before resetting them under **Reset Immich Geo Data → Reset Single Item(s)**.
 5. Select **Run Now** on the Dashboard to process the reset assets.
 
 **Preview Next 100** replaces the current results, so select the assets you want to retain first. Selected GUIDs are kept across pages; **Start Preview** clears the selection. After cancellation, you can review completed results and continue after the last checked asset. If cancellation happens before any results are available, start a new preview.
 
+Choose **Order by → Nearby coordinates** to group photos into quarter-degree map tiles, helping nearby lookups reuse cached data. This can reduce switching between country caches, particularly with the bounded country cache, but each uncached country still needs preparing. Sorting can increase database query time for large libraries; use **Asset GUID** order if loading matching assets takes too long. Start a new preview to change the order. Both orders support continuing after the last checked asset on cancellation.
+
+While preview runs, the page shows the current asset, lookup step or country-cache wait, and elapsed time. The progress bar counts checked assets, not downloaded data. Preparing a country for the first time can take several minutes; later lookups reuse its cache. To investigate a long wait, open **Logs** from the preview page. Preview events include a short identifier so you can follow one preview's start, cache waits, failures, cancellation, and page summaries. These events also appear in the container logs. Successful cached lookups are summarized rather than logged for every asset.
+
 Settings are loaded once when you start the preview; start again after changing settings. Results may change if settings, source data, or coordinates change before processing.
 
-Deleted assets and GUIDs without an Immich metadata row are excluded. Missing GPS coordinates, unresolved locations, and lookup failures are shown separately and are excluded from the list of GUIDs with proposed changes. Preview can help find inconsistent names; it cannot recover missing GPS coordinates or guarantee that a proposed name is correct.
+Deleted assets, GUIDs without an Immich metadata row, and assets missing either latitude or longitude are excluded from every preview query, including pasted GUIDs. Unresolved locations and lookup failures are shown separately and cannot be selected for correction. Preview can help find inconsistent names; it cannot recover missing GPS coordinates or guarantee that a proposed name is correct.
 
 ### Maintenance actions
 

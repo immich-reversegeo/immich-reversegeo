@@ -34,10 +34,17 @@ public class LocationPreviewIntegrationTests
                     FROM generate_series(1, 207) AS n;
                 UPDATE asset SET "deletedAt" = now() WHERE id = '00000000-0000-0000-0000-000000000206';
                 INSERT INTO asset_exif
-                    SELECT id, 48, 2, 'France', 'Region', 'Old city'
+                    SELECT id, 48 - (row_number() OVER (ORDER BY id) % 7) * 0.1,
+                        2 + (row_number() OVER (ORDER BY id) % 11) * 0.1, 'France', 'Region', 'Old city'
                     FROM asset WHERE id <> '00000000-0000-0000-0000-000000000207';
                 UPDATE asset_exif SET latitude = NULL, state = NULL, city = ''' OR TRUE --'
                     WHERE "assetId" = '00000000-0000-0000-0000-000000000001';
+                UPDATE asset_exif SET longitude = NULL
+                    WHERE "assetId" = '00000000-0000-0000-0000-000000000205';
+                UPDATE asset_exif SET state = NULL, city = ''' OR TRUE --'
+                    WHERE "assetId" = '00000000-0000-0000-0000-000000000002';
+                UPDATE asset_exif SET latitude = -0.01, longitude = -0.26
+                    WHERE "assetId" = '00000000-0000-0000-0000-000000000200';
                 """);
             await seed.ExecuteNonQueryAsync();
 
@@ -45,21 +52,43 @@ public class LocationPreviewIntegrationTests
             var all = LocationPreviewSelection.Create(LocationPreviewScope.All, null);
             var first = await repository.GetLocationPreviewBatchAsync(all, null);
             Assert.HasCount(101, first);
-            Assert.IsNull(first[0].Latitude);
+            Assert.IsNotNull(first[0].Latitude);
             Assert.IsNull(first[0].Existing.State);
-            var second = await repository.GetLocationPreviewBatchAsync(all, first[99].Id);
+            var second = await repository.GetLocationPreviewBatchAsync(all, LocationPreviewCursor.FromAsset(first[99]));
             Assert.HasCount(101, second);
-            var third = await repository.GetLocationPreviewBatchAsync(all, second[99].Id);
-            Assert.HasCount(5, third);
-            Assert.HasCount(205, first.Take(100).Concat(second.Take(100)).Concat(third).Select(a => a.Id).Distinct().ToArray());
+            var third = await repository.GetLocationPreviewBatchAsync(all, LocationPreviewCursor.FromAsset(second[99]));
+            Assert.HasCount(3, third);
+            var gpsAssets = first.Take(100).Concat(second.Take(100)).Concat(third).ToArray();
+            Assert.HasCount(203, gpsAssets);
+            Assert.HasCount(203, gpsAssets.Select(a => a.Id).Distinct().ToArray());
+            Assert.IsTrue(gpsAssets.All(asset => asset.Latitude is not null && asset.Longitude is not null));
+
+            var nearby = all with { Order = LocationPreviewOrder.NearbyCoordinates };
+            var nearbyFirst = await repository.GetLocationPreviewBatchAsync(nearby, null);
+            var nearbySecond = await repository.GetLocationPreviewBatchAsync(nearby, LocationPreviewCursor.FromAsset(nearbyFirst[99]));
+            var nearbyThird = await repository.GetLocationPreviewBatchAsync(nearby, LocationPreviewCursor.FromAsset(nearbySecond[99]));
+            var nearbyAssets = nearbyFirst.Take(100).Concat(nearbySecond.Take(100)).Concat(nearbyThird).ToArray();
+            var expectedOrder = first.Take(100).Concat(second.Take(100)).Concat(third)
+                .OrderBy(asset => LocationPreviewCursor.FromAsset(asset).LatitudeTile)
+                .ThenBy(asset => LocationPreviewCursor.FromAsset(asset).LongitudeTile)
+                .ThenBy(asset => asset.Id).Select(asset => asset.Id).ToArray();
+            CollectionAssert.AreEqual(expectedOrder, nearbyAssets.Select(asset => asset.Id).ToArray());
+            Assert.HasCount(203, nearbyAssets.Select(asset => asset.Id).Distinct().ToArray());
+            Assert.IsTrue(nearbyAssets.All(asset => asset.Latitude is not null && asset.Longitude is not null));
+
+            // Resuming after cancellation partway through a tile must retain every unchecked asset.
+            var resumed = await repository.GetLocationPreviewBatchAsync(nearby, LocationPreviewCursor.FromAsset(nearbyFirst[36]));
+            CollectionAssert.AreEqual(expectedOrder.Skip(37).Take(101).ToArray(), resumed.Select(asset => asset.Id).ToArray());
+            Assert.HasCount(0, await repository.GetLocationPreviewBatchAsync(nearby, LocationPreviewCursor.FromAsset(nearbyAssets[^1])));
 
             var exactCity = await repository.GetLocationPreviewBatchAsync(
                 LocationPreviewSelection.Create(LocationPreviewScope.City, "' OR TRUE --"), null);
             Assert.HasCount(1, exactCity);
             var byIds = await repository.GetLocationPreviewBatchAsync(
                 LocationPreviewSelection.Create(LocationPreviewScope.AssetIds,
-                    "00000000-0000-0000-0000-000000000001,00000000-0000-0000-0000-000000000206,00000000-0000-0000-0000-000000000207"), null);
+                    "00000000-0000-0000-0000-000000000001,00000000-0000-0000-0000-000000000002,00000000-0000-0000-0000-000000000205,00000000-0000-0000-0000-000000000206,00000000-0000-0000-0000-000000000207"), null);
             Assert.HasCount(1, byIds);
+            Assert.AreEqual(Guid.Parse("00000000-0000-0000-0000-000000000002"), byIds[0].Id);
             Assert.HasCount(101, await repository.GetLocationPreviewBatchAsync(
                 LocationPreviewSelection.Create(LocationPreviewScope.Country, "France"), null));
             Assert.HasCount(101, await repository.GetLocationPreviewBatchAsync(
