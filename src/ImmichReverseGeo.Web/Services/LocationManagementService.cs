@@ -24,6 +24,10 @@ public sealed class LocationManagementService(SavedLocationPreviewRepository sca
         {
             throw new ArgumentException("One or more selected assets are missing from this scan or are not resolvable differences.");
         }
+        if ((await changes.GetScanResultsAsync(scanId, ids)).Count > 0)
+        {
+            throw new ArgumentException("One or more selected differences have already been attempted. Use Change History for pending work or run a new scan before applying them again.");
+        }
         return rows;
     }
 

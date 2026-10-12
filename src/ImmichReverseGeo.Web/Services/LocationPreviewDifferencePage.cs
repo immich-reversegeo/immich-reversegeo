@@ -24,6 +24,11 @@ public sealed class LocationPreviewDifferencePage
         }
 
         _rows = await load(Page);
+        while (Page > 1 && _rows.Count == 0)
+        {
+            Page--;
+            _rows = await load(Page);
+        }
         _loadedCount = differentCount;
     }
 

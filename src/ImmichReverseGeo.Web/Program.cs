@@ -111,6 +111,7 @@ builder.Services.AddSingleton<ImmichDbRepository>();
 builder.Services.AddSingleton<ILocationChangeWriter>(sp => sp.GetRequiredService<ImmichDbRepository>());
 builder.Services.AddSingleton<LocationChangeRepository>();
 builder.Services.AddSingleton<LocationManagementService>();
+builder.Services.AddSingleton<LocationReviewResults>();
 builder.Services.AddSingleton<ProcessingState>();
 builder.Services.AddSingleton<ProcessingBackgroundService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ProcessingBackgroundService>());
