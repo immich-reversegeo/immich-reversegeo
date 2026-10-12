@@ -1,0 +1,203 @@
+@page "/data/saved-previews/{Id:guid}"
+@rendermode InteractiveServer
+@inject SavedLocationPreviewRepository Saved
+@inject NavigationManager Navigation
+
+<PageTitle>Saved Location Preview - Immich ReverseGeo</PageTitle>
+<h2>Saved Location Preview</h2>
+<p><a class="text-link" href="/data/saved-previews">All saved previews</a></p>
+@if (_error is not null)
+{
+    <p class="alert alert-error" role="alert">@_error</p>
+}
+@if (_loading)
+{
+    <p role="status">Loading saved results…</p>
+}
+else if (_report is null)
+{
+    <p>This saved preview was not found.</p>
+}
+else
+{
+    <section class="settings-card wide-card">
+        <p>Started: <LocalTimestamp Timestamp="_report.CreatedAt" />. Last saved: <LocalTimestamp Timestamp="_report.UpdatedAt" />.</p>
+        <p>Status: @_report.Status. @_report.CheckedCount checked; @_report.DifferentCount different.</p>
+        <p>Selection: @SelectionLabel. Order: @(_report.Selection.Order == LocationPreviewOrder.NearbyCoordinates ? "Nearby coordinates" : "Asset GUID").</p>
+        <p>These are saved snapshots, not live Immich values. Opening this report does not run lookups or change Immich.
+            Start a new preview if you need current results. Only checked assets are saved; this report may cover part of the selection.</p>
+        @if (_report.Error is not null)
+        {
+            <p class="alert alert-error">@_report.Error</p>
+        }
+        <details>
+            <summary>Processing settings used</summary>
+            <p>Airport names: @(_report.Settings.UseAirportInfrastructure ? "enabled" : "disabled").
+                GADM administrative areas: @(_report.Settings.UseGadmAdministrativeAreas ? "enabled" : "disabled").
+                Preferred administrative source: @(_report.Settings.UseGadmAdministrativeAreas && _report.Settings.PreferGadmAdministrativeAreas ? "GADM" : "Overture").</p>
+        </details>
+        <div class="btn-row">
+            <button class="btn btn-secondary" disabled="@_loading" @onclick="LoadAsync">Refresh saved results</button>
+            <button class="btn btn-secondary" disabled="@(_loading || _report.Status == "Running")" @onclick="() => _confirmDelete = true">Delete saved report</button>
+        </div>
+        @if (_confirmDelete)
+        {
+            <p>Delete this report and its saved results? Immich metadata will not be changed.</p>
+            <div class="btn-row">
+                <button class="btn btn-secondary" @onclick="DeleteAsync">Confirm delete</button>
+                <button class="btn btn-secondary" @onclick="() => _confirmDelete = false">Keep report</button>
+            </div>
+        }
+    </section>
+    <section class="settings-card wide-card">
+        <h3>Saved results — page @_page</h3>
+        <label><input type="checkbox" @bind="_onlyChanges" @bind:after="FilterAsync" disabled="@_loading" /> Show only different values</label>
+        @if (_rows.Count == 0)
+        {
+            <p>@(_onlyChanges ? "No different values saved on this page. Uncheck Show only different values to inspect all saved results." : "No results saved on this page.")</p>
+        }
+        else
+        {
+            <div class="btn-row">
+                <button class="btn btn-secondary" @onclick="SelectPageChanges">Select different values on this page</button>
+                <button class="btn btn-secondary" @onclick="_review.Clear" disabled="@(_review.Count == 0)">Clear selection</button>
+            </div>
+            <div class="table-scroll">
+                <table class="data-table">
+                    <thead><tr><th>Select</th><th>Asset GUID</th><th>Existing location</th><th>Proposed location</th><th>Result</th></tr></thead>
+                    <tbody>
+                        @foreach (var row in _rows.Take(100))
+                        {
+                            <tr>
+                                <td><input type="checkbox" aria-label="Select asset @row.Asset.Id" checked="@_review.IsSelected(row.Asset.Id)"
+                                    disabled="@(!row.HasChange)" @onchange="args => _review.Select(row, args.Value is true)" /></td>
+                                <td><code>@row.Asset.Id</code><div class="hint">GPS: @row.Asset.Latitude?.ToString("G", System.Globalization.CultureInfo.InvariantCulture), @row.Asset.Longitude?.ToString("G", System.Globalization.CultureInfo.InvariantCulture)</div></td>
+                                <td><div>City: @(row.Asset.Existing.City ?? "—")</div><div>State: @(row.Asset.Existing.State ?? "—")</div><div>Country: @(row.Asset.Existing.Country ?? "—")</div></td>
+                                <td><div>City: @(row.Proposed?.City ?? "—")</div><div>State: @(row.Proposed?.State ?? "—")</div><div>Country: @(row.Proposed?.Country ?? "—")</div></td>
+                                <td>@row.Status
+                                    @if (row.Error is not null)
+                                    {
+                                        <div>@row.Error</div>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
+            </div>
+        }
+        <div class="btn-row">
+            <button class="btn btn-secondary" disabled="@(_loading || _page == 1)" @onclick="PreviousAsync">Previous 100</button>
+            <button class="btn btn-secondary" disabled="@(_loading || _rows.Count <= 100)" @onclick="NextAsync">Next 100</button>
+        </div>
+        @if (_review.Count > 0)
+        {
+            <div class="form-group">
+                <label for="saved-preview-guids">Selected GUIDs (@_review.Count)</label>
+                <textarea id="saved-preview-guids" class="form-control reset-textarea" readonly value="@string.Join(Environment.NewLine, _review.SelectedIds)"></textarea>
+            </div>
+            <p>Selections are kept across pages while this report is open. Verify current results with a new preview before resetting.
+                Take an Immich database backup, then copy reviewed GUIDs into <a class="text-link" href="/data/reset-geo-data">Reset Immich Geo Data → Reset Single Item(s)</a>.</p>
+        }
+    </section>
+}
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+    private SavedLocationPreview? _report;
+    private IReadOnlyList<LocationPreviewRow> _rows = [];
+    private LocationPreviewReview _review = new();
+    private Guid? _loadedId;
+    private bool _loading;
+    private bool _onlyChanges = true;
+    private bool _confirmDelete;
+    private int _page = 1;
+    private string? _error;
+
+    private string SelectionLabel => _report!.Selection.Scope switch
+    {
+        LocationPreviewScope.All => "Whole library (GPS only)",
+        LocationPreviewScope.AssetIds => $"{_report.Selection.AssetIds.Length} GUID(s)",
+        _ => $"{_report.Selection.Scope}: {_report.Selection.Value}"
+    };
+
+    protected override async Task OnParametersSetAsync()
+    {
+        if (_loadedId != Id)
+        {
+            _page = 1;
+            _review.Clear();
+            _confirmDelete = false;
+            _report = null;
+            _rows = [];
+            _onlyChanges = true;
+            _loadedId = Id;
+        }
+        await LoadAsync();
+    }
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _report = (await Saved.GetReportsAsync(id: Id)).SingleOrDefault();
+            _rows = _report is null ? [] : await Saved.GetRowsAsync(Id, _page, _onlyChanges);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Could not load saved preview: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Task FilterAsync()
+    {
+        _page = 1;
+        return LoadAsync();
+    }
+
+    private Task PreviousAsync()
+    {
+        _page--;
+        return LoadAsync();
+    }
+
+    private Task NextAsync()
+    {
+        _page++;
+        return LoadAsync();
+    }
+
+    private void SelectPageChanges()
+    {
+        foreach (var row in _rows.Take(100).Where(row => row.HasChange))
+        {
+            _review.Select(row, true);
+        }
+    }
+
+    private async Task DeleteAsync()
+    {
+        _confirmDelete = false;
+        try
+        {
+            if (await Saved.DeleteAsync(Id))
+            {
+                Navigation.NavigateTo("/data/saved-previews");
+            }
+            else
+            {
+                _error = "The report is running or has already been deleted. Refresh saved results to check its status.";
+            }
+        }
+        catch (Exception ex)
+        {
+            _error = $"Could not delete saved preview: {ex.Message}";
+        }
+    }
+}

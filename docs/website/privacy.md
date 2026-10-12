@@ -12,6 +12,7 @@ Operationally:
 - asset coordinates are read from your immich database
 - resolved place names are written back to your immich database
 - bundled and cached data is stored locally on your system
+- preview reports save asset GUIDs, coordinates, existing and proposed names, and processing settings locally in your `/data` volume; they remain until you delete the saved report
 
 The app UI uses local system fonts and does not request fonts from an external provider.
 

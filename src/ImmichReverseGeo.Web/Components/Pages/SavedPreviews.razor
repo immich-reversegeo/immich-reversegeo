@@ -1,0 +1,88 @@
+@page "/data/saved-previews"
+@rendermode InteractiveServer
+@inject SavedLocationPreviewRepository Saved
+
+<PageTitle>Saved Previews - Immich ReverseGeo</PageTitle>
+<h2>Saved Previews</h2>
+<section class="settings-card wide-card">
+    <p>Preview results are saved automatically as each asset is checked. Open a report to compare its saved names without running another lookup.</p>
+    <p>Reports are snapshots. Immich metadata and resolver settings may have changed since they were saved.</p>
+    <a class="text-link" href="/data/location-preview">Start a new preview</a>
+    @if (_error is not null)
+    {
+        <p class="alert alert-error" role="alert">@_error</p>
+    }
+    @if (_loading)
+    {
+        <p role="status">Loading saved previews…</p>
+    }
+    else if (_reports.Count == 0)
+    {
+        <p>No saved previews on this page.</p>
+    }
+    else
+    {
+        <div class="table-scroll">
+            <table class="data-table">
+                <thead><tr><th>Started</th><th>Selection</th><th>Status</th><th>Checked</th><th>Different</th><th>Report</th></tr></thead>
+                <tbody>
+                    @foreach (var report in _reports.Take(25))
+                    {
+                        <tr>
+                            <td><LocalTimestamp Timestamp="report.CreatedAt" /></td>
+                            <td>@(report.Selection.Scope == LocationPreviewScope.All ? "Whole library" : report.Selection.Scope == LocationPreviewScope.AssetIds ? $"{report.Selection.AssetIds.Length} GUID(s)" : $"{report.Selection.Scope}: {report.Selection.Value}")</td>
+                            <td>@report.Status</td>
+                            <td>@report.CheckedCount</td>
+                            <td>@report.DifferentCount</td>
+                            <td><a class="text-link" href="@($"/data/saved-previews/{report.Id}")">View</a></td>
+                        </tr>
+                    }
+                </tbody>
+            </table>
+        </div>
+    }
+    <div class="btn-row">
+        <button class="btn btn-secondary" disabled="@(_loading || _page == 1)" @onclick="PreviousAsync">Previous</button>
+        <button class="btn btn-secondary" disabled="@(_loading || _reports.Count <= 25)" @onclick="NextAsync">Next</button>
+        <button class="btn btn-secondary" disabled="@_loading" @onclick="LoadAsync">Refresh</button>
+    </div>
+</section>
+
+@code {
+    private IReadOnlyList<SavedLocationPreview> _reports = [];
+    private int _page = 1;
+    private bool _loading;
+    private string? _error;
+
+    protected override Task OnInitializedAsync() => LoadAsync();
+
+    private async Task LoadAsync()
+    {
+        _loading = true;
+        _error = null;
+        try
+        {
+            _reports = await Saved.GetReportsAsync(_page);
+        }
+        catch (Exception ex)
+        {
+            _error = $"Could not load saved previews: {ex.Message}";
+        }
+        finally
+        {
+            _loading = false;
+        }
+    }
+
+    private Task PreviousAsync()
+    {
+        _page--;
+        return LoadAsync();
+    }
+
+    private Task NextAsync()
+    {
+        _page++;
+        return LoadAsync();
+    }
+}

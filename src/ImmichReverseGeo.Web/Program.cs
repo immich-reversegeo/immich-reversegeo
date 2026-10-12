@@ -93,6 +93,7 @@ builder.Services.AddSingleton(sp =>
         sp.GetRequiredService<ILogger<GadmDivisionsService>>(),
         sp.GetRequiredService<StorageOptions>().DataDir));
 builder.Services.AddSingleton<SkippedAssetsRepository>();
+builder.Services.AddSingleton<SavedLocationPreviewRepository>();
 builder.Services.AddSingleton<ImmichDbRepository>();
 builder.Services.AddSingleton<ProcessingState>();
 builder.Services.AddSingleton<ProcessingBackgroundService>();
