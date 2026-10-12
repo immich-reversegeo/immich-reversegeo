@@ -199,5 +199,8 @@ docker-compose.yml   Reference snippet; joins immich_default network
 | `DB_USERNAME` | — | PostgreSQL user |
 | `DB_PASSWORD` | — | PostgreSQL password |
 | `DB_DATABASE_NAME` | `immich` | Database name |
+| `IMMICH_URL` | — | Optional server URL for photo thumbnails |
+| `IMMICH_WEB_URL` | `IMMICH_URL` | Browser URL for original-photo links |
+| `IMMICH_API_KEY` | — | Optional thumbnail key with asset.view permission; environment only |
 | `DATA_DIR` | `/data` | Geodata and cache files |
 | `CONFIG_DIR` | `/config` | settings.json |

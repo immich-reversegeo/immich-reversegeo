@@ -1,0 +1,11 @@
+@inject ImmichPhotoOptions Photos
+
+@if (Photos.ConfigurationError is not null)
+{
+    <p class="alert alert-error" role="alert">@Photos.ConfigurationError</p>
+}
+@if (!Photos.ThumbnailsEnabled || Photos.WebBaseUri is null)
+{
+    <p class="hint">Photo previews and original-photo links use an optional Immich connection.
+        See <a class="text-link" href="https://immich-reversegeo.github.io/configuration/#photo-previews-and-immich-links" target="_blank" rel="noopener noreferrer">connection setup</a> to enable them.</p>
+}

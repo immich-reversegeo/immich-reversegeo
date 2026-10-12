@@ -47,6 +47,29 @@ The two editors save their own sections, so saving City Resolver does not overwr
 
 Saving replaces the settings file only after the new values have been written completely. If a save fails, the previous file remains available. Database credentials stay in the environment.
 
+## Photo previews and Immich links
+
+Live location previews and saved reports can show photo thumbnails and an **Open in Immich** link. This connection is optional; location processing still uses your database settings.
+
+Add these environment variables to the Immich ReverseGeo service, then recreate or restart it:
+
+| Variable | Purpose |
+|---|---|
+| `IMMICH_URL` | Immich server URL reachable from Immich ReverseGeo, such as `http://immich-server:2283`. |
+| `IMMICH_WEB_URL` | Optional URL used by your browser, such as `https://photos.example.com`. Defaults to `IMMICH_URL`. |
+| `IMMICH_API_KEY` | Immich API key with `asset.view` permission and access to the photos being previewed. |
+
+```yaml
+environment:
+  IMMICH_URL: http://immich-server:2283
+  IMMICH_WEB_URL: https://photos.example.com
+  IMMICH_API_KEY: ${REVERSEGEO_IMMICH_API_KEY}
+```
+
+Put `REVERSEGEO_IMMICH_API_KEY` in your compose environment or secrets-backed deployment configuration. The key stays on the server and is not stored in settings or saved reports. An API key can only show photos its Immich account can access; a database-wide preview may include photos belonging to other users.
+
+You can configure only `IMMICH_WEB_URL` if you want original-photo links without thumbnails. Thumbnails are fetched on demand for assets in saved preview reports and are not saved as image files. Missing thumbnails, denied access, or an unavailable Immich server show **Preview unavailable** while the saved location results remain usable. Original-photo links open Immich in a new tab and use your normal Immich sign-in.
+
 ## Processing settings
 
 The Settings page lets you control:
