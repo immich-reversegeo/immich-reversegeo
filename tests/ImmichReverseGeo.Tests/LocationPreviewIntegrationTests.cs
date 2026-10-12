@@ -50,6 +50,19 @@ public class LocationPreviewIntegrationTests
 
             var repository = new ImmichDbRepository(source, NullLogger<ImmichDbRepository>.Instance);
             var all = LocationPreviewSelection.Create(LocationPreviewScope.All, null);
+            Assert.AreEqual(203L, await repository.GetLocationPreviewCountAsync(all));
+            Assert.AreEqual(203L, await repository.GetLocationPreviewCountAsync(all with { Order = LocationPreviewOrder.NearbyCoordinates }));
+            Assert.AreEqual(1L, await repository.GetLocationPreviewCountAsync(
+                LocationPreviewSelection.Create(LocationPreviewScope.City, "' OR TRUE --")));
+            Assert.AreEqual(202L, await repository.GetLocationPreviewCountAsync(
+                LocationPreviewSelection.Create(LocationPreviewScope.State, "Region")));
+            Assert.AreEqual(203L, await repository.GetLocationPreviewCountAsync(
+                LocationPreviewSelection.Create(LocationPreviewScope.Country, "France")));
+            Assert.AreEqual(0L, await repository.GetLocationPreviewCountAsync(
+                LocationPreviewSelection.Create(LocationPreviewScope.City, "Missing city")));
+            Assert.AreEqual(1L, await repository.GetLocationPreviewCountAsync(
+                LocationPreviewSelection.Create(LocationPreviewScope.AssetIds,
+                    "00000000-0000-0000-0000-000000000001,00000000-0000-0000-0000-000000000002,00000000-0000-0000-0000-000000000205,00000000-0000-0000-0000-000000000206,00000000-0000-0000-0000-000000000207")));
             var first = await repository.GetLocationPreviewBatchAsync(all, null);
             Assert.HasCount(101, first);
             Assert.IsNotNull(first[0].Latitude);

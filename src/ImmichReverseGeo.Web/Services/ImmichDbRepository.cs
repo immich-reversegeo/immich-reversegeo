@@ -239,11 +239,7 @@ public class ImmichDbRepository(NpgsqlDataSource dataSource, ILogger<ImmichDbRep
         }
     }
 
-    /// <summary>Reads up to 101 assets; the extra row indicates another 100-row preview page.</summary>
-    public async Task<IReadOnlyList<LocationPreviewAsset>> GetLocationPreviewBatchAsync(
-        LocationPreviewSelection selection, LocationPreviewCursor? after, CancellationToken ct = default)
-    {
-        var predicate = selection.Scope switch
+    private static string GetPreviewPredicate(LocationPreviewSelection selection) => selection.Scope switch
         {
             LocationPreviewScope.All => "TRUE",
             LocationPreviewScope.AssetIds => "a.id = ANY(@assetIds)",
@@ -252,6 +248,42 @@ public class ImmichDbRepository(NpgsqlDataSource dataSource, ILogger<ImmichDbRep
             LocationPreviewScope.Country => "e.country = @value",
             _ => throw new ArgumentOutOfRangeException(nameof(selection))
         };
+
+    private static void AddPreviewParameters(NpgsqlCommand cmd, LocationPreviewSelection selection)
+    {
+        if (selection.Scope == LocationPreviewScope.AssetIds)
+        {
+            cmd.Parameters.AddWithValue("assetIds", NpgsqlDbType.Array | NpgsqlDbType.Uuid, selection.AssetIds);
+        }
+        else if (selection.Scope != LocationPreviewScope.All)
+        {
+            cmd.Parameters.AddWithValue("value", NpgsqlDbType.Text, (object?)selection.Value ?? DBNull.Value);
+        }
+    }
+
+    public async Task<long> GetLocationPreviewCountAsync(
+        LocationPreviewSelection selection, CancellationToken ct = default)
+    {
+        var sql = $"""
+            SELECT count(*)
+            FROM asset a
+            INNER JOIN asset_exif e ON e."assetId" = a.id
+            WHERE a."deletedAt" IS NULL
+              AND ({GetPreviewPredicate(selection)})
+              AND e.latitude IS NOT NULL
+              AND e.longitude IS NOT NULL
+            """;
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        await using var cmd = new NpgsqlCommand(sql, conn);
+        AddPreviewParameters(cmd, selection);
+        return (long)(await cmd.ExecuteScalarAsync(ct))!;
+    }
+
+    /// <summary>Reads up to 101 assets; the extra row indicates another 100-row preview page.</summary>
+    public async Task<IReadOnlyList<LocationPreviewAsset>> GetLocationPreviewBatchAsync(
+        LocationPreviewSelection selection, LocationPreviewCursor? after, CancellationToken ct = default)
+    {
+        var predicate = GetPreviewPredicate(selection);
         const string latitudeTile = "floor(e.latitude * 4)";
         const string longitudeTile = "floor(e.longitude * 4)";
         var (seek, order) = selection.Order switch
@@ -283,14 +315,7 @@ public class ImmichDbRepository(NpgsqlDataSource dataSource, ILogger<ImmichDbRep
             cmd.Parameters.AddWithValue("afterLatitudeTile", NpgsqlDbType.Double, (object?)after?.LatitudeTile ?? DBNull.Value);
             cmd.Parameters.AddWithValue("afterLongitudeTile", NpgsqlDbType.Double, (object?)after?.LongitudeTile ?? DBNull.Value);
         }
-        if (selection.Scope == LocationPreviewScope.AssetIds)
-        {
-            cmd.Parameters.AddWithValue("assetIds", NpgsqlDbType.Array | NpgsqlDbType.Uuid, selection.AssetIds);
-        }
-        else if (selection.Scope != LocationPreviewScope.All)
-        {
-            cmd.Parameters.AddWithValue("value", NpgsqlDbType.Text, (object?)selection.Value ?? DBNull.Value);
-        }
+        AddPreviewParameters(cmd, selection);
 
         var results = new List<LocationPreviewAsset>();
         await using var reader = await cmd.ExecuteReaderAsync(ct);
