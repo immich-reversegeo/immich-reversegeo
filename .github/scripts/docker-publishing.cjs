@@ -19,7 +19,7 @@ async function promoteLatest({ github, context, core, exec, image, digest, manua
             return false;
         }
 
-        const { data: latest } = await github.rest.releases.getLatestRelease(context.repo);
+        const { data: latest } = await github.rest.repos.getLatestRelease(context.repo);
         if (latest.tag_name !== release.tag_name)
         {
             core.info(`Skipping latest promotion: ${release.tag_name} is superseded by ${latest.tag_name}.`);
@@ -45,4 +45,20 @@ async function promoteLatest({ github, context, core, exec, image, digest, manua
     return true;
 }
 
-module.exports = { validateReleaseTag, promoteLatest };
+async function recoveryContext({ context, exec, tag, image, digest })
+{
+    if (context.eventName !== 'workflow_dispatch' || !/^v(0|[1-9]\d*)\.(0|[1-9]\d*)\.(0|[1-9]\d*)$/.test(tag) || !/^sha256:[a-f0-9]{64}$/.test(digest))
+    {
+        throw new Error('Recovery requires a stable release tag and a SHA-256 image digest.');
+    }
+    const result = await exec.getExecOutput('docker', ['buildx', 'imagetools', 'inspect', image]);
+    const publishedDigest = result.stdout.match(/^Digest:\s+(sha256:[a-f0-9]{64})\s*$/m)?.[1];
+    if (publishedDigest !== digest)
+    {
+        throw new Error('Recovery digest must match the published release image.');
+    }
+    // Reuse the current-latest-release check immediately before registry promotion.
+    return { repo: context.repo, eventName: 'release', payload: { release: { tag_name: tag, prerelease: false } } };
+}
+
+module.exports = { validateReleaseTag, promoteLatest, recoveryContext };
