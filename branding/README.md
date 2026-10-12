@@ -7,6 +7,8 @@ Brand assets for Immich ReverseGeo.
 - `logo-mark.svg` — standalone symbol, transparent background (use anywhere)
 - `logo-horizontal.svg` — symbol + wordmark on dark background (banners, headers)
 - `logo-stacked.svg` — symbol + stacked wordmark on dark background (badges, splash)
+- `social-preview.png` — 1280 × 640 GitHub social preview, ready to upload
+- `social-preview.svg` — editable vector source for the social preview
 
 ## Design
 

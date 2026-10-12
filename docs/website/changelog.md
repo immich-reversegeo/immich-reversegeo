@@ -11,11 +11,15 @@ Technical implementation notes live in [CHANGELOG.md](https://github.com/immich-
 
 ## Unreleased
 
-## 0.1.0 — 2026-10-11
+## 0.1.0 — 2026-10-12
 
 This first versioned release brings location previews, improved country and city matching, refreshed airport data, and lower retained country-boundary memory. Earlier development milestones remain listed below.
 
 - Country lookup uses less memory, with a low-memory mode for smaller hosts and automatic release of idle country boundaries after five minutes. An optional bounded cache can retain recently used boundaries. These settings do not cap total app memory; see [memory settings](./configuration.md#low-memory-mode).
+
+- Optionally fill a missing city with a point-only airport within 100 m. The new setting defaults off and never replaces a resolved city or county.
+
+- By default, airport names now require a mapped boundary matching the photo coordinates, with a 5 m tolerance for minor GPS or mapping differences. Nearby airports outside that tolerance are excluded. Point-only airports can fill a missing city only when the optional 100 m fallback is enabled; use Lookup to inspect excluded airport candidates.
 
 - Use county names as a fallback for US photos where Overture has no preferred city-like match, instead of falling back directly to a state or a nearby airport.
 

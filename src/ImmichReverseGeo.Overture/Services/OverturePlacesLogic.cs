@@ -202,7 +202,7 @@ public static class OverturePlacesLogic
                     AND bbox.xmin <= {lon.ToString(CultureInfo.InvariantCulture)}
                     AND bbox.ymax >= {lat.ToString(CultureInfo.InvariantCulture)}
                     AND bbox.ymin <= {lat.ToString(CultureInfo.InvariantCulture)} AS bbox_contains_point,
-                ST_Intersects(geometry, ST_Point({lon.ToString(CultureInfo.InvariantCulture)}, {lat.ToString(CultureInfo.InvariantCulture)})) AS geometry_contains_point,
+                ST_AsWKB(geometry) AS geom_wkb,
                 CAST(sources AS VARCHAR) AS sources_json
             FROM read_parquet('{releaseUrl}', filename = true, hive_partitioning = 1)
             WHERE bbox.xmax >= {minLon.ToString(CultureInfo.InvariantCulture)}
@@ -216,6 +216,9 @@ public static class OverturePlacesLogic
                   )
               AND subtype NOT IN ('airport_gate', 'taxiway', 'runway', 'apron')
               AND COALESCE(class, '') NOT IN ('airport_gate', 'taxiway', 'runway', 'apron')
+            ORDER BY (ST_GeometryType(geometry) IN ('POLYGON', 'MULTIPOLYGON')
+                AND ST_Covers(geometry, ST_Point({lon.ToString(CultureInfo.InvariantCulture)}, {lat.ToString(CultureInfo.InvariantCulture)}))) DESC,
+                ST_Distance(geometry, ST_Point({lon.ToString(CultureInfo.InvariantCulture)}, {lat.ToString(CultureInfo.InvariantCulture)})) ASC, id
             LIMIT {QueryLimit}
             """;
     }
@@ -295,6 +298,16 @@ public static class OverturePlacesLogic
         OvertureInfrastructureResult candidate,
         OvertureInfrastructureResult currentBest)
     {
+        if (!candidate.IsBoundaryMatch)
+        {
+            return false;
+        }
+
+        if (!currentBest.IsBoundaryMatch)
+        {
+            return true;
+        }
+
         var candidateClassRank = GetInfrastructureClassRank(candidate.SubType, candidate.ClassName);
         var currentBestClassRank = GetInfrastructureClassRank(currentBest.SubType, currentBest.ClassName);
 

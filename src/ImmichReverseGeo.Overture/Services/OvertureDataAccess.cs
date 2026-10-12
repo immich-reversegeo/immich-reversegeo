@@ -3,6 +3,7 @@ using System.IO;
 using DuckDB.NET.Data;
 using Microsoft.Data.Sqlite;
 using NetTopologySuite.Geometries;
+using NetTopologySuite.Geometries.Utilities;
 using NetTopologySuite.IO;
 
 namespace ImmichReverseGeo.Overture.Services;
@@ -13,6 +14,8 @@ public static class OvertureDataAccess
     /// Tolerance, in degrees (~16m), for treating a point just outside a boundary as inside it.
     /// </summary>
     public const double BoundaryToleranceDegrees = 0.00015;
+
+    public const double AirportBoundaryToleranceMetres = 5;
 
     private static readonly WKBReader WkbReader = new();
 
@@ -72,6 +75,72 @@ public static class OvertureDataAccess
         }
 
         throw new InvalidCastException($"Unsupported blob value type '{value.GetType().FullName}'.");
+    }
+
+    public static bool IsAirportPointGeometry(byte[]? wkb)
+    {
+        if (wkb is null)
+        {
+            return false;
+        }
+
+        try
+        {
+            var geometry = WkbReader.Read(wkb);
+            return geometry is Point && !geometry.IsEmpty && geometry.IsValid;
+        }
+        catch (Exception ex) when (ex is ParseException or ArgumentException)
+        {
+            return false;
+        }
+    }
+
+    public static (bool HasBoundary, bool ContainsPoint) ReadAirportBoundary(byte[]? wkb, Point point)
+    {
+        if (wkb is null)
+        {
+            return (false, false);
+        }
+
+        try
+        {
+            var geometry = WkbReader.Read(wkb);
+            if (geometry is not (Polygon or MultiPolygon) || geometry.IsEmpty || !geometry.IsValid)
+            {
+                return (false, false);
+            }
+
+            if (geometry.Covers(point))
+            {
+                return (true, true);
+            }
+
+            // Local metre scaling is sufficient for a five-metre tolerance. Scale longitude
+            // by latitude so the tolerance does not grow toward the poles. Only transform
+            // polygons whose envelopes are close enough to be plausible matches.
+            const double metresPerDegree = Math.PI * 6_371_000 / 180;
+            var xScale = metresPerDegree * Math.Cos(point.Y * Math.PI / 180);
+            if (xScale <= 0)
+            {
+                return (true, false);
+            }
+
+            var nearEnvelope = new Envelope(point.Coordinate);
+            nearEnvelope.ExpandBy(AirportBoundaryToleranceMetres / xScale, AirportBoundaryToleranceMetres / metresPerDegree);
+            if (!geometry.EnvelopeInternal.Intersects(nearEnvelope))
+            {
+                return (true, false);
+            }
+
+            var transform = AffineTransformation.ScaleInstance(xScale, metresPerDegree);
+            var metricGeometry = transform.Transform(geometry);
+            var metricPoint = new Point(point.X * xScale, point.Y * metresPerDegree);
+            return (true, metricGeometry.IsWithinDistance(metricPoint, AirportBoundaryToleranceMetres));
+        }
+        catch (Exception ex) when (ex is ParseException or ArgumentException)
+        {
+            return (false, false);
+        }
     }
 
     public static bool TryGeometryContains(byte[] wkb, Point point)

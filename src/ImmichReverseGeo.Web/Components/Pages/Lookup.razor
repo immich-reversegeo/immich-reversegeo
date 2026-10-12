@@ -161,8 +161,12 @@
                 <div class="result-row"><span class="result-key">Subtype</span><span class="result-val">@(_result.OvertureInfrastructure.SubType ?? "—")</span></div>
                 <div class="result-row"><span class="result-key">Class</span><span class="result-val">@(_result.OvertureInfrastructure.ClassName ?? "—")</span></div>
                 <div class="result-row"><span class="result-key">BBox Contains Point</span><span class="result-val">@(_result.OvertureInfrastructure.BoundingBoxContainsPoint ? "yes" : "no")</span></div>
-                <div class="result-row"><span class="result-key">Geometry Contains Point</span><span class="result-val">@(_result.OvertureInfrastructure.GeometryContainsPoint ? "yes" : "no")</span></div>
+                <div class="result-row"><span class="result-key">Airport Boundary</span><span class="result-val">@_result.OvertureInfrastructure.BoundaryStatus</span></div>
                 <div class="result-row"><span class="result-key">Distance</span><span class="result-val">@((int)_result.OvertureInfrastructure.DistanceMetres) m</span></div>
+                @if (_result.OvertureInfrastructure.IsPointOnly)
+                {
+                    <div class="result-note">Proximity fallback only. This does not confirm the photo was taken on airport grounds.</div>
+                }
             }
             else if (_result.Iso3 is not null)
             {
@@ -301,7 +305,7 @@
                                         <span class="trace-name">@candidate.Name</span>
                                         <span class="trace-meta">@((int)candidate.DistanceMetres) m</span>
                                         <span class="trace-meta">bbox @(candidate.BoundingBoxContainsPoint ? "yes" : "no")</span>
-                                        <span class="trace-meta">geom @(candidate.GeometryContainsPoint ? "yes" : "no")</span>
+                                        <span class="trace-meta">@candidate.BoundaryStatus</span>
                                         <span class="trace-meta">@((candidate.SubType ?? candidate.FeatureType ?? "unknown").ToLowerInvariant())</span>
                                     </div>
                                     <div class="trace-candidate-sub">
@@ -663,7 +667,7 @@
                 ? $"Overture infrastructure lookup failed: {r.OvertureInfrastructureDiagnostics.Error}"
                 : r.OvertureInfrastructure is not null
                     ? $"Overture infrastructure winner: {r.OvertureInfrastructure.Name} at {(int)r.OvertureInfrastructure.DistanceMetres} m (bbox={(r.OvertureInfrastructure.BoundingBoxContainsPoint ? "yes" : "no")}, geom={(r.OvertureInfrastructure.GeometryContainsPoint ? "yes" : "no")})"
-                    : "Overture infrastructure lookup: no in-range match");
+                    : "Overture infrastructure lookup: no containing airport boundary");
         }
         else
         {
@@ -706,28 +710,36 @@
         r.FinalState = adminState;
         r.FinalStateSource = adminStateSource;
         r.FinalCountrySource = r.CountryName is not null ? "Bundled Overture country divisions" : null;
-        var city = r.OvertureInfrastructure?.GeometryContainsPoint == true
-            ? r.OvertureInfrastructure.Name
-            : adminCity ?? r.OvertureInfrastructure?.Name;
-        r.FinalCitySource = r.OvertureInfrastructure?.GeometryContainsPoint == true
-            ? "Bundled airport infrastructure (geometry match)"
-            : adminCitySource is not null
+        var adminResult = new GeoResult(r.CountryName, r.FinalState, adminCity);
+        var allowPointOnly = r.AirportInfrastructureEnabled && cfg.Processing.UsePointOnlyAirportFallback;
+        if (r.OvertureInfrastructureDiagnostics is not null)
+        {
+            r.OvertureInfrastructure = AssetLocationResolverService.SelectAirport(
+                adminResult, r.OvertureInfrastructureDiagnostics, allowPointOnly);
+            if (r.OvertureInfrastructure?.IsPointOnly == true)
+            {
+                var selectedId = r.OvertureInfrastructure.Id;
+                r.OvertureInfrastructureDiagnostics = r.OvertureInfrastructureDiagnostics with
+                {
+                    BestMatch = r.OvertureInfrastructure,
+                    Candidates = r.OvertureInfrastructureDiagnostics.Candidates.Select(c => c.Id == selectedId
+                        ? c with { Selected = true, Decision = "selected: opt-in point-only fallback within 100 m" }
+                        : c).ToList()
+                };
+                r.Trace.Add($"Point-only airport proximity fallback: {r.OvertureInfrastructure.Name} at {r.OvertureInfrastructure.DistanceMetres:F1} m; airport grounds are unconfirmed.");
+            }
+        }
+        var final = AssetLocationResolverService.FinalizeLocation(adminResult, r.OvertureInfrastructure, allowPointOnly);
+        r.FinalCity = final.City;
+        r.FinalCitySource = r.OvertureInfrastructure?.IsBoundaryMatch == true
+            ? "Bundled airport infrastructure (mapped boundary match)"
+            : r.OvertureInfrastructure?.IsPointOnly == true
+                ? "Point-only airport proximity fallback (within 100 m)"
+            : adminCity is not null
                 ? adminCitySource
-                : r.OvertureInfrastructure?.Name is not null
-                    ? "Bundled airport infrastructure (fallback)"
-                    : null;
-        if (city is null && r.FinalState is not null)
-        {
-            city = r.FinalState;
-            r.FinalCitySource = r.FinalStateSource;
-        }
-        else if (city is null && r.CountryName is not null)
-        {
-            city = r.CountryName;
-            r.FinalCitySource = r.FinalCountrySource;
-        }
-
-        r.FinalCity = city;
+                : r.FinalState is not null
+                    ? r.FinalStateSource
+                    : r.FinalCountrySource;
         r.Trace.Add($"Final city decision: {r.FinalCity ?? "no result"}");
         await UpdateLookupStatusAsync("Lookup finished.");
 

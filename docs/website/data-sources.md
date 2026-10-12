@@ -128,7 +128,9 @@ Why this source is used:
 What it does not do:
 
 - it is not a general-purpose places database
-- a nearby airport can fill an empty city result even when its geometry does not contain the coordinate; proximity alone does not prove the photo was taken at the airport
+- by default, point-only airports, missing or invalid boundaries, and coordinates more than 5 m outside an airport boundary are excluded
+- the optional point-only fallback can fill an empty city within 100 m, but cannot confirm airport grounds or replace an administrative city/county
+- proximity and bounding-box overlap alone do not confirm airport grounds
 
 Origin:
 
