@@ -134,6 +134,8 @@
             Results use the settings loaded when you started this preview.</p>
         <p class="hint">@PageSummary Page elapsed: @_pageElapsed.Elapsed.ToString(@"hh\:mm\:ss").</p>
         <label><input type="checkbox" @bind="_onlyChanges" /> Show only different values</label>
+        <p class="hint">Highlighted characters differ between the existing and proposed names.
+            Changed spaces appear as ␠; other invisible characters use symbols or Unicode codes. Hover over a highlight for character codes.</p>
         @if (_onlyChanges && !_rows.Any(row => row.HasChange))
         {
             <p class="hint">No different values @(_busy ? "found yet" : "found") on this page. Uncheck Show only different values to inspect all results.</p>
@@ -160,14 +162,14 @@
                                 <div class="hint">GPS: @(row.Asset.Latitude?.ToString("G", System.Globalization.CultureInfo.InvariantCulture) ?? "—"), @(row.Asset.Longitude?.ToString("G", System.Globalization.CultureInfo.InvariantCulture) ?? "—")</div>
                             </td>
                             <td>
-                                <div>City: @(row.Asset.Existing.City ?? "—")</div>
-                                <div>State: @(row.Asset.Existing.State ?? "—")</div>
-                                <div>Country: @(row.Asset.Existing.Country ?? "—")</div>
+                                <div>City: <LocationDiffValue Value="@row.Asset.Existing.City" OtherValue="@row.Proposed?.City" Highlight="@row.HasChange" /></div>
+                                <div>State: <LocationDiffValue Value="@row.Asset.Existing.State" OtherValue="@row.Proposed?.State" Highlight="@row.HasChange" /></div>
+                                <div>Country: <LocationDiffValue Value="@row.Asset.Existing.Country" OtherValue="@row.Proposed?.Country" Highlight="@row.HasChange" /></div>
                             </td>
                             <td>
-                                <div>City: @(row.Proposed?.City ?? "—")</div>
-                                <div>State: @(row.Proposed?.State ?? "—")</div>
-                                <div>Country: @(row.Proposed?.Country ?? "—")</div>
+                                <div>City: <LocationDiffValue Value="@row.Proposed?.City" OtherValue="@row.Asset.Existing.City" Highlight="@row.HasChange" /></div>
+                                <div>State: <LocationDiffValue Value="@row.Proposed?.State" OtherValue="@row.Asset.Existing.State" Highlight="@row.HasChange" /></div>
+                                <div>Country: <LocationDiffValue Value="@row.Proposed?.Country" OtherValue="@row.Asset.Existing.Country" Highlight="@row.HasChange" /></div>
                             </td>
                             <td>@row.Status
                                 @if (row.Error is not null)

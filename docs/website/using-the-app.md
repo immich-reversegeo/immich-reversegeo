@@ -59,6 +59,8 @@ Open **Data → Preview Location Corrections** to compare existing city, state, 
 4. Select only the assets you want to correct. The GUID list includes your selections across reviewed pages. Copy those GUIDs and take an [Immich database backup](https://docs.immich.app/administration/backup-and-restore/) before resetting them under **Reset Immich Geo Data → Reset Single Item(s)**.
 5. Select **Run Now** on the Dashboard to process the reset assets.
 
+In live and saved previews, changed characters are highlighted in both the existing and proposed names. The comparison is exact, so punctuation, capitalization, and spaces can mark a name as different even when it refers to the same place. Changed spaces appear as `␠`; other invisible characters use symbols or Unicode codes. Hover over a highlight to see its character codes. An empty value appears as `(empty)` and a missing value as `—`.
+
 **Preview Next 100** replaces the current results, so select the assets you want to retain first. Selected GUIDs are kept across pages; **Start Preview** clears the selection. After cancellation, you can review completed results and continue after the last checked asset. If cancellation happens before any results are available, start a new preview.
 
 **Continuous scan** advances through all matching assets automatically. Set **Pause after this many new differences** to stop for review after a chosen number of changed results; use **0** to scan to the end. **Continue Scan** resumes after the last saved asset and pauses after the next group of differences. Unresolved results and errors do not count as differences. The live table shows only the current batch of up to 100 results; the saved report contains every completed result.

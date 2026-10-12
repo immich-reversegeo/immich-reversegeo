@@ -1937,3 +1937,16 @@ input[type="text"].env-readonly {
         scroll-behavior: auto !important;
     }
 }
+
+/* ── Location comparison ─────────────────────────────── */
+.location-diff-value {
+    white-space: pre-wrap;
+    overflow-wrap: anywhere;
+}
+
+.location-diff-change {
+    color: #ffe6a3;
+    background: #574019;
+    border-bottom: 2px solid #e9b949;
+    border-radius: 2px;
+}
