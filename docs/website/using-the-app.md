@@ -99,6 +99,8 @@ Applying changes updates only city, state, and country. GPS coordinates and othe
 
 **Location Management → Change History** records each selected operation and its per-asset outcomes. Open an operation to see its saved previous names, exact proposals, timestamps, and applied, skipped, pending, or **Needs review** results. Select applied rows, review the previous names to restore, and confirm **Undo**. Undo requires the current applied names, GPS coordinates, and metadata version to match; any later metadata edit is skipped, even if its location names are identical.
 
+The history overview shows pending apply and undo work separately. If any selected change is no longer eligible for undo, the app queues none of that selection; refresh the results and review your selection again.
+
 Cancel or leave the page to stop remaining work. A write already underway may complete. Pending items have not been attempted and can be resumed from Change History after confirmation. Applied items are not retried. If the app loses the connection or stops between a database write and saving its outcome, the item is marked **Needs review**. Check that asset in Immich and run a new scan before making another change; uncertain items are never retried or undone automatically.
 
 Previous names and operation results are saved in `location-changes.db` under `/data`, separately from saved scans. Preserve this volume to retain history and undo information. Deleting a saved scan does not delete its change history. The journal contains location metadata; protect it along with your other app data. It does not replace an Immich database backup, and undo cannot restore deleted assets or override later edits.

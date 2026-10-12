@@ -53,7 +53,7 @@ else
         {
             <p>Delete this report and its saved results? Immich metadata will not be changed.</p>
             <div class="btn-row">
-                <button class="btn btn-secondary" @onclick="DeleteAsync">Confirm delete</button>
+                <button class="btn btn-secondary" disabled="@(_loading || _applying)" @onclick="DeleteAsync">Confirm delete</button>
                 <button class="btn btn-secondary" @onclick="() => _confirmDelete = false">Keep report</button>
             </div>
         }
@@ -125,6 +125,7 @@ else
     private IReadOnlyList<LocationPreviewRow> _rows = [];
     private LocationPreviewReview _review = new();
     private Guid? _loadedId;
+    private long _loadVersion;
     private bool _loading;
     private bool _applying;
     private Dictionary<Guid, LocationChangeItem> _changeResults = new();
@@ -157,21 +158,38 @@ else
 
     private async Task LoadAsync()
     {
+        var version = ++_loadVersion;
+        var requestedId = Id;
+        var requestedPage = _page;
+        var onlyChanges = _onlyChanges;
         _loading = true;
         _error = null;
         try
         {
-            _report = (await Saved.GetReportsAsync(id: Id)).SingleOrDefault();
-            _rows = _report is null ? [] : await Saved.GetRowsAsync(Id, _page, _onlyChanges);
-            _changeResults = new Dictionary<Guid, LocationChangeItem>(await Changes.GetScanResultsAsync(Id, _rows.Take(100).Select(row => row.Asset.Id).ToArray()));
+            var report = (await Saved.GetReportsAsync(id: requestedId)).SingleOrDefault();
+            var rows = report is null ? [] : await Saved.GetRowsAsync(requestedId, requestedPage, onlyChanges);
+            var results = await Changes.GetScanResultsAsync(requestedId, rows.Take(100).Select(row => row.Asset.Id).ToArray());
+            if (version != _loadVersion || requestedId != Id)
+            {
+                return;
+            }
+            _report = report;
+            _rows = rows;
+            _changeResults = new Dictionary<Guid, LocationChangeItem>(results);
         }
         catch (Exception ex)
         {
-            _error = $"Could not load saved scan: {ex.Message}";
+            if (version == _loadVersion)
+            {
+                _error = $"Could not load saved scan: {ex.Message}";
+            }
         }
         finally
         {
-            _loading = false;
+            if (version == _loadVersion)
+            {
+                _loading = false;
+            }
         }
     }
 
@@ -209,11 +227,20 @@ else
 
     private async Task DeleteAsync()
     {
+        if (_loading || _applying)
+        {
+            return;
+        }
+        var requestedId = Id;
         _confirmDelete = false;
         try
         {
-            if (await Saved.DeleteAsync(Id))
+            if (await Saved.DeleteAsync(requestedId))
             {
+                if (requestedId != Id)
+                {
+                    return;
+                }
                 Navigation.NavigateTo("/data/location-management/scans");
             }
             else

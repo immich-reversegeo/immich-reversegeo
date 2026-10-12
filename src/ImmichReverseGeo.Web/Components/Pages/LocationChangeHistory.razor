@@ -17,10 +17,10 @@ else if (Id is null)
     <section class="settings-card wide-card">
         <p>Each operation saves the reviewed existing names, proposed names, and its results. History remains available even if you delete the saved scan.</p>
         <div class="table-scroll"><table class="data-table">
-            <thead><tr><th>Started</th><th>Selected</th><th>Applied</th><th>Skipped</th><th>Needs review</th><th>Pending</th><th>Undone</th><th>Operation</th></tr></thead>
+            <thead><tr><th>Started</th><th>Selected</th><th>Applied</th><th>Skipped</th><th>Needs review</th><th>Pending</th><th>Undone</th><th>Pending undo</th><th>Operation</th></tr></thead>
             <tbody>@foreach (var operation in _operations.Take(25))
             {
-                <tr @key="operation.Id"><td><LocalTimestamp Timestamp="operation.CreatedAt" /></td><td>@operation.Total</td><td>@operation.Applied</td><td>@operation.Skipped</td><td>@operation.NeedsReview</td><td>@operation.Pending</td><td>@operation.Undone</td>
+                <tr @key="operation.Id"><td><LocalTimestamp Timestamp="operation.CreatedAt" /></td><td>@operation.Total</td><td>@operation.Applied</td><td>@operation.Skipped</td><td>@operation.NeedsReview</td><td>@operation.Pending</td><td>@operation.Undone</td><td>@operation.UndoPending</td>
                     <td><a class="text-link" href="@($"/data/location-management/history/{operation.Id}")">View</a></td></tr>
             }</tbody>
         </table></div>
@@ -103,6 +103,7 @@ else
     private IReadOnlyList<LocationChangeItem> _items = [];
     private readonly HashSet<Guid> _selected = [];
     private Guid[] _undoIds = [];
+    private long _loadVersion;
     private bool _loading;
     private bool _busy;
     private bool _disposed;
@@ -130,17 +131,38 @@ else
     }
     private async Task LoadAsync()
     {
+        var version = ++_loadVersion;
+        var requestedId = Id;
+        var requestedPage = _page;
         _loading = true;
         _error = null;
         try
         {
-            _operations = await Changes.GetOperationsAsync(_page, Id);
-            _operation = Id is null ? null : _operations.SingleOrDefault();
-            _items = Id is { } id ? await Changes.GetItemsAsync(id) : [];
+            var operations = await Changes.GetOperationsAsync(requestedPage, requestedId);
+            var items = requestedId is { } id ? await Changes.GetItemsAsync(id) : [];
+            if (_disposed || version != _loadVersion || requestedId != Id)
+            {
+                return;
+            }
+            _operations = operations;
+            _operation = requestedId is null ? null : operations.SingleOrDefault();
+            _items = items;
             _selected.RemoveWhere(id => !_items.Any(item => item.AssetId == id && item.CanUndo));
         }
-        catch (Exception ex) { _error = "Could not load change history: " + ex.Message; }
-        finally { _loading = false; }
+        catch (Exception ex)
+        {
+            if (!_disposed && version == _loadVersion)
+            {
+                _error = "Could not load change history: " + ex.Message;
+            }
+        }
+        finally
+        {
+            if (version == _loadVersion)
+            {
+                _loading = false;
+            }
+        }
     }
     private void SelectUndo(LocationChangeItem item, bool selected)
     {

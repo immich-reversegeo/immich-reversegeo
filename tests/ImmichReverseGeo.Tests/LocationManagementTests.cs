@@ -1,6 +1,7 @@
 using ImmichReverseGeo.Core.Models;
 using ImmichReverseGeo.Web.Services;
 using Microsoft.Extensions.Logging.Abstractions;
+using Microsoft.Data.Sqlite;
 
 namespace ImmichReverseGeo.Tests;
 
@@ -247,6 +248,47 @@ public class LocationManagementTests
         Assert.AreEqual(2, _writer.Calls);
     }
 
+
+    [TestMethod]
+    public async Task UndoQueue_RejectsEntireSelectionWhenAnyItemIsNoLongerEligible()
+    {
+        var (scan, rows) = await ScanAsync();
+        var id = await _service.CreateApplyAsync(scan, rows.Select(row => row.Asset.Id).ToArray());
+        await _service.RunAsync(id, false);
+        await _journal.QueueUndoAsync(id, [rows[1].Asset.Id]);
+        await Assert.ThrowsAsync<ArgumentException>(() => _journal.QueueUndoAsync(id,
+            [rows[0].Asset.Id, rows[1].Asset.Id]));
+        var items = (await _journal.GetItemsAsync(id)).ToDictionary(item => item.AssetId);
+        Assert.AreEqual(LocationUndoStatus.NotRequested, items[rows[0].Asset.Id].UndoStatus);
+        Assert.AreEqual(LocationUndoStatus.Pending, items[rows[1].Asset.Id].UndoStatus);
+    }
+
+    [TestMethod]
+    public async Task UndoQueue_StorageFailureRollsBackEntireSelection()
+    {
+        var (scan, rows) = await ScanAsync();
+        var id = await _service.CreateApplyAsync(scan, rows.Select(row => row.Asset.Id).ToArray());
+        await _service.RunAsync(id, false);
+        await using (var connection = new SqliteConnection(new SqliteConnectionStringBuilder
+        {
+            DataSource = Path.Combine(_directory, "location-changes.db"), Pooling = false
+        }.ToString()))
+        {
+            await connection.OpenAsync();
+            await using var command = connection.CreateCommand();
+            // Fail the second row after the first update succeeded inside the transaction.
+            command.CommandText = $"""
+                CREATE TRIGGER fail_undo BEFORE UPDATE OF undo_status ON changes
+                WHEN NEW.asset_id='{rows[1].Asset.Id}' AND NEW.undo_status='Pending'
+                BEGIN SELECT RAISE(ABORT, 'simulated storage failure'); END;
+                """;
+            await command.ExecuteNonQueryAsync();
+        }
+        await Assert.ThrowsAsync<SqliteException>(() => _journal.QueueUndoAsync(id,
+            [rows[0].Asset.Id, rows[1].Asset.Id]));
+        Assert.IsTrue((await _journal.GetItemsAsync(id)).All(item => item.UndoStatus == LocationUndoStatus.NotRequested));
+        Assert.AreEqual(2, _writer.Calls);
+    }
 
     private sealed class FakeWriter : ILocationChangeWriter
     {

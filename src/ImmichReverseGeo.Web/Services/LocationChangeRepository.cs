@@ -192,9 +192,15 @@ public sealed class LocationChangeRepository
             await using var cmd = conn.CreateCommand();
             var parameters = ids.Select((_, index) => "$asset" + index).ToArray();
             cmd.CommandText = $"""
-                SELECT c.* FROM changes c JOIN operations o ON o.id=c.operation_id
-                WHERE o.scan_id=$scan AND c.asset_id IN ({string.Join(',', parameters)})
-                ORDER BY o.created_at,o.id
+                WITH latest AS (
+                    SELECT c.*, ROW_NUMBER() OVER (
+                        PARTITION BY c.asset_id ORDER BY o.created_at DESC,o.id DESC
+                    ) AS position
+                    FROM changes c JOIN operations o ON o.id=c.operation_id
+                    WHERE o.scan_id=$scan AND c.asset_id IN ({string.Join(',', parameters)})
+                )
+                SELECT operation_id,asset_id,snapshot_json,apply_status,undo_status,
+                    applied_revision,message,updated_at FROM latest WHERE position=1
                 """;
             cmd.Parameters.AddWithValue("$scan", scanId.ToString());
             for (var index = 0; index < ids.Length; index++)
@@ -226,16 +232,39 @@ public sealed class LocationChangeRepository
 
     public async Task QueueUndoAsync(Guid operationId, IReadOnlyCollection<Guid> assetIds)
     {
-        var items = (await GetItemsAsync(operationId)).ToDictionary(item => item.AssetId);
-        var selected = assetIds.Distinct().ToArray();
-        if (selected.Length == 0 || selected.Any(id => !items.TryGetValue(id, out var item) || !item.CanUndo))
+        var selected = assetIds.Distinct().Take(1001).ToArray();
+        if (selected.Length is < 1 or > 1000)
         {
-            throw new ArgumentException("Select applied changes that have not already been undone or marked uncertain.");
+            throw new ArgumentException("Select between 1 and 1,000 applied changes for undo.");
         }
-        foreach (var assetId in selected)
+        await _gate.WaitAsync();
+        try
         {
-            await UpdateAsync(operationId, assetId, "undo_status='Pending',message=NULL",
-                "AND apply_status='Applied' AND undo_status IN ('NotRequested','Skipped')");
+            await using var conn = await OpenAsync();
+            using var transaction = conn.BeginTransaction();
+            foreach (var assetId in selected)
+            {
+                await using var cmd = conn.CreateCommand();
+                cmd.Transaction = transaction;
+                cmd.CommandText = """
+                    UPDATE changes SET undo_status='Pending',message=NULL,updated_at=$at
+                    WHERE operation_id=$id AND asset_id=$asset AND apply_status='Applied'
+                        AND undo_status IN ('NotRequested','Skipped')
+                        AND applied_revision IS NOT NULL AND trim(applied_revision)<>''
+                    """;
+                cmd.Parameters.AddWithValue("$id", operationId.ToString());
+                cmd.Parameters.AddWithValue("$asset", assetId.ToString());
+                cmd.Parameters.AddWithValue("$at", DateTimeOffset.UtcNow.ToString("O"));
+                if (await cmd.ExecuteNonQueryAsync() != 1)
+                {
+                    throw new ArgumentException("The undo selection changed. Refresh results and select applied changes that have not already been undone or marked uncertain.");
+                }
+            }
+            transaction.Commit();
+        }
+        finally
+        {
+            _gate.Release();
         }
     }
 

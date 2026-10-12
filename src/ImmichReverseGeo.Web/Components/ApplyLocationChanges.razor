@@ -86,7 +86,12 @@
         try
         {
             _reviewedIds = SelectedIds.Distinct().ToArray();
-            _reviewed = await Management.ReviewAsync(id, _reviewedIds);
+            var reviewed = await Management.ReviewAsync(id, _reviewedIds);
+            if (_disposed || ScanId != id)
+            {
+                return;
+            }
+            _reviewed = reviewed;
             _reviewedScanId = id;
             _page = 1;
             _acknowledged = false;
@@ -95,13 +100,20 @@
         finally
         {
             _busy = false;
-            await BusyChanged.InvokeAsync(false);
+            if (!_disposed)
+            {
+                await BusyChanged.InvokeAsync(false);
+            }
         }
     }
 
     private async Task ApplyAsync()
     {
-        if (_busy || Disabled || !_acknowledged || _reviewed is null || _reviewedScanId is not { } id) { return; }
+        if (_busy || Disabled || !_acknowledged || _reviewed is null
+            || _reviewedScanId is not { } id || ScanId != id)
+        {
+            return;
+        }
         _busy = true;
         _operationId = null;
         _summary = null;
