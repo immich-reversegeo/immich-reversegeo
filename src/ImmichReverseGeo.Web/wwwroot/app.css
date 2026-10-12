@@ -1432,6 +1432,12 @@ input[type="text"].env-readonly {
 }
 .log-line.warn { color: var(--warn); }
 
+.preview-progress progress {
+    width: 100%;
+    height: 0.6rem;
+    accent-color: var(--accent);
+}
+
 /* ── Scrollbar ────────────────────────────────────────── */
 ::-webkit-scrollbar       { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: var(--bg-surface); }

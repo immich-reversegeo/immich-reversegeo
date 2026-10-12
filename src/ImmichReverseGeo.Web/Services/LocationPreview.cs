@@ -14,11 +14,19 @@ public enum LocationPreviewScope
     All
 }
 
+public enum LocationPreviewOrder
+{
+    AssetId,
+    NearbyCoordinates
+}
+
 public sealed record LocationPreviewSelection(
     LocationPreviewScope Scope,
     Guid[] AssetIds,
     string? Value)
 {
+    public LocationPreviewOrder Order { get; init; }
+
     public static LocationPreviewSelection Create(LocationPreviewScope scope, string? input)
     {
         if (!Enum.IsDefined(scope))
@@ -66,6 +74,20 @@ public sealed record LocationPreviewSelection(
 
 public sealed record LocationPreviewAsset(
     Guid Id, double? Latitude, double? Longitude, GeoResult Existing);
+
+/// <summary>Stable seek key for GUID order or quarter-degree map tiles.</summary>
+public sealed record LocationPreviewCursor(Guid Id, double LatitudeTile, double LongitudeTile)
+{
+    public static LocationPreviewCursor FromAsset(LocationPreviewAsset asset)
+    {
+        if (asset.Latitude is null || asset.Longitude is null)
+        {
+            throw new ArgumentException("A preview cursor requires both GPS coordinates.", nameof(asset));
+        }
+
+        return new(asset.Id, Math.Floor(asset.Latitude.Value * 4), Math.Floor(asset.Longitude.Value * 4));
+    }
+}
 
 public sealed record LocationPreviewRow(LocationPreviewAsset Asset, GeoResult? Proposed, string? Error = null)
 {

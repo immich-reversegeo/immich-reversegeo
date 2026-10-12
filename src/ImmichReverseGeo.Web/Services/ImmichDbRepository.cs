@@ -241,7 +241,7 @@ public class ImmichDbRepository(NpgsqlDataSource dataSource, ILogger<ImmichDbRep
 
     /// <summary>Reads up to 101 assets; the extra row indicates another 100-row preview page.</summary>
     public async Task<IReadOnlyList<LocationPreviewAsset>> GetLocationPreviewBatchAsync(
-        LocationPreviewSelection selection, Guid? afterId, CancellationToken ct = default)
+        LocationPreviewSelection selection, LocationPreviewCursor? after, CancellationToken ct = default)
     {
         var predicate = selection.Scope switch
         {
@@ -252,20 +252,37 @@ public class ImmichDbRepository(NpgsqlDataSource dataSource, ILogger<ImmichDbRep
             LocationPreviewScope.Country => "e.country = @value",
             _ => throw new ArgumentOutOfRangeException(nameof(selection))
         };
+        const string latitudeTile = "floor(e.latitude * 4)";
+        const string longitudeTile = "floor(e.longitude * 4)";
+        var (seek, order) = selection.Order switch
+        {
+            LocationPreviewOrder.AssetId => ("a.id > @afterId", "a.id"),
+            LocationPreviewOrder.NearbyCoordinates => (
+                $"({latitudeTile}, {longitudeTile}, a.id) > (@afterLatitudeTile, @afterLongitudeTile, @afterId)",
+                $"{latitudeTile}, {longitudeTile}, a.id"),
+            _ => throw new ArgumentOutOfRangeException(nameof(selection))
+        };
         var sql = $"""
             SELECT a.id, e.latitude, e.longitude, e.country, e.state, e.city
             FROM asset a
             INNER JOIN asset_exif e ON e."assetId" = a.id
             WHERE a."deletedAt" IS NULL
               AND ({predicate})
-              AND (@afterId IS NULL OR a.id > @afterId)
-            ORDER BY a.id
+              AND e.latitude IS NOT NULL
+              AND e.longitude IS NOT NULL
+              AND (@afterId IS NULL OR ({seek}))
+            ORDER BY {order}
             LIMIT 101
             """;
 
         await using var conn = await dataSource.OpenConnectionAsync(ct);
         await using var cmd = new NpgsqlCommand(sql, conn);
-        cmd.Parameters.AddWithValue("afterId", NpgsqlDbType.Uuid, (object?)afterId ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("afterId", NpgsqlDbType.Uuid, (object?)after?.Id ?? DBNull.Value);
+        if (selection.Order == LocationPreviewOrder.NearbyCoordinates)
+        {
+            cmd.Parameters.AddWithValue("afterLatitudeTile", NpgsqlDbType.Double, (object?)after?.LatitudeTile ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("afterLongitudeTile", NpgsqlDbType.Double, (object?)after?.LongitudeTile ?? DBNull.Value);
+        }
         if (selection.Scope == LocationPreviewScope.AssetIds)
         {
             cmd.Parameters.AddWithValue("assetIds", NpgsqlDbType.Array | NpgsqlDbType.Uuid, selection.AssetIds);

@@ -95,6 +95,34 @@ public class LocationPreviewTests
     private static LocationPreviewAsset Asset(GeoResult existing) => new(Guid.NewGuid(), 48.0, 2.0, existing);
 
     [TestMethod]
+    public void CoordinateCursor_GroupsNearbyPointsAndFloorsNegativeCoordinates()
+    {
+        var existing = new GeoResult(null, null, null);
+        var first = LocationPreviewCursor.FromAsset(new(Guid.NewGuid(), 47.41, 8.51, existing));
+        var nearby = LocationPreviewCursor.FromAsset(new(Guid.NewGuid(), 47.49, 8.74, existing));
+        Assert.AreEqual(first.LatitudeTile, nearby.LatitudeTile);
+        Assert.AreEqual(first.LongitudeTile, nearby.LongitudeTile);
+        var negative = LocationPreviewCursor.FromAsset(new(Guid.NewGuid(), -0.01, -0.26, existing));
+        Assert.AreEqual(-1d, negative.LatitudeTile);
+        Assert.AreEqual(-2d, negative.LongitudeTile);
+    }
+
+    [TestMethod]
+    public void CoordinateCursor_RejectsIncompleteGps()
+    {
+        var existing = new GeoResult(null, null, null);
+        foreach (var asset in new[]
+        {
+            new LocationPreviewAsset(Guid.NewGuid(), null, 8, existing),
+            new LocationPreviewAsset(Guid.NewGuid(), 47, null, existing),
+            new LocationPreviewAsset(Guid.NewGuid(), null, null, existing)
+        })
+        {
+            Assert.Throws<ArgumentException>(() => LocationPreviewCursor.FromAsset(asset));
+        }
+    }
+
+    [TestMethod]
     public void Review_KeepsOnlyExplicitResolvableChangesAcrossPages()
     {
         var review = new LocationPreviewReview();
