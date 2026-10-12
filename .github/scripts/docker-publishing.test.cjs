@@ -1,6 +1,6 @@
 const { test } = require('node:test');
 const assert = require('node:assert/strict');
-const { validateReleaseTag, promoteLatest } = require('./docker-publishing.cjs');
+const { validateReleaseTag, promoteLatest, recoveryContext } = require('./docker-publishing.cjs');
 
 test('release validation requires a SemVer tag emitted by metadata-action', () =>
 {
@@ -22,7 +22,7 @@ function fixture(overrides = {})
     const requests = [];
     const options = {
         context: { eventName: 'release', payload: { release: { tag_name: 'v1.2.3', prerelease: false } }, repo: { owner: 'example', repo: 'app' } },
-        github: { rest: { releases: { getLatestRelease: async repo =>
+        github: { rest: { repos: { getLatestRelease: async repo =>
         {
             requests.push(repo);
             return { data: { tag_name: 'v1.2.3' } };
@@ -49,7 +49,7 @@ test('current stable release promotes the exact built digest', async () =>
 test('superseded retry and delayed older build never update latest', async () =>
 {
     const f = fixture();
-    f.options.github.rest.releases.getLatestRelease = async () => ({ data: { tag_name: 'v1.2.4' } });
+    f.options.github.rest.repos.getLatestRelease = async () => ({ data: { tag_name: 'v1.2.4' } });
     assert.equal(await promoteLatest(f.options), false);
     f.options.context.payload.release.tag_name = 'v1.2.4';
     assert.equal(await promoteLatest(f.options), true);
@@ -87,7 +87,7 @@ test('manual runs need an explicit override and bypass release lookup', async ()
 test('API errors prevent promotion and registry errors propagate', async () =>
 {
     const f = fixture();
-    f.options.github.rest.releases.getLatestRelease = async () => { throw new Error('API unavailable'); };
+    f.options.github.rest.repos.getLatestRelease = async () => { throw new Error('API unavailable'); };
     await assert.rejects(promoteLatest(f.options), /API unavailable/);
     assert.equal(f.commands.length, 0);
     f.options.context.eventName = 'workflow_dispatch';
@@ -101,4 +101,23 @@ test('missing build outputs cannot produce a latest tag', async () =>
     const f = fixture({ digest: '' });
     await assert.rejects(promoteLatest(f.options), /successfully built image and digest/);
     assert.equal(f.commands.length, 0);
+});
+
+test('recovery verifies the published digest and retains the latest-release guard', async () =>
+{
+    const f = fixture();
+    f.options.context.eventName = 'workflow_dispatch';
+    f.options.exec.getExecOutput = async () => ({ stdout: `Name: example\nDigest: ${f.options.digest}\n` });
+    const recovery = { context: f.options.context, exec: f.options.exec, tag: 'v1.2.3', image: f.options.image, digest: f.options.digest };
+    f.options.context = await recoveryContext(recovery);
+    assert.equal(await promoteLatest(f.options), true);
+    assert.deepEqual(f.requests, [{ owner: 'example', repo: 'app' }]);
+    f.options.github.rest.repos.getLatestRelease = async () => ({ data: { tag_name: 'v1.2.4' } });
+    assert.equal(await promoteLatest(f.options), false);
+    assert.equal(f.commands.length, 1);
+    await assert.rejects(recoveryContext({ ...recovery, digest: `sha256:${'b'.repeat(64)}` }), /match the published/);
+    for (const tag of ['v1.2.3-rc.1', 'v01.2.3', 'invalid'])
+    {
+        await assert.rejects(recoveryContext({ ...recovery, tag }), /stable release/);
+    }
 });

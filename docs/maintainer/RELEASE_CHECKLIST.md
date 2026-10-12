@@ -34,6 +34,7 @@ For a tag run, use `refs/tags/<tag>` instead. Add `--bundle attestation.json` to
 - Choose which stable release GitHub designates as latest. Confirm the publishing workflow succeeds and inspect the image tags: the full version with and without `v`, the SHA tag, and `latest` when this is GitHub's latest stable release. `edge` remains the master build channel.
 - Automatic `latest` promotion runs separately from the build, in a shared queue, and checks GitHub's latest release immediately before promoting the built digest. Superseded release runs skip promotion. If the GitHub lookup or registry promotion fails, the version tags remain published; rerun the failed promotion job.
 - The existing manual `publish_latest` workflow input remains an explicit override. Use it only when intentionally promoting a validated build to `latest`.
+- To recover promotion without rebuilding, run Publish Docker Image with `publish_latest=true`, `existing_release` set to the stable release tag, and `existing_digest` set to its already published image digest. This skips the build, checks the version tag's registry digest, and rechecks GitHub's latest stable release before promotion.
 - Confirm the published container image can be pulled and started
 
 ## Runtime
