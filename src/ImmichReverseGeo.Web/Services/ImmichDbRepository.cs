@@ -10,7 +10,7 @@ using NpgsqlTypes;
 
 namespace ImmichReverseGeo.Web.Services;
 
-public class ImmichDbRepository(NpgsqlDataSource dataSource, ILogger<ImmichDbRepository> logger)
+public class ImmichDbRepository(NpgsqlDataSource dataSource, ILogger<ImmichDbRepository> logger) : ILocationChangeWriter
 {
     /// <summary>
     /// Returns the next batch of assets with null city/country using keyset pagination.
@@ -77,9 +77,75 @@ public class ImmichDbRepository(NpgsqlDataSource dataSource, ILogger<ImmichDbRep
         await cmd.ExecuteNonQueryAsync(ct);
     }
 
-    /// <summary>
-    /// Returns the count of assets still awaiting processing (for Dashboard display).
-    /// </summary>
+    /// <summary>Do not overwrite a correction applied after the processing batch was fetched.</summary>
+    public async Task<bool> WriteUnprocessedLocationAsync(AssetRecord asset, GeoResult geo, CancellationToken ct = default)
+    {
+        const string sql = """
+            UPDATE asset_exif e SET city=@city,state=@state,country=@country
+            FROM asset a WHERE e."assetId"=a.id AND a.id=@id AND a."deletedAt" IS NULL
+                AND e.city IS NULL AND e.country IS NULL
+                AND e.latitude=@latitude AND e.longitude=@longitude
+            """;
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        await using var cmd = new NpgsqlCommand(sql, conn);
+        cmd.Parameters.AddWithValue("id", asset.Id);
+        cmd.Parameters.AddWithValue("latitude", asset.Latitude);
+        cmd.Parameters.AddWithValue("longitude", asset.Longitude);
+        cmd.Parameters.AddWithValue("city", NpgsqlDbType.Text, (object?)geo.City ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("state", NpgsqlDbType.Text, (object?)geo.State ?? DBNull.Value);
+        cmd.Parameters.AddWithValue("country", NpgsqlDbType.Text, (object?)geo.Country ?? DBNull.Value);
+        return await cmd.ExecuteNonQueryAsync(ct) == 1;
+    }
+
+
+    /// <summary>Locks the asset and metadata row, replacing only names from an unchanged reviewed snapshot.</summary>
+    public async Task<LocationWriteResult> TryReplaceLocationAsync(LocationPreviewAsset expected,
+        GeoResult replacement, string? expectedRevision = null, CancellationToken ct = default)
+    {
+        if (expected.Latitude is null || expected.Longitude is null)
+        {
+            return LocationWriteResult.Skip("The reviewed asset has incomplete GPS coordinates.");
+        }
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        await using var transaction = await conn.BeginTransactionAsync(ct);
+        await using var read = new NpgsqlCommand("""
+            SELECT e.latitude,e.longitude,e.country,e.state,e.city,e.xmin::text,a."deletedAt"
+            FROM asset a INNER JOIN asset_exif e ON e."assetId"=a.id
+            WHERE a.id=@id FOR UPDATE OF a,e
+            """, conn, transaction);
+        read.Parameters.AddWithValue("id", expected.Id);
+        string revision;
+        await using (var reader = await read.ExecuteReaderAsync(ct))
+        {
+            if (!await reader.ReadAsync(ct) || !reader.IsDBNull(6))
+            {
+                return LocationWriteResult.Skip("The asset was deleted or its metadata row no longer exists.");
+            }
+            var current = new GeoResult(reader.IsDBNull(2) ? null : reader.GetString(2),
+                reader.IsDBNull(3) ? null : reader.GetString(3), reader.IsDBNull(4) ? null : reader.GetString(4));
+            revision = reader.GetString(5);
+            if (reader.IsDBNull(0) || reader.IsDBNull(1)
+                || reader.GetDouble(0) != expected.Latitude.Value || reader.GetDouble(1) != expected.Longitude.Value
+                || current != expected.Existing || (expectedRevision is not null && expectedRevision != revision))
+            {
+                return LocationWriteResult.Skip("Coordinates, location names, or the metadata revision changed since review/apply. Run a new scan.");
+            }
+        }
+        await using var write = new NpgsqlCommand("""
+            UPDATE asset_exif SET country=@country,state=@state,city=@city
+            WHERE "assetId"=@id RETURNING xmin::text
+            """, conn, transaction);
+        write.Parameters.AddWithValue("id", expected.Id);
+        write.Parameters.AddWithValue("country", NpgsqlDbType.Text, (object?)replacement.Country ?? DBNull.Value);
+        write.Parameters.AddWithValue("state", NpgsqlDbType.Text, (object?)replacement.State ?? DBNull.Value);
+        write.Parameters.AddWithValue("city", NpgsqlDbType.Text, (object?)replacement.City ?? DBNull.Value);
+        var appliedRevision = (string)(await write.ExecuteScalarAsync(ct))!;
+        await transaction.CommitAsync(ct);
+        return new(true, appliedRevision, null);
+    }
+
+
+    /// <summary>Returns the count of assets still awaiting processing.</summary>
     public async Task<long> GetUnprocessedCountAsync(CancellationToken ct = default)
     {
         const string sql = """
@@ -240,14 +306,14 @@ public class ImmichDbRepository(NpgsqlDataSource dataSource, ILogger<ImmichDbRep
     }
 
     private static string GetPreviewPredicate(LocationPreviewSelection selection) => selection.Scope switch
-        {
-            LocationPreviewScope.All => "TRUE",
-            LocationPreviewScope.AssetIds => "a.id = ANY(@assetIds)",
-            LocationPreviewScope.City => "e.city = @value",
-            LocationPreviewScope.State => "e.state = @value",
-            LocationPreviewScope.Country => "e.country = @value",
-            _ => throw new ArgumentOutOfRangeException(nameof(selection))
-        };
+    {
+        LocationPreviewScope.All => "TRUE",
+        LocationPreviewScope.AssetIds => "a.id = ANY(@assetIds)",
+        LocationPreviewScope.City => "e.city = @value",
+        LocationPreviewScope.State => "e.state = @value",
+        LocationPreviewScope.Country => "e.country = @value",
+        _ => throw new ArgumentOutOfRangeException(nameof(selection))
+    };
 
     private static void AddPreviewParameters(NpgsqlCommand cmd, LocationPreviewSelection selection)
     {

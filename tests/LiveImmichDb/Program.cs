@@ -165,6 +165,49 @@ internal static class Program
         await repository.WriteLocationAsync(ids[0], new GeoResult("Switzerland", null, null));
         Check(await LocationAsync(ids[0]) == "||Switzerland", "nullable state and city round-trip");
         await repository.WriteLocationAsync(ids[0], new GeoResult("Switzerland", "Zürich", "O'Malley"));
+        // Location Management writes only reviewed names and keeps an independent undo journal.
+        var managementDir = Path.Combine(directory, target.Name + "-location-management");
+        var scans = new SavedLocationPreviewRepository(managementDir);
+        var journal = new LocationChangeRepository(managementDir);
+        var management = new LocationManagementService(scans, journal, repository, NullLogger<LocationManagementService>.Instance);
+        var scanId = await scans.CreateAsync(LocationPreviewSelection.Create(LocationPreviewScope.AssetIds, ids[0].ToString()), new());
+        var expectedLocation = new GeoResult("Switzerland", "Zürich", "O'Malley");
+        var exactProposal = new GeoResult("France", null, "Reviewed city");
+        await scans.AppendAsync(scanId, new(new(ids[0], 47.3769, 8.5417, expectedLocation), exactProposal));
+        await scans.SetStatusAsync(scanId, "Complete");
+        var operation = await management.CreateApplyAsync(scanId, [ids[0]]);
+        await management.RunAsync(operation, false);
+        Check(await LocationAsync(ids[0]) == "Reviewed city||France", "selected apply uses exact reviewed values");
+        Check(!await repository.WriteUnprocessedLocationAsync(new(ids[0], 47.3769, 8.5417, DateTime.UtcNow),
+            new("Overwrite", null, "Must not overwrite reviewed values")), "processing does not overwrite a selected apply from an earlier batch");
+        Check(await ExifSnapshotAsync(ids[0]) == untouched, "selected apply preserves GPS and unrelated metadata");
+        var apiAsset = await http.GetFromJsonAsync<JsonElement>($"/api/assets/{ids[0]}");
+        Check(apiAsset.GetProperty("exifInfo").GetProperty("city").GetString() == "Reviewed city"
+            && apiAsset.GetProperty("exifInfo").GetProperty("country").GetString() == "France", "Immich asset API sees direct applied names");
+        using (var search = await http.PostAsJsonAsync("/api/search/metadata", new { city = "Reviewed city", country = "France", size = 10 }))
+        {
+            Require(search.IsSuccessStatusCode, "Fixture location search failed.");
+            var results = await search.Content.ReadFromJsonAsync<JsonElement>();
+            Check(results.GetProperty("assets").GetProperty("items").EnumerateArray().Any(asset => asset.GetProperty("id").GetGuid() == ids[0]),
+                "Immich metadata search sees directly applied names");
+        }
+        await journal.QueueUndoAsync(operation, [ids[0]]);
+        await management.RunAsync(operation, true);
+        Check(await LocationAsync(ids[0]) == "O'Malley|Zürich|Switzerland", "guarded undo restores exact previous names");
+        var reapplied = await management.CreateApplyAsync(scanId, [ids[0]]);
+        await management.RunAsync(reapplied, false);
+        await repository.WriteLocationAsync(ids[0], exactProposal); // Same text, newer metadata revision.
+        await journal.QueueUndoAsync(reapplied, [ids[0]]);
+        await management.RunAsync(reapplied, true);
+        Check((await journal.GetItemsAsync(reapplied)).Single().UndoStatus == LocationUndoStatus.Skipped,
+            "undo does not overwrite a later metadata revision with identical location names");
+        var stale = await management.CreateApplyAsync(scanId, [ids[0]]);
+        await management.RunAsync(stale, false);
+        Check((await journal.GetItemsAsync(stale)).Single().ApplyStatus == LocationChangeStatus.Skipped, "stale saved scan skips newer names");
+        await repository.WriteLocationAsync(ids[0], expectedLocation);
+        Check(await ExifSnapshotAsync(ids[0]) == untouched, "apply and undo preserve unrelated metadata throughout");
+
+
         var cleared = await repository.ClearLocationDataForAssetsAsync([ids[0], ids[0], Guid.NewGuid()]);
         Check(cleared.Count == 1 && cleared[0] == ids[0] && await LocationAsync(ids[4]) == "Existing|Zurich|Switzerland", "ID reset deduplicates IDs and preserves other assets");
         Check(await ExifSnapshotAsync(ids[0]) == untouched, "ID reset preserves unrelated metadata");

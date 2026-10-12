@@ -1950,3 +1950,8 @@ input[type="text"].env-readonly {
     border-bottom: 2px solid #e9b949;
     border-radius: 2px;
 }
+
+
+.location-management-nav { margin-bottom: 1rem; }
+.location-confirmation { padding: 1rem; margin: 1rem 0; border: 1px solid var(--border); border-radius: 8px; }
+.location-apply-panel .btn-row { margin-top: 1rem; }

@@ -6,6 +6,8 @@ For a shorter user-facing summary, see [docs/website/changelog.md](./docs/websit
 
 ## Unreleased
 
+- Expand preview into Location Management with compatible legacy routes, exact-snapshot selected apply, per-asset PostgreSQL row locks and stale-value guards, an independent SQLite write-ahead journal, resumable pending work, and metadata-revision-guarded undo. Uncertain interrupted writes require review. See [user-facing release notes](docs/website/changelog.md).
+
 ## 0.1.0 — 2026-10-12
 
 First versioned release; earlier development milestones remain listed below.

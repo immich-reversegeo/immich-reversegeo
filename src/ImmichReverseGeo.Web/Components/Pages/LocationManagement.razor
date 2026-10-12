@@ -1,0 +1,16 @@
+@page "/data/location-management"
+<PageTitle>Location Management - Immich ReverseGeo</PageTitle>
+<h2>Location Management</h2>
+<LocationManagementNav />
+<section class="settings-card">
+    <p>Scan existing location names, review proposed corrections, and apply only the changes you select.</p>
+    <div class="data-grid">
+        <a class="data-link-card" href="/data/location-management/scan"><span class="data-card-title">Scan &amp; Review</span><span class="data-card-meta">Compare current names with proposed values before making changes</span></a>
+        <a class="data-link-card" href="/data/location-management/scans"><span class="data-card-title">Saved Scans</span><span class="data-card-meta">Review saved results and apply selected differences</span></a>
+        <a class="data-link-card" href="/data/location-management/history"><span class="data-card-title">Change History</span><span class="data-card-meta">Inspect results, resume pending work, and undo selected changes</span></a>
+    </div>
+    <p>Scanning is read-only. Applying changes writes the exact reviewed city, state, and country names to Immich;
+        no reset or processing run is needed. Take an Immich database backup before applying corrections.</p>
+    <p>Changed coordinates or location names are skipped. Undo also checks the metadata revision, so it cannot overwrite a later edit.
+        Interrupted writes with an uncertain outcome are marked Needs review and must be checked in Immich.</p>
+</section>

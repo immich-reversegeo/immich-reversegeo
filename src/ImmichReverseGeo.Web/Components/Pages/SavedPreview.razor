@@ -1,11 +1,14 @@
 @page "/data/saved-previews/{Id:guid}"
+@page "/data/location-management/scans/{Id:guid}"
 @rendermode InteractiveServer
+@inject LocationChangeRepository Changes
 @inject SavedLocationPreviewRepository Saved
 @inject NavigationManager Navigation
 
-<PageTitle>Saved Location Preview - Immich ReverseGeo</PageTitle>
-<h2>Saved Location Preview</h2>
-<p><a class="text-link" href="/data/saved-previews">All saved previews</a></p>
+<PageTitle>Saved Scan - Immich ReverseGeo</PageTitle>
+<h2>Saved Scan</h2>
+<LocationManagementNav />
+<p><a class="text-link" href="/data/location-management/scans">All saved scans</a></p>
 @if (_error is not null)
 {
     <p class="alert alert-error" role="alert">@_error</p>
@@ -16,7 +19,7 @@
 }
 else if (_report is null)
 {
-    <p>This saved preview was not found.</p>
+    <p>This saved scan was not found.</p>
 }
 else
 {
@@ -31,7 +34,7 @@ else
             }
         </p>
         <p>These are saved snapshots, not live Immich values. Opening this report does not run lookups or change Immich.
-            Start a new preview if you need current results. Only checked assets are saved; this report may cover part of the selection.</p>
+            Start a new scan if you need current results. Only checked assets are saved; this report may cover part of the selection.</p>
         @if (_report.Error is not null)
         {
             <p class="alert alert-error">@_report.Error</p>
@@ -43,8 +46,8 @@ else
                 Preferred administrative source: @(_report.Settings.UseGadmAdministrativeAreas && _report.Settings.PreferGadmAdministrativeAreas ? "GADM" : "Overture").</p>
         </details>
         <div class="btn-row">
-            <button class="btn btn-secondary" disabled="@_loading" @onclick="LoadAsync">Refresh saved results</button>
-            <button class="btn btn-secondary" disabled="@(_loading || _report.Status == "Running")" @onclick="() => _confirmDelete = true">Delete saved report</button>
+            <button class="btn btn-secondary" disabled="@(_loading || _applying)" @onclick="LoadAsync">Refresh saved results</button>
+            <button class="btn btn-secondary" disabled="@(_loading || _applying || _report.Status == "Running")" @onclick="() => _confirmDelete = true">Delete saved report</button>
         </div>
         @if (_confirmDelete)
         {
@@ -58,7 +61,7 @@ else
     <section class="settings-card wide-card">
         <h3>Saved results — page @_page</h3>
         <ImmichPhotoSetup />
-        <label><input type="checkbox" @bind="_onlyChanges" @bind:after="FilterAsync" disabled="@_loading" /> Show only different values</label>
+        <label><input type="checkbox" @bind="_onlyChanges" @bind:after="FilterAsync" disabled="@(_loading || _applying)" /> Show only different values</label>
         <p class="hint">Highlighted characters differ between the existing and proposed names.
             Changed spaces appear as ␠; other invisible characters use symbols or Unicode codes. Hover over a highlight for character codes.</p>
         @if (_rows.Count == 0)
@@ -68,8 +71,8 @@ else
         else
         {
             <div class="btn-row">
-                <button class="btn btn-secondary" @onclick="SelectPageChanges">Select different values on this page</button>
-                <button class="btn btn-secondary" @onclick="_review.Clear" disabled="@(_review.Count == 0)">Clear selection</button>
+                <button class="btn btn-secondary" disabled="@_applying" @onclick="SelectPageChanges">Select different values on this page</button>
+                <button class="btn btn-secondary" @onclick="_review.Clear" disabled="@(_applying || _review.Count == 0)">Clear selection</button>
             </div>
             <div class="table-scroll">
                 <table class="data-table">
@@ -79,12 +82,16 @@ else
                         {
                             <tr>
                                 <td><input type="checkbox" aria-label="Select asset @row.Asset.Id" checked="@_review.IsSelected(row.Asset.Id)"
-                                    disabled="@(!row.HasChange)" @onchange="args => _review.Select(row, args.Value is true)" /></td>
+                                    disabled="@(_applying || !row.HasChange)" @onchange="args => _review.Select(row, args.Value is true)" /></td>
                                 <td><PreviewPhoto AssetId="row.Asset.Id" PreviewId="Id" /></td>
                                 <td><code>@row.Asset.Id</code><div class="hint">GPS: @row.Asset.Latitude?.ToString("G", System.Globalization.CultureInfo.InvariantCulture), @row.Asset.Longitude?.ToString("G", System.Globalization.CultureInfo.InvariantCulture)</div></td>
                                 <td><div>City: <LocationDiffValue Value="@row.Asset.Existing.City" OtherValue="@row.Proposed?.City" Highlight="@row.HasChange" /></div><div>State: <LocationDiffValue Value="@row.Asset.Existing.State" OtherValue="@row.Proposed?.State" Highlight="@row.HasChange" /></div><div>Country: <LocationDiffValue Value="@row.Asset.Existing.Country" OtherValue="@row.Proposed?.Country" Highlight="@row.HasChange" /></div></td>
                                 <td><div>City: <LocationDiffValue Value="@row.Proposed?.City" OtherValue="@row.Asset.Existing.City" Highlight="@row.HasChange" /></div><div>State: <LocationDiffValue Value="@row.Proposed?.State" OtherValue="@row.Asset.Existing.State" Highlight="@row.HasChange" /></div><div>Country: <LocationDiffValue Value="@row.Proposed?.Country" OtherValue="@row.Asset.Existing.Country" Highlight="@row.HasChange" /></div></td>
                                 <td>@row.Status
+                                @if (_changeResults.TryGetValue(row.Asset.Id, out var change))
+                                {
+                                    <div class="hint">@change.Label @if (change.Message is not null) { <span>: @change.Message</span> }</div>
+                                }
                                     @if (row.Error is not null)
                                     {
                                         <div>@row.Error</div>
@@ -97,8 +104,8 @@ else
             </div>
         }
         <div class="btn-row">
-            <button class="btn btn-secondary" disabled="@(_loading || _page == 1)" @onclick="PreviousAsync">Previous 100</button>
-            <button class="btn btn-secondary" disabled="@(_loading || _rows.Count <= 100)" @onclick="NextAsync">Next 100</button>
+            <button class="btn btn-secondary" disabled="@(_loading || _applying || _page == 1)" @onclick="PreviousAsync">Previous 100</button>
+            <button class="btn btn-secondary" disabled="@(_loading || _applying || _rows.Count <= 100)" @onclick="NextAsync">Next 100</button>
         </div>
         @if (_review.Count > 0)
         {
@@ -106,9 +113,9 @@ else
                 <label for="saved-preview-guids">Selected GUIDs (@_review.Count)</label>
                 <textarea id="saved-preview-guids" class="form-control reset-textarea" readonly value="@string.Join(Environment.NewLine, _review.SelectedIds)"></textarea>
             </div>
-            <p>Selections are kept across pages while this report is open. Verify current results with a new preview before resetting.
-                Take an Immich database backup, then copy reviewed GUIDs into <a class="text-link" href="/data/reset-geo-data">Reset Immich Geo Data → Reset Single Item(s)</a>.</p>
+            <p>Selections are kept across pages while this scan is open. Review and apply the exact saved proposals below; assets with changed names or coordinates are skipped.</p>
         }
+        <ApplyLocationChanges ScanId="Id" SelectedIds="_review.SelectedIds" Disabled="_loading" BusyChanged="busy => _applying = busy" ResultsChanged="OnChangeResults" />
     </section>
 }
 
@@ -119,6 +126,8 @@ else
     private LocationPreviewReview _review = new();
     private Guid? _loadedId;
     private bool _loading;
+    private bool _applying;
+    private Dictionary<Guid, LocationChangeItem> _changeResults = new();
     private bool _onlyChanges = true;
     private bool _confirmDelete;
     private int _page = 1;
@@ -154,10 +163,11 @@ else
         {
             _report = (await Saved.GetReportsAsync(id: Id)).SingleOrDefault();
             _rows = _report is null ? [] : await Saved.GetRowsAsync(Id, _page, _onlyChanges);
+            _changeResults = new Dictionary<Guid, LocationChangeItem>(await Changes.GetScanResultsAsync(Id, _rows.Take(100).Select(row => row.Asset.Id).ToArray()));
         }
         catch (Exception ex)
         {
-            _error = $"Could not load saved preview: {ex.Message}";
+            _error = $"Could not load saved scan: {ex.Message}";
         }
         finally
         {
@@ -183,6 +193,12 @@ else
         return LoadAsync();
     }
 
+    private void OnChangeResults(IReadOnlyList<LocationChangeItem> items)
+    {
+        _changeResults.Clear();
+        foreach (var item in items.Where(item => _rows.Take(100).Any(row => row.Asset.Id == item.AssetId))) { _changeResults[item.AssetId] = item; }
+        _review.Clear();
+    }
     private void SelectPageChanges()
     {
         foreach (var row in _rows.Take(100).Where(row => row.HasChange))
@@ -198,7 +214,7 @@ else
         {
             if (await Saved.DeleteAsync(Id))
             {
-                Navigation.NavigateTo("/data/saved-previews");
+                Navigation.NavigateTo("/data/location-management/scans");
             }
             else
             {
@@ -207,7 +223,7 @@ else
         }
         catch (Exception ex)
         {
-            _error = $"Could not delete saved preview: {ex.Message}";
+            _error = $"Could not delete saved scan: {ex.Message}";
         }
     }
 }

@@ -29,3 +29,6 @@ Before any data writes, the runner verifies the exact server version and a datab
 The runner uploads eight generated PNGs through Immich, waits for metadata extraction, and seeds deterministic GPS/location states in the real schema. Checks cover eligibility, tied-timestamp keyset pagination, Unicode/parameterized writes, nullable fields, location options, all reset scopes, and preservation of unrelated metadata. Immich's automatically maintained `updatedAt` and `updateId` fields are excluded from preservation comparisons.
 
 CI compiles the runner but does not start Docker stacks, create accounts, or run these live checks. Normal `npm run test` and integration-data-source tests are unchanged. This is database-contract evidence for these pinned versions, not a guarantee for every Immich release or deployed library.
+
+
+The live harness also checks Location Management apply and guarded undo, exact saved proposals, preservation of unrelated metadata, stale-scan skips, and visibility through Immich's asset API and metadata search. Undo uses the PostgreSQL row revision to reject later metadata edits even when names remain identical. The fixtures contain only generated images; all writes remain subject to their local database identity guards.

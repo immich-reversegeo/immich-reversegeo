@@ -236,8 +236,15 @@ public class ProcessingBackgroundService(
                     logger.LogDebug("Asset {AssetId}: {City}, {State}, {Country}",
                         asset.Id, geoResult.City, geoResult.State, geoResult.Country);
                 }
-                await db.WriteLocationAsync(asset.Id, geoResult, ct);
-                state.IncrementProcessed();
+                if (await db.WriteUnprocessedLocationAsync(asset, geoResult, ct))
+                {
+                    state.IncrementProcessed();
+                }
+                else
+                {
+                    state.AppendLog($"Asset {asset.Id}: location or coordinates changed after the batch was loaded; skipped write.");
+                    state.IncrementSkipped();
+                }
             }
             else
             {

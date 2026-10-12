@@ -1,0 +1,25 @@
+<div class="table-scroll">
+    <table class="data-table">
+        <thead><tr><th>Asset GUID</th><th>@(Reverse ? "Applied names" : "Reviewed existing names")</th><th>@(Reverse ? "Restore names" : "Exact proposed names")</th></tr></thead>
+        <tbody>
+            @foreach (var row in Rows)
+            {
+                var before = Reverse ? row.Proposed : row.Asset.Existing;
+                var after = Reverse ? row.Asset.Existing : row.Proposed;
+                <tr @key="row.Asset.Id">
+                    <td><code>@row.Asset.Id</code></td>
+                    <td><div>City: <LocationDiffValue Value="@before?.City" OtherValue="@after?.City" Highlight="true" /></div>
+                        <div>State: <LocationDiffValue Value="@before?.State" OtherValue="@after?.State" Highlight="true" /></div>
+                        <div>Country: <LocationDiffValue Value="@before?.Country" OtherValue="@after?.Country" Highlight="true" /></div></td>
+                    <td><div>City: <LocationDiffValue Value="@after?.City" OtherValue="@before?.City" Highlight="true" /></div>
+                        <div>State: <LocationDiffValue Value="@after?.State" OtherValue="@before?.State" Highlight="true" /></div>
+                        <div>Country: <LocationDiffValue Value="@after?.Country" OtherValue="@before?.Country" Highlight="true" /></div></td>
+                </tr>
+            }
+        </tbody>
+    </table>
+</div>
+@code {
+    [Parameter] public IEnumerable<LocationPreviewRow> Rows { get; set; } = [];
+    [Parameter] public bool Reverse { get; set; }
+}
