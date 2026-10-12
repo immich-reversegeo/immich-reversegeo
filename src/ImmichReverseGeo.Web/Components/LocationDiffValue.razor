@@ -1,0 +1,40 @@
+<span class="location-diff-value">@foreach (var segment in _segments)
+    {
+        if (segment.Changed)
+        {
+            <mark class="location-diff-change" title="@(Value is null ? "Missing value" : Value.Length == 0 ? "Empty value" : LocationTextDiff.DescribeChanges(segment.Text))">@LocationTextDiff.VisibleChanges(segment.Text)</mark>
+        }
+        else
+        {
+            @segment.Text
+        }
+    }</span>
+
+@code {
+    [Parameter] public string? Value { get; set; }
+    [Parameter] public string? OtherValue { get; set; }
+    [Parameter] public bool Highlight { get; set; }
+
+    private IReadOnlyList<LocationTextSegment> _segments = [];
+    private bool _initialized;
+    private string? _previousValue;
+    private string? _previousOtherValue;
+    private bool _previousHighlight;
+
+    protected override void OnParametersSet()
+    {
+        // Completed rows rerender as each new asset arrives; do not recompute their diff.
+        if (_initialized && Value == _previousValue && OtherValue == _previousOtherValue
+            && Highlight == _previousHighlight)
+        {
+            return;
+        }
+
+        _segments = Highlight ? LocationTextDiff.Compare(Value, OtherValue)
+            : [new(LocationTextDiff.DisplayValue(Value), false)];
+        _initialized = true;
+        _previousValue = Value;
+        _previousOtherValue = OtherValue;
+        _previousHighlight = Highlight;
+    }
+}

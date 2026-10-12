@@ -56,6 +56,9 @@ Open **Data → Preview Location Corrections** to compare existing city, state, 
 1. Choose pasted asset GUIDs, an exact existing city/state/country name, or the whole library.
 2. Start the preview. It checks up to 100 assets per page and may download country caches. Every scope includes only assets with both GPS coordinates. It does not write to Immich or change the skip list.
 3. Review the existing and proposed values. Use **Show only different values** to focus on changes. Different does not necessarily mean better: test unfamiliar results in Lookup using the coordinates shown in the table.
+
+In live and saved previews, changed characters are highlighted in both the existing and proposed names. The comparison is exact, so punctuation, capitalization, and spaces can mark a name as different even when it refers to the same place. Changed spaces appear as `␠`; other invisible characters use symbols or Unicode codes. Hover over a highlight to see its character codes. An empty value appears as `(empty)` and a missing value as `—`.
+
 4. Select only the assets you want to correct. The GUID list includes your selections across reviewed pages. Copy those GUIDs and take an [Immich database backup](https://docs.immich.app/administration/backup-and-restore/) before resetting them under **Reset Immich Geo Data → Reset Single Item(s)**.
 5. Select **Run Now** on the Dashboard to process the reset assets.
 
