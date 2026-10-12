@@ -69,6 +69,8 @@ Choose **Order by → Nearby coordinates** to group photos into quarter-degree m
 
 While preview runs, the page shows the current asset, lookup step or country-cache wait, and elapsed time. The progress bar counts checked assets, not downloaded data. Preparing a country for the first time can take several minutes; later lookups reuse its cache. To investigate a long wait, open **Logs** from the preview page. Preview events include a short identifier so you can follow one preview's start, cache waits, failures, cancellation, and page summaries. These events also appear in the container logs. Successful cached lookups are summarized rather than logged for every asset.
 
+Preview counts all matching assets with both GPS coordinates when you start and shows the total checked and percentage across manual pages and continuous scans. Estimated remaining processing time appears after five checked assets and excludes review pauses. Country-cache downloads can change the estimate. Use **Preview Next 100** or **Continue Scan** to resume after a pause. If assets are added, deleted, or edited during the preview, the starting total may no longer match the final count.
+
 Settings are loaded once when you start the preview; start again after changing settings. Results may change if settings, source data, or coordinates change before processing.
 
 Photo thumbnails and **Open in Immich** links are available in live previews and saved reports when the optional [Immich connection](./configuration.md#photo-previews-and-immich-links) is configured. Thumbnails load on demand; they are not part of the saved snapshot and may become unavailable if an asset is deleted or access changes.

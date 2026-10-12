@@ -75,10 +75,20 @@
         }
     </div>
     <p class="hint">Starting a new preview clears your selected GUIDs. Selections are kept when you move to the next page.</p>
+    @if (_estimate is not null)
+    {
+        <div class="preview-progress" role="status">
+            <p>@_estimate.Checked.ToString("N0") of @_estimate.Total.ToString("N0") matching assets checked
+                (@_estimate.Percentage.ToString("F1")%). Estimated processing time remaining: @RemainingLabel.</p>
+            <progress value="@_estimate.Percentage" max="100" aria-label="Overall preview progress"></progress>
+        </div>
+        <p class="hint">The total is counted when the preview starts. The estimate excludes review pauses;
+            country-cache downloads can change it. Continue the scan to check remaining assets.</p>
+    }
     @if (_busy)
     {
         <div class="preview-progress" role="status">
-            <p>@(_pageCount == 0 ? "Loading matching assets…" : $"Checking asset {Math.Min(_rows.Count + 1, _pageCount)} of {_pageCount}.")
+            <p>@(_estimate is null ? "Counting matching assets…" : _pageCount == 0 ? "Loading matching assets…" : $"Checking asset {Math.Min(_rows.Count + 1, _pageCount)} of {_pageCount}.")
                 Page elapsed: @_pageElapsed.Elapsed.ToString(@"hh\:mm\:ss").</p>
             @if (_pageCount > 0)
             {
@@ -213,6 +223,7 @@
     private int _observedBatch;
     private string ContinueLabel => _selection?.ScanMode == LocationPreviewScanMode.Continuous ? "Continue Scan" : "Preview Next 100";
     private readonly Stopwatch _scanElapsed = new();
+    private LocationPreviewScanEstimate? _estimate;
     private LocationPreviewSelection? _selection;
     private ProcessingConfig? _settings;
     private CancellationTokenSource? _cts;
@@ -223,6 +234,13 @@
     private readonly Stopwatch _stageElapsed = new();
     private IReadOnlyList<LocationPreviewRow> _rows => _scanner?.Rows ?? Array.Empty<LocationPreviewRow>();
     private readonly LocationPreviewReview _review = new();
+
+    private string RemainingLabel => _estimate?.EstimatedRemaining is not { } remaining
+        ? "Estimating…"
+        : remaining.TotalDays >= 1 ? $"about {remaining.TotalDays:F1} days"
+        : remaining.TotalHours >= 1 ? $"about {remaining.TotalHours:F1} hours"
+        : remaining.TotalMinutes >= 1 ? $"about {Math.Ceiling(remaining.TotalMinutes):N0} minutes"
+        : $"about {Math.Ceiling(remaining.TotalSeconds):N0} seconds";
 
     private void SelectPageChanges()
     {
@@ -289,6 +307,7 @@
         _review.Clear();
         _observedBatch = 0;
         _scanElapsed.Reset();
+        _estimate = null;
         _savedPreviewId = null;
         _saveError = null;
         _previewId = Guid.NewGuid().ToString("N")[..8];
@@ -308,7 +327,6 @@
         _busy = true;
         _message = null;
         _error = null;
-        _scanElapsed.Start();
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
         var ct = _cts.Token;
@@ -334,6 +352,14 @@
                 await SavedPreviews.SetStatusAsync(_savedPreviewId.Value, "Running", ct: ct);
             }
 
+            if (_estimate is null)
+            {
+                SetStage("Counting matching assets…");
+                var total = await Db.GetLocationPreviewCountAsync(_selection, ct);
+                _estimate = new LocationPreviewScanEstimate(total);
+                await InvokeAsync(StateHasChanged);
+            }
+            _scanElapsed.Start();
             ct.ThrowIfCancellationRequested();
             var outcome = await _scanner!.RunAsync(
                 async (cursor, token) =>
@@ -370,6 +396,7 @@
                     try
                     {
                         await SavedPreviews.AppendAsync(_savedPreviewId!.Value, row);
+                        _estimate.RecordChecked(_scanElapsed.Elapsed);
                     }
                     catch (Exception ex)
                     {
@@ -428,6 +455,7 @@
             }
             _currentAssetId = null;
             _scanElapsed.Stop();
+            _estimate?.UpdateElapsed(_scanElapsed.Elapsed);
             _pageElapsed.Stop();
             _stageElapsed.Stop();
             pageCts.Cancel();
@@ -490,6 +518,7 @@
                 {
                     return;
                 }
+                _estimate?.UpdateElapsed(_scanElapsed.Elapsed);
                 await InvokeAsync(StateHasChanged);
             }
         }
