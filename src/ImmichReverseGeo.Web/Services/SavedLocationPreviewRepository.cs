@@ -217,6 +217,24 @@ public sealed class SavedLocationPreviewRepository
         }
     }
 
+    public async Task<bool> ContainsAssetAsync(Guid id, Guid assetId, CancellationToken ct = default)
+    {
+        await _gate.WaitAsync(ct);
+        try
+        {
+            await using var connection = await OpenAsync(ct);
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT EXISTS(SELECT 1 FROM preview_rows WHERE preview_id = $id AND asset_id = $asset)";
+            command.Parameters.AddWithValue("$id", id.ToString());
+            command.Parameters.AddWithValue("$asset", assetId.ToString());
+            return (long)(await command.ExecuteScalarAsync(ct))! == 1;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
     public async Task<bool> DeleteAsync(Guid id, CancellationToken ct = default)
     {
         await _gate.WaitAsync(ct);

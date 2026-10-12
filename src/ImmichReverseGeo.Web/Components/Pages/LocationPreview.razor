@@ -78,6 +78,7 @@
     }
     <p class="hint">Preview starts, country-cache waits, failures, and page summaries appear in <a class="text-link" href="/logs" target="_blank" rel="noopener">Logs</a>.</p>
     <p>Completed results are saved automatically. <a class="text-link" href="/data/saved-previews" target="_blank" rel="noopener">View saved previews</a> after reloading or restarting the app.</p>
+    <ImmichPhotoSetup />
     @if (_savedPreviewId is not null)
     {
         <p><a class="text-link" href="@($"/data/saved-previews/{_savedPreviewId}")" target="_blank" rel="noopener">View this saved preview</a></p>
@@ -118,7 +119,7 @@
         }
         <div class="table-scroll">
             <table class="data-table">
-                <thead><tr><th>Select</th><th>Asset GUID</th><th>Existing location</th><th>Proposed location</th><th>Result</th></tr></thead>
+                <thead><tr><th>Select</th><th>Photo</th><th>Asset GUID</th><th>Existing location</th><th>Proposed location</th><th>Result</th></tr></thead>
                 <tbody>
                     @foreach (var row in _rows.Where(row => !_onlyChanges || row.HasChange))
                     {
@@ -126,6 +127,7 @@
                             <td><input type="checkbox" aria-label="Select asset @row.Asset.Id"
                                        checked="@_review.IsSelected(row.Asset.Id)" disabled="@(_busy || !row.HasChange)"
                                        @onchange="args => _review.Select(row, args.Value is true)" /></td>
+                            <td><PreviewPhoto AssetId="row.Asset.Id" PreviewId="_savedPreviewId" /></td>
                             <td><code>@row.Asset.Id</code>
                                 <div class="hint">GPS: @(row.Asset.Latitude?.ToString("G", System.Globalization.CultureInfo.InvariantCulture) ?? "—"), @(row.Asset.Longitude?.ToString("G", System.Globalization.CultureInfo.InvariantCulture) ?? "—")</div>
                             </td>
@@ -323,6 +325,7 @@
                 _currentAssetId = asset.Id;
                 SetStage("Resolving location…");
                 await InvokeAsync(StateHasChanged);
+                LocationPreviewRow completedRow;
                 try
                 {
                     var proposed = asset.Latitude is not null && asset.Longitude is not null
@@ -332,7 +335,7 @@
                             asset.Latitude.Value, asset.Longitude.Value, _settings!, progress, ct), ct)
                         : null;
                     ct.ThrowIfCancellationRequested();
-                    _rows.Add(new LocationPreviewRow(asset, proposed));
+                    completedRow = new LocationPreviewRow(asset, proposed);
                 }
                 catch (OperationCanceledException) when (ct.IsCancellationRequested)
                 {
@@ -340,19 +343,20 @@
                 }
                 catch (Exception ex)
                 {
-                    _rows.Add(new LocationPreviewRow(asset, null, ex.Message));
+                    completedRow = new LocationPreviewRow(asset, null, ex.Message);
                     LogPreview($"[ERROR] Asset {asset.Id}: {ex.Message}");
                 }
 
                 // A completed result remains saved even if Cancel was clicked during the short write.
                 try
                 {
-                    await SavedPreviews.AppendAsync(_savedPreviewId!.Value, _rows[^1]);
+                    await SavedPreviews.AppendAsync(_savedPreviewId!.Value, completedRow);
                 }
                 catch (Exception ex)
                 {
                     throw new InvalidOperationException($"Could not save the latest preview result: {ex.Message}", ex);
                 }
+                _rows.Add(completedRow);
                 await InvokeAsync(StateHasChanged);
             }
 

@@ -1,12 +1,15 @@
 using System;
 using System.IO;
+using System.Net.Http;
 using System.Text.Json;
+using System.Threading.Tasks;
 using ImmichReverseGeo.Core.Models;
 using ImmichReverseGeo.Gadm.Services;
 using ImmichReverseGeo.Overture.Services;
 using ImmichReverseGeo.Web.Services;
 using Microsoft.AspNetCore.Builder;
 using Microsoft.AspNetCore.DataProtection;
+using Microsoft.AspNetCore.Http;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -20,6 +23,13 @@ builder.Services.AddRazorComponents()
     .AddInteractiveServerComponents();
 
 builder.Services.AddHttpClient();
+builder.Services.AddSingleton(ImmichPhotoOptions.FromEnvironment());
+builder.Services.AddHttpClient<ImmichPhotoService>()
+    .ConfigurePrimaryHttpMessageHandler(() => new HttpClientHandler
+    {
+        AllowAutoRedirect = false,
+        MaxConnectionsPerServer = 6
+    });
 builder.Services.AddSingleton<MemoryResourcePolicy>();
 
 var bundledDataDir = builder.Environment.IsDevelopment()
@@ -123,6 +133,14 @@ if (!app.Environment.IsDevelopment())
 app.UseAntiforgery();
 
 app.MapStaticAssets();
+app.MapGet("/api/location-previews/{previewId:guid}/assets/{assetId:guid}/thumbnail",
+    async Task<IResult> (Guid previewId, Guid assetId, ImmichPhotoService photos, HttpContext context) =>
+    {
+        context.Response.Headers.CacheControl = "no-store";
+        context.Response.Headers["X-Content-Type-Options"] = "nosniff";
+        var thumbnail = await photos.GetThumbnailAsync(previewId, assetId, context.RequestAborted);
+        return thumbnail is null ? Results.NotFound() : Results.File(thumbnail.Bytes, thumbnail.ContentType);
+    });
 app.MapRazorComponents<ImmichReverseGeo.Web.Components.App>()
     .AddInteractiveServerRenderMode();
 

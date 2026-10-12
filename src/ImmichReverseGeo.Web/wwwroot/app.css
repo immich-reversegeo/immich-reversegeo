@@ -1438,6 +1438,31 @@ input[type="text"].env-readonly {
     accent-color: var(--accent);
 }
 
+.preview-photo {
+    width: 144px;
+    display: flex;
+    flex-direction: column;
+    gap: 0.5rem;
+}
+
+.preview-photo img,
+.preview-photo-placeholder {
+    width: 144px;
+    height: 96px;
+    border-radius: 0.4rem;
+    object-fit: cover;
+}
+
+.preview-photo-placeholder {
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    border: 1px solid var(--border);
+    color: var(--text-secondary);
+    font-size: 0.75rem;
+}
+
 /* ── Scrollbar ────────────────────────────────────────── */
 ::-webkit-scrollbar       { width: 5px; height: 5px; }
 ::-webkit-scrollbar-track { background: var(--bg-surface); }

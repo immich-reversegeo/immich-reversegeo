@@ -1,0 +1,44 @@
+@inject ImmichPhotoOptions Photos
+
+<div class="preview-photo">
+    @if (Photos.ThumbnailsEnabled && PreviewId is not null && !_failed && _ready)
+    {
+        <img src="@($"/api/location-previews/{PreviewId}/assets/{AssetId}/thumbnail")"
+             alt="Immich photo preview" width="144" height="96" loading="lazy" decoding="async"
+             @onerror="() => _failed = true" />
+    }
+    else
+    {
+        <div class="preview-photo-placeholder">@(_failed ? "Preview unavailable" : Photos.ThumbnailsEnabled && PreviewId is not null ? "Loading photo preview…" : "Photo preview not configured")</div>
+    }
+    @if (Photos.GetAssetUrl(AssetId) is { } url)
+    {
+        <a class="text-link" href="@url" target="_blank" rel="noopener noreferrer">Open in Immich</a>
+    }
+</div>
+
+@code {
+    [Parameter] public Guid AssetId { get; set; }
+    [Parameter] public Guid? PreviewId { get; set; }
+    private (Guid? PreviewId, Guid AssetId) _loaded;
+    private bool _failed;
+    private bool _ready;
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _ready = true;
+            StateHasChanged();
+        }
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (_loaded != (PreviewId, AssetId))
+        {
+            _loaded = (PreviewId, AssetId);
+            _failed = false;
+        }
+    }
+}
