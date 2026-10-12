@@ -16,6 +16,8 @@ Operationally:
 
 The app UI uses local system fonts and does not request fonts from an external provider.
 
+If photo previews are configured, Immich ReverseGeo fetches thumbnails from your Immich server when you view preview results. The API key stays on the server; thumbnail requests are limited to assets in saved preview reports. Image files are not added to the saved reports.
+
 The optional Nearby Places investigation tool on the Lookup page may contact Overture-hosted public data sources when enabled.
 
 You are responsible for how and where you deploy the service.

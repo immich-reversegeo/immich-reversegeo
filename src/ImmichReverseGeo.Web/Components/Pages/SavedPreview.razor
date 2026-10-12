@@ -51,6 +51,7 @@ else
     </section>
     <section class="settings-card wide-card">
         <h3>Saved results — page @_page</h3>
+        <ImmichPhotoSetup />
         <label><input type="checkbox" @bind="_onlyChanges" @bind:after="FilterAsync" disabled="@_loading" /> Show only different values</label>
         @if (_rows.Count == 0)
         {
@@ -64,13 +65,14 @@ else
             </div>
             <div class="table-scroll">
                 <table class="data-table">
-                    <thead><tr><th>Select</th><th>Asset GUID</th><th>Existing location</th><th>Proposed location</th><th>Result</th></tr></thead>
+                    <thead><tr><th>Select</th><th>Photo</th><th>Asset GUID</th><th>Existing location</th><th>Proposed location</th><th>Result</th></tr></thead>
                     <tbody>
                         @foreach (var row in _rows.Take(100))
                         {
                             <tr>
                                 <td><input type="checkbox" aria-label="Select asset @row.Asset.Id" checked="@_review.IsSelected(row.Asset.Id)"
                                     disabled="@(!row.HasChange)" @onchange="args => _review.Select(row, args.Value is true)" /></td>
+                                <td><PreviewPhoto AssetId="row.Asset.Id" PreviewId="Id" /></td>
                                 <td><code>@row.Asset.Id</code><div class="hint">GPS: @row.Asset.Latitude?.ToString("G", System.Globalization.CultureInfo.InvariantCulture), @row.Asset.Longitude?.ToString("G", System.Globalization.CultureInfo.InvariantCulture)</div></td>
                                 <td><div>City: @(row.Asset.Existing.City ?? "—")</div><div>State: @(row.Asset.Existing.State ?? "—")</div><div>Country: @(row.Asset.Existing.Country ?? "—")</div></td>
                                 <td><div>City: @(row.Proposed?.City ?? "—")</div><div>State: @(row.Proposed?.State ?? "—")</div><div>Country: @(row.Proposed?.Country ?? "—")</div></td>

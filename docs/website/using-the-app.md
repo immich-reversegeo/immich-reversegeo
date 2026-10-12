@@ -67,6 +67,8 @@ While preview runs, the page shows the current asset, lookup step or country-cac
 
 Settings are loaded once when you start the preview; start again after changing settings. Results may change if settings, source data, or coordinates change before processing.
 
+Photo thumbnails and **Open in Immich** links are available in live previews and saved reports when the optional [Immich connection](./configuration.md#photo-previews-and-immich-links) is configured. Thumbnails load on demand; they are not part of the saved snapshot and may become unavailable if an asset is deleted or access changes.
+
 #### Saved previews
 
 Each completed asset result is saved automatically under **Data → Saved Previews**, including results checked before you cancel. Open a report later to compare the saved existing and proposed names, filter to differences, and copy GUIDs you have reviewed across pages. Viewing a saved report does not run new lookups or change Immich. Selections made with checkboxes are kept only while that report is open; the saved results remain available after a reload or app restart.
