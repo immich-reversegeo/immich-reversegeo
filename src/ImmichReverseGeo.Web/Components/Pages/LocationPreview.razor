@@ -127,23 +127,23 @@
 @if (_rows.Count > 0 || _review.Count > 0 || _hasMore || (_scanner?.CheckedCount ?? 0) > 0)
 {
     <section class="settings-card wide-card">
-        <h3>Preview results — page @_page</h3>
+        <h3>@(_onlyChanges ? $"Preview differences — page {_differences.Page}" : $"Preview results — batch {_page}")</h3>
         <p>Selection: @SelectionLabel. Order: @OrderLabel. Start a new preview to use different inputs or updated settings.</p>
         <p>@(_scanner?.CheckedCount ?? 0) checked in total; @(_scanner?.DifferentCount ?? 0) different. Active scan time: @_scanElapsed.Elapsed.ToString(@"hh\:mm\:ss").</p>
-        <p>@_rows.Count checked on this page; @_rows.Count(row => row.HasChange) have different proposed values.
+        <p>@_rows.Count checked in the current scan batch; @_rows.Count(row => row.HasChange) have different proposed values.
             Results use the settings loaded when you started this preview.</p>
-        <p class="hint">@PageSummary Page elapsed: @_pageElapsed.Elapsed.ToString(@"hh\:mm\:ss").</p>
-        <label><input type="checkbox" @bind="_onlyChanges" /> Show only different values</label>
+        <p class="hint">@PageSummary Batch elapsed: @_pageElapsed.Elapsed.ToString(@"hh\:mm\:ss").</p>
+        <label><input type="checkbox" @bind="_onlyChanges" @bind:after="FilterDifferencesAsync" /> Show only different values</label>
         <p class="hint">Highlighted characters differ between the existing and proposed names.
             Changed spaces appear as ␠; other invisible characters use symbols or Unicode codes. Hover over a highlight for character codes.</p>
-        @if (_onlyChanges && !_rows.Any(row => row.HasChange))
+        @if (_onlyChanges && !VisibleRows.Any())
         {
-            <p class="hint">No different values @(_busy ? "found yet" : "found") on this page. Uncheck Show only different values to inspect all results.</p>
+            <p class="hint">No different values @(_busy ? "found yet" : "found") in this preview. Uncheck Show only different values to inspect the current batch.</p>
         }
-        @if (!_busy && (_rows.Any(row => row.HasChange) || _review.Count > 0))
+        @if (!_busy && (VisibleRows.Any(row => row.HasChange) || _review.Count > 0))
         {
             <div class="btn-row">
-                <button class="btn btn-secondary" @onclick="SelectPageChanges" disabled="@(!_rows.Any(row => row.HasChange))">Select Different Values on This Page</button>
+                <button class="btn btn-secondary" @onclick="SelectPageChanges" disabled="@(!VisibleRows.Any(row => row.HasChange))">Select Different Values on This Page</button>
                 <button class="btn btn-secondary" @onclick="_review.Clear" disabled="@(_review.Count == 0)">Clear Selection</button>
             </div>
         }
@@ -151,9 +151,9 @@
             <table class="data-table">
                 <thead><tr><th>Select</th><th>Photo</th><th>Asset GUID</th><th>Existing location</th><th>Proposed location</th><th>Result</th></tr></thead>
                 <tbody>
-                    @foreach (var row in _rows.Where(row => !_onlyChanges || row.HasChange))
+                    @foreach (var row in VisibleRows)
                     {
-                        <tr>
+                        <tr @key="row.Asset.Id">
                             <td><input type="checkbox" aria-label="Select asset @row.Asset.Id"
                                        checked="@_review.IsSelected(row.Asset.Id)" disabled="@(_busy || !row.HasChange)"
                                        @onchange="args => _review.Select(row, args.Value is true)" /></td>
@@ -182,12 +182,24 @@
                 </tbody>
             </table>
         </div>
+        @if (_onlyChanges)
+        {
+            <p class="hint">Showing differences from all checked batches. These results stay here as scanning advances.</p>
+            <div class="btn-row">
+                <button class="btn btn-secondary" disabled="@(_busy || _differences.Page == 1)" @onclick="() => MoveDifferencesAsync(-1)">Previous 100 Differences</button>
+                <button class="btn btn-secondary" disabled="@(_busy || !_differences.HasNext)" @onclick="() => MoveDifferencesAsync(1)">Next 100 Differences</button>
+            </div>
+        }
+        @if (_differenceError is not null)
+        {
+            <p class="alert alert-error" role="alert">@_differenceError</p>
+        }
         @if (!_busy && _hasMore)
         {
             <div class="btn-row">
                 <button class="btn btn-secondary" @onclick="NextAsync">@ContinueLabel</button>
             </div>
-            <p class="hint">Continuing replaces these live results. All completed results are available in the saved preview; selected GUIDs are kept.</p>
+            <p class="hint">Continuing replaces the full-results batch. The differences view keeps earlier results available; selected GUIDs are kept.</p>
         }
         @if (!_busy && _review.Count > 0)
         {
@@ -210,6 +222,9 @@
     private bool _busy;
     private bool _circuitReady;
     private bool _onlyChanges;
+    private LocationPreviewDifferencePage _differences = new();
+    private string? _differenceError;
+    private IEnumerable<LocationPreviewRow> VisibleRows => _onlyChanges ? _differences.Rows : _rows;
     private LocationPreviewOrder _order = LocationPreviewOrder.AssetId;
     private bool _hasMore => _scanner?.HasMore ?? false;
     private bool _disposed;
@@ -244,9 +259,49 @@
         : remaining.TotalMinutes >= 1 ? $"about {Math.Ceiling(remaining.TotalMinutes):N0} minutes"
         : $"about {Math.Ceiling(remaining.TotalSeconds):N0} seconds";
 
+    private Task FilterDifferencesAsync() => _onlyChanges ? RefreshDifferencesAsync(force: true) : Task.CompletedTask;
+
+    private async Task RefreshDifferencesAsync(bool force = false)
+    {
+        if (_savedPreviewId is not { } id)
+        {
+            return;
+        }
+
+        try
+        {
+            await _differences.RefreshAsync(_scanner?.DifferentCount ?? 0,
+                page => SavedPreviews.GetRowsAsync(id, page, onlyChanges: true), force);
+            _differenceError = null;
+        }
+        catch (Exception ex)
+        {
+            _differenceError = $"Could not load preview differences: {ex.Message}. Completed results remain saved.";
+        }
+    }
+
+    private async Task MoveDifferencesAsync(int direction)
+    {
+        if (_busy || _savedPreviewId is not { } id)
+        {
+            return;
+        }
+
+        try
+        {
+            await _differences.MoveAsync(direction, _scanner?.DifferentCount ?? 0,
+                page => SavedPreviews.GetRowsAsync(id, page, onlyChanges: true));
+            _differenceError = null;
+        }
+        catch (Exception ex)
+        {
+            _differenceError = $"Could not load preview differences: {ex.Message}. Completed results remain saved.";
+        }
+    }
+
     private void SelectPageChanges()
     {
-        foreach (var row in _rows.Where(row => row.HasChange))
+        foreach (var row in VisibleRows.Where(row => row.HasChange))
         {
             _review.Select(row, true);
         }
@@ -307,6 +362,8 @@
         _message = null;
         _scanner = new LocationPreviewScanner(selection.ScanMode, selection.PauseAfterDifferences);
         _review.Clear();
+        _differences = new LocationPreviewDifferencePage();
+        _differenceError = null;
         _observedBatch = 0;
         _scanElapsed.Reset();
         _estimate = null;
@@ -416,6 +473,10 @@
                     }
                     if (!_disposed)
                     {
+                        if (_onlyChanges)
+                        {
+                            await RefreshDifferencesAsync();
+                        }
                         await InvokeAsync(StateHasChanged);
                     }
                 }, ct);
