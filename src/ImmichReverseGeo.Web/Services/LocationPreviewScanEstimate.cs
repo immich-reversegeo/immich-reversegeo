@@ -24,4 +24,3 @@ public sealed class LocationPreviewScanEstimate(long total)
 
     public void UpdateElapsed(TimeSpan activeElapsed) => ActiveElapsed = activeElapsed;
 }
-
