@@ -1301,7 +1301,7 @@ input[type="text"].env-readonly {
 }
 .cache-table {
     margin-top: 0;
-    min-width: 980px;
+    min-width: 70rem;
     table-layout: fixed;
 }
 .cache-table th:nth-child(1),
@@ -1310,7 +1310,7 @@ input[type="text"].env-readonly {
 }
 .cache-table th:nth-child(2),
 .cache-table td:nth-child(2) {
-    width: 6rem;
+    width: 12rem;
 }
 .cache-table th:nth-child(3),
 .cache-table td:nth-child(3) {
@@ -1326,11 +1326,31 @@ input[type="text"].env-readonly {
 }
 .cache-table th:nth-child(6),
 .cache-table td:nth-child(6) {
-    width: 12rem;
+    width: 14rem;
 }
 .cache-table th:nth-child(7),
 .cache-table td:nth-child(7) {
     width: 12rem;
+}
+.cache-table td {
+    vertical-align: top;
+}
+.cache-table td:nth-child(2),
+.cache-table td:nth-child(6) {
+    white-space: normal;
+    overflow-wrap: anywhere;
+}
+.cache-country-name {
+    display: block;
+    margin-bottom: .25rem;
+}
+.cache-row-actions {
+    display: flex;
+    flex-wrap: wrap;
+    gap: .4rem;
+}
+.cache-table .cache-row-actions .btn {
+    margin: 0;
 }
 .cache-table .btn {
     padding: 0.35rem 0.7rem;
