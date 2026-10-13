@@ -2014,3 +2014,46 @@ input[type="text"].env-readonly {
 }
 .location-confirmation { padding: 1rem; margin: 1rem 0; border: 1px solid var(--border); border-radius: 8px; }
 .location-apply-panel .btn-row { margin-top: 1rem; }
+
+/* Keep an automatic review pause visible while browsing a long result table. */
+.preview-pause-status {
+    padding: 0.75rem 1rem;
+    border: 1px solid var(--warn-border);
+    border-radius: var(--radius);
+    background: var(--warn-light);
+    color: var(--warn);
+}
+
+.preview-pause-banner {
+    position: sticky;
+    top: 1rem;
+    z-index: 5;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: 1rem;
+    padding: 1rem;
+    margin-bottom: 1.25rem;
+    border: 1px solid var(--warn-border);
+    border-left-width: 4px;
+    border-radius: var(--radius);
+    background: var(--bg-surface);
+    box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
+}
+
+.preview-pause-banner h3 {
+    margin: 0 0 0.35rem;
+    color: var(--warn);
+    font-size: 1rem;
+    text-transform: none;
+}
+
+.preview-pause-banner p {
+    margin: 0;
+    color: var(--text-secondary);
+}
+
+.preview-pause-banner .btn {
+    white-space: nowrap;
+}
