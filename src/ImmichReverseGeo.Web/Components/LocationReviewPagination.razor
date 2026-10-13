@@ -1,0 +1,15 @@
+<div class="review-pagination" role="group" aria-label="@Label">
+    <span class="hint">@Label — page @Page · up to 100 per page</span>
+    <button class="btn btn-secondary" disabled="@(Disabled || Page == 1)" @onclick="Previous">Previous @Kind</button>
+    <button class="btn btn-secondary" disabled="@(Disabled || !HasNext)" @onclick="Next">Next @Kind</button>
+</div>
+
+@code {
+    [Parameter] public int Page { get; set; } = 1;
+    [Parameter] public bool HasNext { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public string Label { get; set; } = "Results";
+    [Parameter] public string Kind { get; set; } = "results";
+    [Parameter] public EventCallback Previous { get; set; }
+    [Parameter] public EventCallback Next { get; set; }
+}

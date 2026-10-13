@@ -1,6 +1,6 @@
-<div class="table-scroll">
-    <table class="data-table">
-        <thead><tr><th>Asset GUID</th><th>@(Reverse ? "Applied names" : "Reviewed existing names")</th><th>@(Reverse ? "Restore names" : "Exact proposed names")</th></tr></thead>
+<div class="table-scroll" role="region" aria-label="Selected change comparisons; scroll horizontally to see all columns" tabindex="0">
+    <table class="data-table location-confirmation-table">
+        <thead><tr><th scope="col">Asset GUID</th><th scope="col">@(Reverse ? "Applied names" : "Reviewed existing names")</th><th scope="col">@(Reverse ? "Restore names" : "Exact proposed names")</th></tr></thead>
         <tbody>
             @foreach (var row in Rows)
             {

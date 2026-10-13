@@ -80,13 +80,19 @@ else if (_dbError is not null)
         ? (int)Math.Min(100, State.CheckedThisRun * 100.0 / State.TotalUnprocessed)
         : 0;
 }
-<div class="progress-bar-wrap" role="progressbar" aria-label="Assets checked" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@pct" style="visibility:@(State.IsRunning && State.TotalUnprocessed > 0 ? "visible" : "hidden")">
-    <div class="progress-bar" style="width:@pct%"></div>
+@if (State.IsRunning && State.TotalUnprocessed > 0)
+{
+    <div class="progress-bar-wrap" role="progressbar" aria-label="Assets checked" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@pct">
+        <div class="progress-bar" style="width:@pct%"></div>
+    </div>
+    <p class="run-info">@pct% — @State.CheckedThisRun.ToString("N0") / @State.TotalUnprocessed.ToString("N0") assets checked</p>
+}
+<div role="status">
+    @if (State.CurrentActivity is not null)
+    {
+        <p class="run-info activity">⏳ @State.CurrentActivity</p>
+    }
 </div>
-<p class="run-info" style="visibility:@(State.IsRunning && State.TotalUnprocessed > 0 ? "visible" : "hidden")">
-    @pct% — @State.CheckedThisRun.ToString("N0") / @State.TotalUnprocessed.ToString("N0") assets checked
-</p>
-<p class="run-info activity" role="status">@(State.CurrentActivity is not null ? $"⏳ {State.CurrentActivity}" : "\u00a0")</p>
 @if (State.IsRunning || State.LastOutcome is not null)
 {
     <div class="alert @(State.LastOutcome is ProcessingRunOutcome.Failed ? "alert-error" : "alert-info")" role="status">
@@ -103,8 +109,10 @@ else if (_dbError is not null)
     <button @onclick="RunNow" disabled="@(!_circuitReady || _loadingStats || State.IsRunning || State.IsMaintaining || _runPending || _dbError is not null)" class="btn btn-primary">
         @(!_circuitReady ? "Starting UI…" : _loadingStats ? "Checking DB…" : State.IsRunning ? "Running…" : State.IsMaintaining ? "Maintenance Active…" : _runPending ? "Starting…" : "Run Now")
     </button>
-    <button @onclick="() => Processor.CancelRun()" class="btn btn-secondary"
-            style="visibility:@(State.IsRunning ? "visible" : "hidden")">Cancel</button>
+    @if (State.IsRunning)
+    {
+        <button @onclick="() => Processor.CancelRun()" class="btn btn-secondary">Cancel</button>
+    }
     <button @onclick="RefreshStats" disabled="@(!_circuitReady || _loadingStats)" class="btn btn-secondary">
         @(_loadingStats ? "Refreshing…" : "Refresh Stats")
     </button>

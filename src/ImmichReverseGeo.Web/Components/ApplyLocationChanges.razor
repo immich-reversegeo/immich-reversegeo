@@ -14,11 +14,12 @@
     else
     {
         <p>@_reviewed.Count @(_reviewed.Count == 1 ? "asset" : "assets") will be checked against the existing names and GPS coordinates saved in this scan.</p>
+        <p class="hint">Applying confirms all @_reviewed.Count selected changes across pages, not just the page shown below.</p>
+        <LocationReviewPagination Page="_page" HasNext="@(_page * 100 < _reviewed.Count)" Disabled="_busy"
+            Label="Selected changes" Kind="selected page" Previous="() => MoveReviewPage(-1)" Next="() => MoveReviewPage(1)" />
         <LocationChangeTable Rows="_reviewed.Skip((_page - 1) * 100).Take(100)" />
-        <div class="btn-row">
-            <button class="btn btn-secondary" disabled="@(_busy || _page == 1)" @onclick="() => _page--">Previous 100</button>
-            <button class="btn btn-secondary" disabled="@(_busy || _page * 100 >= _reviewed.Count)" @onclick="() => _page++">Next 100</button>
-        </div>
+        <LocationReviewPagination Page="_page" HasNext="@(_page * 100 < _reviewed.Count)" Disabled="_busy"
+            Label="Selected changes" Kind="selected page" Previous="() => MoveReviewPage(-1)" Next="() => MoveReviewPage(1)" />
         <p>Take an Immich database backup before continuing. Change History saves the previous names for guarded undo;
             it does not replace a database backup.</p>
         <label><input type="checkbox" @bind="_acknowledged" disabled="@_busy" /> I have reviewed these changes and understand that they update Immich.</label>
@@ -48,6 +49,7 @@
 
 @code {
     [Parameter] public Guid? ScanId { get; set; }
+    [Parameter] public long ReviewVersion { get; set; }
     [Parameter] public IReadOnlyList<Guid> SelectedIds { get; set; } = [];
     [Parameter] public bool Disabled { get; set; }
     [Parameter] public EventCallback<bool> BusyChanged { get; set; }
@@ -65,6 +67,7 @@
     private IReadOnlyList<LocationPreviewRow>? _reviewed;
     private Guid[] _reviewedIds = [];
     private Guid? _reviewedScanId;
+    private LocationReviewSnapshot? _reviewSnapshot;
     private Guid? _operationId;
     private Guid? _loadedScanId;
     private LocationChangeOperation? _summary;
@@ -78,6 +81,11 @@
     protected override void OnInitialized() => Lifetime.Disconnected += Cancel;
     protected override async Task OnParametersSetAsync()
     {
+        if (!_busy && _reviewed is not null && !ReviewMatchesSelection())
+        {
+            ClearReview();
+            await ReviewChanged.InvokeAsync(false);
+        }
         if (!_busy && _loadedScanId != ScanId)
         {
             _loadedScanId = ScanId;
@@ -152,13 +160,15 @@
         try
         {
             _reviewedIds = SelectedIds.Distinct().ToArray();
+            var snapshot = new LocationReviewSnapshot(id, _reviewedIds, ReviewVersion);
             var reviewed = await Management.ReviewAsync(id, _reviewedIds);
-            if (_disposed || ScanId != id)
+            if (_disposed || !snapshot.Matches(ScanId, SelectedIds, ReviewVersion))
             {
                 return;
             }
             _reviewed = reviewed;
             _reviewedScanId = id;
+            _reviewSnapshot = snapshot;
             _focusHeading = true;
             await ReviewChanged.InvokeAsync(true);
             _page = 1;
@@ -178,7 +188,7 @@
     private async Task ApplyAsync()
     {
         if (_busy || Disabled || !_acknowledged || _reviewed is null
-            || _reviewedScanId is not { } id || ScanId != id)
+            || _reviewedScanId is not { } id || !ReviewMatchesSelection())
         {
             return;
         }
@@ -202,7 +212,13 @@
                 try
                 {
                     await RefreshSummaryAsync();
-                    if (!_disposed && ScanId == id) { await ResultsChanged.InvokeAsync(await Changes.GetItemsAsync(operation)); }
+                    if (!_disposed && ScanId == id)
+                    {
+                        ClearReview();
+                        await ReviewChanged.InvokeAsync(false);
+                        await ResultsChanged.InvokeAsync(await Changes.GetItemsAsync(operation));
+                        _focusHeading = true;
+                    }
                 }
                 catch (Exception ex) { _error = "Could not refresh change results: " + ex.Message; }
             }
@@ -225,11 +241,25 @@
         if (!_disposed) { await InvokeAsync(StateHasChanged); }
     }
 
+    private bool ReviewMatchesSelection() => _reviewSnapshot?.Matches(ScanId, SelectedIds, ReviewVersion) is true;
+
+    private void MoveReviewPage(int direction)
+    {
+        var page = _page + direction;
+        if (_busy || _reviewed is null || page < 1 || (page - 1) * 100 >= _reviewed.Count)
+        {
+            return;
+        }
+        _page = page;
+        _focusHeading = true;
+    }
+
     private void ClearReview()
     {
         _reviewed = null;
         _reviewedIds = [];
         _reviewedScanId = null;
+        _reviewSnapshot = null;
         _acknowledged = false;
         _page = 1;
     }

@@ -110,7 +110,7 @@ else
             </div>
         }
         <h3 class="review-focus-target" tabindex="-1" @ref="_resultsHeading">Operation results — page @_itemPage</h3>
-        <div class="table-scroll" role="region" aria-label="Change history results" tabindex="0"><table class="data-table">
+        <div class="table-scroll" role="region" aria-label="Change history results" tabindex="0"><table class="data-table location-history-table">
             <thead><tr><th scope="col">Undo</th><th scope="col">Asset GUID</th><th scope="col">Previous names</th><th scope="col">Applied proposal</th><th scope="col">Result</th></tr></thead>
             <tbody>@foreach (var item in _items.Skip((_itemPage - 1) * 100).Take(100))
             {

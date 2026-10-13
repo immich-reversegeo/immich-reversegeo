@@ -122,6 +122,10 @@ You can apply selected differences from a live scan or a saved scan. The app use
 
 Applying changes updates only city, state, and country. GPS coordinates and other metadata are preserved. Refresh the asset in Immich to see its new names. Scheduled metadata extraction or other apps can subsequently replace those names; run a new scan if the current results differ.
 
+Selection and confirmation are separate steps. Use **Next results** to select differences across pages, then review the whole selection. **Next selected page** pages through that confirmation; applying writes all selected changes, not only the visible page. Use **Back to Selection** to change your selection. Refreshing the report requires a fresh confirmation.
+
+After applying, the app returns to the first page of **Ready to apply** and keeps the operation summary and history link visible. The scan's **Differences found** count includes handled changes. When no checked differences remain ready, continue an unfinished scan or inspect **Applied**, **Needs attention**, or **All results**. On small screens, scroll comparison tables horizontally to read the existing and proposed names.
+
 #### Change history, undo, and interruption
 
 Use **Show operations → Pending work** to find operations with apply or undo work waiting or underway. **Needs review** finds uncertain write outcomes that need checking in Immich. These filters cover all operations before pagination, and an operation can match both. Open it to check current outcomes before resuming work.
