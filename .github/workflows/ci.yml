@@ -39,6 +39,32 @@ jobs:
       - name: Test
         run: dotnet test --solution immich-reversegeo.slnx --configuration Release --no-build --filter "TestCategory!=Integration&TestCategory!=Performance"
 
+      - name: Setup Node for browser tests
+        uses: actions/setup-node@v7
+        with:
+          node-version: 24
+          cache: npm
+
+      - name: Install browser test dependencies
+        run: npm ci
+
+      - name: Install Chromium
+        run: npx playwright install --with-deps chromium
+
+      - name: Test frontend workflows
+        run: npm run test:frontend
+
+      - name: Upload browser test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: frontend-test-results
+          path: |
+            _out/frontend-tests/report/
+            _out/frontend-tests/results/
+          if-no-files-found: ignore
+          retention-days: 7
+
       - name: Build Docker image
         run: docker build -f src/ImmichReverseGeo.Web/Dockerfile -t immich-reversegeo:test .
 

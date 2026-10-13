@@ -17,3 +17,5 @@ reversegeo/
 
 /.local/immich-db/
 /.local/geographic-workload/
+
+/node_modules/
