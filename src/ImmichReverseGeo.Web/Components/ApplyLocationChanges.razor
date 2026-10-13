@@ -6,14 +6,14 @@
 
 <section class="settings-card location-apply-panel">
     <h3>Apply Selected Changes</h3>
-    <p>Apply the exact names from this scan. Changed coordinates or existing names are skipped. Select up to 1,000 differences per operation.</p>
+    <p class="hint">Applies exact saved names; later edits are skipped. Select up to 1,000 differences.</p>
     @if (_reviewed is null)
     {
         <button class="btn btn-primary" @onclick="ReviewAsync" disabled="@(Disabled || _busy || SelectedIds.Count == 0)">Review @SelectedIds.Count Selected Changes</button>
     }
     else
     {
-        <p>@_reviewed.Count assets will be checked against the existing names and GPS coordinates saved in this scan.</p>
+        <p>@_reviewed.Count @(_reviewed.Count == 1 ? "asset" : "assets") will be checked against the existing names and GPS coordinates saved in this scan.</p>
         <LocationChangeTable Rows="_reviewed.Skip((_page - 1) * 100).Take(100)" />
         <div class="btn-row">
             <button class="btn btn-secondary" disabled="@(_busy || _page == 1)" @onclick="() => _page--">Previous 100</button>

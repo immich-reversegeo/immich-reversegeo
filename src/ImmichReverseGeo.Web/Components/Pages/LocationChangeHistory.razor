@@ -10,14 +10,15 @@
 <PageTitle>@(Id is null ? "Change History" : "Change Details") - Immich ReverseGeo</PageTitle>
 <h2>@(Id is null ? "Change History" : "Change Details")</h2>
 <LocationManagementNav ActiveSection="history" />
+<p class="hint">Review recorded changes, continue pending work, or undo selected changes.</p>
 @if (_error is not null) { <p class="alert alert-error" role="alert">@_error</p> }
 @if (_loading) { <p role="status">Loading change history…</p> }
 else if (Id is null)
 {
     <section class="settings-card wide-card">
         <p>Each operation saves the reviewed existing names, proposed names, and its results. History remains available even if you delete the saved scan.</p>
-        <div class="table-scroll"><table class="data-table">
-            <thead><tr><th>Started</th><th>Selected</th><th>Applied</th><th>Skipped</th><th>Needs review</th><th>Pending</th><th>Undone</th><th>Pending undo</th><th>Operation</th></tr></thead>
+        <div class="table-scroll" role="region" aria-label="Change history results" tabindex="0"><table class="data-table">
+            <thead><tr><th scope="col">Started</th><th scope="col">Selected</th><th scope="col">Applied</th><th scope="col">Skipped</th><th scope="col">Needs review</th><th scope="col">Pending</th><th scope="col">Undone</th><th scope="col">Pending undo</th><th scope="col">Operation</th></tr></thead>
             <tbody>@foreach (var operation in _operations.Take(25))
             {
                 <tr @key="operation.Id"><td><LocalTimestamp Timestamp="operation.CreatedAt" /></td><td>@operation.Total</td><td>@operation.Applied</td><td>@operation.Skipped</td><td>@operation.NeedsReview</td><td>@operation.Pending</td><td>@operation.Undone</td><td>@operation.UndoPending</td>
@@ -38,8 +39,8 @@ else
     <section class="settings-card wide-card">
         <a class="text-link" href="/data/location-management/history">← All changes</a>
         <h3>@_operation.Total selected @(_operation.Total == 1 ? "asset" : "assets")</h3>
-        <p class="hint">Started <LocalTimestamp Timestamp="_operation.CreatedAt" /></p>
-        <dl class="location-change-summary" aria-label="Change results">
+        <dl class="location-metadata"><div><dt>Started</dt><dd><LocalTimestamp Timestamp="_operation.CreatedAt" /></dd></div></dl>
+        <dl class="location-metadata scan-metrics" aria-label="Change results">
             <div><dt>Changes applied</dt><dd>@_operation.Applied</dd></div>
             @if (_operation.Skipped > 0) { <div><dt>Skipped</dt><dd>@_operation.Skipped</dd></div> }
             @if (_operation.NeedsReview > 0) { <div><dt>Check in Immich</dt><dd>@_operation.NeedsReview</dd></div> }
@@ -48,8 +49,15 @@ else
             @if (_operation.UndoPending > 0) { <div><dt>Waiting to undo</dt><dd>@_operation.UndoPending</dd></div> }
         </dl>
         <p><a class="text-link" href="@($"/data/location-management/scans/{_operation.ScanId}")">Original saved scan</a> (if retained).</p>
-        <p>Undo restores the saved previous names only when the applied names, coordinates, and metadata revision still match.
-            Later edits are skipped. Needs review means the write outcome is uncertain: inspect that asset in Immich and run a new scan before making another change.</p>
+        @if (_operation.NeedsReview > 0)
+        {
+            <p class="alert alert-warning" role="alert">Some write outcomes are uncertain. Check the affected assets in Immich and run a new scan before making another change.</p>
+        }
+        <p class="hint">Undo restores previous names when the applied names, coordinates, and metadata revision still match. Later edits are skipped.</p>
+        <div class="btn-row">
+            <button class="btn btn-secondary" disabled="@_busy" @onclick="SelectUndoPage">Select Undo on This Page</button>
+            <button class="btn btn-secondary" disabled="@_busy" @onclick="_selected.Clear">Clear Selection</button>
+        </div>
         <div class="btn-row">
             <button class="btn btn-secondary" disabled="@_busy" @onclick="LoadAsync">Refresh Results</button>
             <button class="btn btn-secondary" disabled="@(_busy || _operation.Pending == 0)" @onclick="() => PrepareResume(false)">Resume Pending Apply</button>
@@ -82,8 +90,8 @@ else
             </div>
         }
         <h3>Operation results — page @_itemPage</h3>
-        <div class="table-scroll"><table class="data-table">
-            <thead><tr><th>Undo</th><th>Asset GUID</th><th>Previous names</th><th>Applied proposal</th><th>Result</th></tr></thead>
+        <div class="table-scroll" role="region" aria-label="Change history results" tabindex="0"><table class="data-table">
+            <thead><tr><th scope="col">Undo</th><th scope="col">Asset GUID</th><th scope="col">Previous names</th><th scope="col">Applied proposal</th><th scope="col">Result</th></tr></thead>
             <tbody>@foreach (var item in _items.Skip((_itemPage - 1) * 100).Take(100))
             {
                 <tr @key="item.AssetId">
@@ -98,8 +106,7 @@ else
         <div class="btn-row">
             <button class="btn btn-secondary" disabled="@(_busy || _itemPage == 1)" @onclick="() => _itemPage--">Previous 100</button>
             <button class="btn btn-secondary" disabled="@(_busy || _itemPage * 100 >= _items.Count)" @onclick="() => _itemPage++">Next 100</button>
-            <button class="btn btn-secondary" disabled="@_busy" @onclick="SelectUndoPage">Select Undo on This Page</button>
-            <button class="btn btn-secondary" disabled="@_busy" @onclick="_selected.Clear">Clear Selection</button>
+
         </div>
     </section>
 }

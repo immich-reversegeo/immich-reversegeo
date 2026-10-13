@@ -9,6 +9,7 @@
 <PageTitle>Saved Scan - Immich ReverseGeo</PageTitle>
 <h2>Saved Scan</h2>
 <LocationManagementNav ActiveSection="scans" />
+<p class="page-desc">Review saved proposals or continue unfinished work. Opening this report does not change Immich.</p>
 <p><a class="text-link" href="/data/location-management/scans">All saved scans</a></p>
 @if (_error is not null)
 {
@@ -25,58 +26,68 @@ else if (_report is null)
 else
 {
     <section class="settings-card wide-card">
-        <p>Started: <LocalTimestamp Timestamp="_report.CreatedAt" />. Last saved: <LocalTimestamp Timestamp="_report.UpdatedAt" />.</p>
-        <p>Status: @_report.StatusLabel. @_report.CheckedCount checked; @_report.DifferentCount different.</p>
-        @if (_report.Checkpoint?.TotalCount is { } total)
-        {
-            <p>Scan progress: @_report.CheckedCount.ToString("N0") of @total.ToString("N0") assets checked. Active scan time: @TimeSpan.FromTicks(_report.Checkpoint.ActiveTicks).ToString(@"hh\:mm\:ss").</p>
-        }
+        <h3>Saved scan summary</h3>
+        <dl class="location-metadata">
+            <div><dt>Status</dt><dd>@_report.StatusLabel</dd></div>
+            <div><dt>Checked</dt><dd>@_report.CheckedCount.ToString("N0") / @(_report.Checkpoint?.TotalCount?.ToString("N0") ?? "—")</dd></div>
+            <div><dt>Different</dt><dd>@_report.DifferentCount.ToString("N0")</dd></div>
+            <div><dt>Active scan time</dt><dd>@(_report.Checkpoint is null ? "—" : TimeSpan.FromTicks(_report.Checkpoint.ActiveTicks).ToString(@"hh\:mm\:ss"))</dd></div>
+            <div><dt>Started</dt><dd><LocalTimestamp Timestamp="_report.CreatedAt" /></dd></div>
+            <div><dt>Last saved</dt><dd><LocalTimestamp Timestamp="_report.UpdatedAt" /></dd></div>
+            <div><dt>Selection</dt><dd>@SelectionLabel</dd></div>
+            <div><dt>Scan mode</dt><dd>@(_report.Selection.ScanMode == LocationPreviewScanMode.Continuous ? "Continuous" : "Manual pages")</dd></div>
+        </dl>
         @if (_report.Status == "Paused")
         {
-            <p class="preview-pause-status">Paused for review after @(_report.Checkpoint?.PausedDifferences ?? _report.Selection.PauseAfterDifferences) new differences. Continue when you are ready to check more assets.</p>
+            <p class="preview-pause-status" role="status">Paused for review after @(_report.Checkpoint?.PausedDifferences ?? _report.Selection.PauseAfterDifferences) new differences. Review results, then continue when ready.</p>
         }
-        <p>Selection: @SelectionLabel. Order: @(_report.Selection.Order == LocationPreviewOrder.NearbyCoordinates ? "Nearby coordinates" : "Asset GUID").</p>
-        <p>Scan mode: @(_report.Selection.ScanMode == LocationPreviewScanMode.Continuous ? "Continuous" : "Manual pages").
-            @if (_report.Selection.ScanMode == LocationPreviewScanMode.Continuous)
-            {
-                <span>Pause after differences: @(_report.Selection.PauseAfterDifferences == 0 ? "No limit" : _report.Selection.PauseAfterDifferences.ToString()).</span>
-            }
-        </p>
-        <p>These are saved snapshots, not live Immich values. Opening this report does not run lookups or change Immich.
-            Start a new scan if you need current results. Only checked assets are saved; this report may cover part of the selection.</p>
         @if (_report.Error is not null)
         {
-            <p class="alert alert-error">@_report.Error</p>
+            <p class="alert alert-error" role="alert">@_report.Error</p>
         }
-        <details>
-            <summary>Processing settings used</summary>
-            <p>Airport names: @(_report.Settings.UseAirportInfrastructure ? "enabled" : "disabled").
-                GADM administrative areas: @(_report.Settings.UseGadmAdministrativeAreas ? "enabled" : "disabled").
-                Preferred administrative source: @(_report.Settings.UseGadmAdministrativeAreas && _report.Settings.PreferGadmAdministrativeAreas ? "GADM" : "Overture").</p>
-        </details>
+        @if (_report.Settings.UseGadmAdministrativeAreas)
+        {
+            <p class="hint">This scan uses GADM data, licensed for non-commercial use.</p>
+        }
+        <ImmichPhotoSetup ShowHelp="false" />
         <div class="btn-row">
             @if (_report.CanResume && !_applying)
             {
                 <a class="btn btn-primary" href="@($"/data/location-management/scans/{Id}/continue")">Continue scan</a>
             }
             <button class="btn btn-secondary" disabled="@(_loading || _applying)" @onclick="LoadAsync">Refresh saved results</button>
-            <button class="btn btn-secondary" disabled="@(_loading || _applying || _report.Status == "Running")" @onclick="() => _confirmDelete = true">Delete saved report</button>
         </div>
-        @if (_confirmDelete)
-        {
-            <p>Delete this report and its saved results? Immich metadata will not be changed.</p>
-            <div class="btn-row">
-                <button class="btn btn-secondary" disabled="@(_loading || _applying)" @onclick="DeleteAsync">Confirm delete</button>
-                <button class="btn btn-secondary" @onclick="() => _confirmDelete = false">Keep report</button>
-            </div>
-        }
+        <details class="location-help">
+            <summary>Original settings and snapshot limits</summary>
+            <dl class="location-metadata">
+                <div><dt>Order</dt><dd>@(_report.Selection.Order == LocationPreviewOrder.NearbyCoordinates ? "Nearby coordinates" : "Asset GUID")</dd></div>
+                <div><dt>Pause after differences</dt><dd>@(_report.Selection.PauseAfterDifferences == 0 ? "No limit" : _report.Selection.PauseAfterDifferences.ToString("N0"))</dd></div>
+                <div><dt>Airport names</dt><dd>@(_report.Settings.UseAirportInfrastructure ? "Enabled" : "Disabled")</dd></div>
+                <div><dt>GADM administrative areas</dt><dd>@(_report.Settings.UseGadmAdministrativeAreas ? "Enabled (non-commercial)" : "Disabled")</dd></div>
+                <div><dt>Preferred source</dt><dd>@(_report.Settings.UseGadmAdministrativeAreas && _report.Settings.PreferGadmAdministrativeAreas ? "GADM" : "Overture")</dd></div>
+                <div><dt>Low-memory mode</dt><dd>@(_report.Settings.LowMemoryMode ? "Enabled" : "Disabled")</dd></div>
+            </dl>
+            <p>These are saved snapshots, not live Immich values. Only checked assets are saved; the report may cover part of the selection. Start a new scan for current proposals or changed settings.</p>
+        </details>
+        <details class="location-help">
+            <summary>Report maintenance</summary>
+            <button class="btn btn-secondary" disabled="@(_loading || _applying || _report.Status == "Running")" @onclick="() => _confirmDelete = true">Delete saved report</button>
+            @if (_confirmDelete)
+            {
+                <p>Delete this report and its saved results? Immich metadata will not be changed.</p>
+                <div class="btn-row">
+                    <button class="btn btn-secondary" disabled="@(_loading || _applying)" @onclick="DeleteAsync">Confirm delete</button>
+                    <button class="btn btn-secondary" @onclick="() => _confirmDelete = false">Keep report</button>
+                </div>
+            }
+            </details>
     </section>
     <section class="settings-card wide-card">
-        <h3>Saved results — page @_page</h3>
-        <ImmichPhotoSetup />
-        <div class="form-group">
+        <div class="location-section-header"><h3>Review saved results</h3><span class="hint">Page @_page · @_review.Count selected</span></div>
+
+        <div class="review-filter-bar">
             <label><input type="checkbox" @bind="_onlyChanges" @bind:after="FilterAsync" disabled="@(_loading || _applying)" /> Show only different values</label>
-            <span class="hint">Uncheck and choose All results or Needs attention to include unchanged, unresolved, and failed results. Photo previews load only for differences.</span>
+
             <label for="saved-result-filter">Show results</label>
             <select id="saved-result-filter" class="form-control" @bind="_resultFilter" @bind:after="FilterAsync" disabled="@(_loading || _applying)">
                 <option value="@LocationReviewFilter.Ready">Ready to apply</option>
@@ -84,23 +95,24 @@ else
                 <option value="@LocationReviewFilter.Attention">Needs attention</option>
                 <option value="@LocationReviewFilter.All">All results</option>
             </select>
-            <span class="hint">Ready to apply shows differences not yet attempted. Resume pending work in Change History; run a new scan for skipped or undone changes.</span>
+
         </div>
-        <p class="hint">Highlighted characters differ between the existing and proposed names.
-            Changed spaces appear as ␠; other invisible characters use symbols or Unicode codes. Hover over a highlight for character codes.</p>
+        <div class="btn-row">
+            <button class="btn btn-secondary" disabled="@(_loading || _applying || !_rows.Take(100).Any(CanSelect))" @onclick="SelectPageChanges">Select different values on this page</button>
+            <button class="btn btn-secondary" @onclick="_review.Clear" disabled="@(_applying || _review.Count == 0)">Clear selection</button>
+        </div>
+        <div class="review-actions">
+            <ApplyLocationChanges ScanId="Id" SelectedIds="_review.SelectedIds" Disabled="_loading" BusyChanged="busy => _applying = busy" ResultsChanged="OnChangeResults" />
+        </div>
         @if (_rows.Count == 0)
         {
             <p>No results match this filter. Choose All results to inspect the saved snapshots.</p>
         }
         else
         {
-            <div class="btn-row">
-                <button class="btn btn-secondary" disabled="@(_loading || _applying || !_rows.Take(100).Any(CanSelect))" @onclick="SelectPageChanges">Select different values on this page</button>
-                <button class="btn btn-secondary" @onclick="_review.Clear" disabled="@(_applying || _review.Count == 0)">Clear selection</button>
-            </div>
-            <div class="table-scroll">
+            <div class="table-scroll" role="region" aria-label="Saved location comparisons; scroll horizontally to see all columns" tabindex="0">
                 <table class="data-table">
-                    <thead><tr><th>Select</th><th>Photo</th><th>Asset GUID</th><th>Existing location</th><th>Proposed location</th><th>Result</th></tr></thead>
+                    <thead><tr><th scope="col">Select</th><th scope="col">Photo</th><th scope="col">Asset GUID</th><th scope="col">Existing location</th><th scope="col">Proposed location</th><th scope="col">Result</th></tr></thead>
                     <tbody>
                         @foreach (var row in _rows.Take(100))
                         {
@@ -134,13 +146,16 @@ else
         </div>
         @if (_review.Count > 0)
         {
-            <div class="form-group">
-                <label for="saved-preview-guids">Selected GUIDs (@_review.Count)</label>
-                <textarea id="saved-preview-guids" class="form-control reset-textarea" readonly value="@string.Join(Environment.NewLine, _review.SelectedIds)"></textarea>
-            </div>
-            <p>Selections are kept across pages while this scan is open. Review and apply the exact saved proposals below; assets with changed names or coordinates are skipped.</p>
+            <details class="location-help"><summary>Selected asset GUIDs (@_review.Count)</summary>
+                <div class="form-group">
+                    <label for="saved-preview-guids">Selected GUIDs (@_review.Count)</label>
+                    <textarea id="saved-preview-guids" class="form-control reset-textarea" readonly value="@string.Join(Environment.NewLine, _review.SelectedIds)"></textarea>
+                </div>
+                <p>Selections are kept across pages while this scan is open. Review and apply the exact saved proposals above; assets with changed names or coordinates are skipped.</p>
+            </details>
         }
-        <ApplyLocationChanges ScanId="Id" SelectedIds="_review.SelectedIds" Disabled="_loading" BusyChanged="busy => _applying = busy" ResultsChanged="OnChangeResults" />
+
+        <LocationReviewHelp />
     </section>
 }
 
