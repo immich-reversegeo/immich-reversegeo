@@ -1,12 +1,81 @@
 using ImmichReverseGeo.Overture.Models;
 using ImmichReverseGeo.Overture.Services;
 using ImmichReverseGeo.Core.Models;
+using DuckDB.NET.Data;
 
 namespace ImmichReverseGeo.Overture.Tests;
 
 [TestClass]
 public class OvertureDivisionsLogicTests
 {
+    [TestMethod]
+    [DataRow("Business Bay", "الخليج التجاري", false, "Business Bay")]
+    [DataRow(null, "الخليج التجاري", false, "الخليج التجاري")]
+    [DataRow("  ", "الخليج التجاري", false, "الخليج التجاري")]
+    [DataRow(null, null, false, "الخليج التجاري")]
+    [DataRow("Business Bay", "الخليج التجاري", true, "الخليج التجاري")]
+    public void BuildDivisionAreaSource_LocalizesHierarchyAndPreservesFallbacks(
+        string? english, string? primary, bool missingParent, string expectedCity)
+    {
+        var directory = Path.Combine(Path.GetTempPath(), "reversegeo-hierarchy-" + Guid.NewGuid().ToString("N"));
+        Directory.CreateDirectory(Path.Combine(directory, "type=division_area"));
+        Directory.CreateDirectory(Path.Combine(directory, "type=division"));
+        try
+        {
+            using var connection = new DuckDBConnection("DataSource=:memory:");
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = """
+                CREATE TABLE divisions AS
+                SELECT 'area' AS id, 'AE' AS country,
+                    {'primary': 'الخليج التجاري', 'common': MAP {'en': 'Business Bay'}} AS names,
+                    [[{'division_id': 'country', 'subtype': 'country', 'name': 'الإمارات العربية المتحدة'},
+                      {'division_id': 'region', 'subtype': 'region', 'name': 'دبي'},
+                      {'division_id': 'city', 'subtype': 'locality', 'name': 'الخليج التجاري'},
+                      {'division_id': 'area', 'subtype': 'macrohood', 'name': 'الخليج التجاري'}]] AS hierarchies;
+                INSERT INTO divisions VALUES
+                    ('country', 'AE', {'primary': 'الإمارات العربية المتحدة', 'common': MAP {'en': 'United Arab Emirates'}}, NULL),
+                    ('region', 'AE', {'primary': 'دبي', 'common': MAP {'en': 'Dubai Emirate'}}, NULL);
+                """;
+            command.ExecuteNonQuery();
+            command.CommandText = "INSERT INTO divisions VALUES ('city', 'AE', {'primary': $primary, 'common': MAP {'en': $english}}, NULL)";
+            command.Parameters.Add(new DuckDBParameter("primary", (object?)primary ?? DBNull.Value));
+            command.Parameters.Add(new DuckDBParameter("english", (object?)english ?? DBNull.Value));
+            command.ExecuteNonQuery();
+            command.Parameters.Clear();
+            if (missingParent)
+            {
+                command.CommandText = "DELETE FROM divisions WHERE id='city'";
+                command.ExecuteNonQuery();
+            }
+
+            var root = directory.Replace('\\', '/');
+            command.CommandText = $"""
+                COPY divisions TO '{root}/type=division/records.parquet' (FORMAT PARQUET);
+                COPY (SELECT id, country, names, 'area' AS division_id FROM divisions WHERE id='area')
+                    TO '{root}/type=division_area/records.parquet' (FORMAT PARQUET);
+                """;
+            command.ExecuteNonQuery();
+            command.CommandText = $"SELECT hierarchy_json FROM {OvertureDivisionsLogic.BuildDivisionAreaSource(root + "/type=division_area/*.parquet", "AE")}";
+            var hierarchy = command.ExecuteScalar()?.ToString();
+            var candidate = CreateDiagnostic("macrohood", "Business Bay", 0.01) with
+            {
+                Country = "AE",
+                DivisionId = "area",
+                HierarchyJson = hierarchy
+            };
+            var ancestors = OvertureDivisionsLogic.ParseHierarchy(candidate);
+            CollectionAssert.AreEqual(new[] { "country", "region", "city", "area" }, ancestors.Select(a => a.DivisionId).ToArray());
+            var result = OvertureDivisionsLogic.SelectAdministrativeAreas([candidate]);
+            Assert.AreEqual(expectedCity, result.City);
+            Assert.AreEqual("Dubai Emirate", result.State);
+        }
+        finally
+        {
+            Directory.Delete(directory, recursive: true);
+        }
+    }
+
     [TestMethod]
     public void BuildDivisionAreaQuery_WithCountryFilter_EmbedsAlpha2AndDivisionPath()
     {

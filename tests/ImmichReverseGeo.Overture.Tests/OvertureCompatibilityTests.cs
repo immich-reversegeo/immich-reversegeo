@@ -244,6 +244,7 @@ public class OvertureCompatibilityTests
                     UNION ALL SELECT 'missing', 'CH', 'missing'
                     UNION ALL SELECT 'other-country', 'FR', 'other') TO '{{areaPath}}' (FORMAT PARQUET);
                 COPY (SELECT 'city' AS id, 'CH' AS country,
+                    {'primary': NULL::VARCHAR, 'common': MAP {'en': NULL::VARCHAR} } AS names,
                     [[{'division_id': 'city', 'name': 'Default', 'subtype': 'locality'}],
                      [{'division_id': 'city', 'name': 'Alternative', 'subtype': 'locality'}]] AS hierarchies)
                     TO '{{divisionPath}}' (FORMAT PARQUET);
@@ -305,6 +306,7 @@ public class OvertureCompatibilityTests
                 COPY (SELECT 'alias-area' AS id, '{{alias}}' AS country, 'alias-city' AS division_id
                     UNION ALL SELECT 'unrelated-area', 'ZZ', 'unrelated-city') TO '{{areaPath}}' (FORMAT PARQUET);
                 COPY (SELECT 'alias-city' AS id, '{{alias}}' AS country,
+                    {'primary': NULL::VARCHAR, 'common': MAP {'en': NULL::VARCHAR} } AS names,
                     [[{'division_id': 'alias-city', 'name': 'Alias City', 'subtype': 'locality'}]] AS hierarchies)
                     TO '{{divisionPath}}' (FORMAT PARQUET);
                 """;
