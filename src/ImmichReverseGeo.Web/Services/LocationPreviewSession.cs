@@ -20,6 +20,9 @@ public sealed class LocationPreviewSession
     public LocationPreviewScanner? Scanner { get; set; }
     public LocationPreviewScanEstimate? Estimate { get; set; }
     public Guid? SavedPreviewId { get; set; }
+    public Guid? ResumeScanId { get; set; }
+    public TimeSpan ElapsedBeforeResume { get; set; }
+    public long? PausedDifferences { get; set; }
     public string PreviewLogId { get; set; } = string.Empty;
     public LocationPreviewDifferencePage Differences { get; set; } = new();
     public LocationReviewFilter Filter { get; set; } = LocationReviewFilter.Ready;

@@ -33,10 +33,15 @@
                         <tr>
                             <td><LocalTimestamp Timestamp="report.CreatedAt" /></td>
                             <td>@(report.Selection.Scope == LocationPreviewScope.All ? "Whole library" : report.Selection.Scope == LocationPreviewScope.AssetIds ? $"{report.Selection.AssetIds.Length} GUID(s)" : $"{report.Selection.Scope}: {report.Selection.Value}")</td>
-                            <td>@report.Status</td>
+                            <td>@report.StatusLabel @if (report.Status == "Paused") { <div class="hint">Pause limit: @report.Selection.PauseAfterDifferences new differences</div> }</td>
                             <td>@report.CheckedCount</td>
                             <td>@report.DifferentCount</td>
-                            <td><a class="text-link" href="@($"/data/location-management/scans/{report.Id}")">View</a></td>
+                            <td><a class="text-link" href="@($"/data/location-management/scans/{report.Id}")">View</a>
+                                @if (report.CanResume)
+                                {
+                                    <div><a class="text-link" href="@($"/data/location-management/scans/{report.Id}/continue")">Continue scan</a></div>
+                                }
+                            </td>
                         </tr>
                     }
                 </tbody>

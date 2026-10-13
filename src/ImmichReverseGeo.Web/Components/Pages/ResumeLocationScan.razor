@@ -1,0 +1,8 @@
+@page "/data/location-management/scans/{Id:guid}/continue"
+@rendermode InteractiveServer
+
+<LocationPreview @key="Id" ResumeScanId="Id" />
+
+@code {
+    [Parameter] public Guid Id { get; set; }
+}

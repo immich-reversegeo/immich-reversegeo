@@ -6,6 +6,7 @@ For a shorter user-facing summary, see [docs/website/changelog.md](./docs/websit
 
 ## Unreleased
 
+- Persist scan checkpoints and resumable status with atomic row saves, restore original selection/settings and progress from Saved Scans, protect concurrent continuation with run ownership tokens, and skip already-recorded asset IDs when resuming. Migrate older reports without losing snapshots; recover interrupted owners on startup.
 - Surface automatic difference-limit pauses with an amber status notice and a sticky review banner containing the pause count and Continue Scan action; clear the pause indication when scanning resumes.
 - Default live and saved reviews to differences-only within the selected status filter, filter before pagination, and render photo-preview components only for rows with proposed differences.
 - Keep live and saved scan reviews actionable after apply: default to unattempted differences, page results by journal status before limiting, refresh and refill after writes, and reject repeated confirmations of handled snapshots. Preserve applied, skipped, pending, uncertain, and undone history through explicit result filters.

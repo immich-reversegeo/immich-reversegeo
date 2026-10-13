@@ -75,8 +75,10 @@ public class LocationPreviewIntegrationTests
             Assert.IsNull(first[0].Existing.State);
             var second = await repository.GetLocationPreviewBatchAsync(all, LocationPreviewCursor.FromAsset(first[99]));
             Assert.HasCount(101, second);
+            Assert.AreEqual(103L, await repository.GetLocationPreviewCountAsync(all, after: LocationPreviewCursor.FromAsset(first[99])));
             var third = await repository.GetLocationPreviewBatchAsync(all, LocationPreviewCursor.FromAsset(second[99]));
             Assert.HasCount(3, third);
+            Assert.AreEqual(3L, await repository.GetLocationPreviewCountAsync(all, after: LocationPreviewCursor.FromAsset(second[99])));
             var gpsAssets = first.Take(100).Concat(second.Take(100)).Concat(third).ToArray();
             Assert.HasCount(203, gpsAssets);
             Assert.HasCount(203, gpsAssets.Select(a => a.Id).Distinct().ToArray());
@@ -98,6 +100,8 @@ public class LocationPreviewIntegrationTests
             // Resuming after cancellation partway through a tile must retain every unchecked asset.
             var resumed = await repository.GetLocationPreviewBatchAsync(nearby, LocationPreviewCursor.FromAsset(nearbyFirst[36]));
             CollectionAssert.AreEqual(expectedOrder.Skip(37).Take(101).ToArray(), resumed.Select(asset => asset.Id).ToArray());
+            Assert.AreEqual(166L, await repository.GetLocationPreviewCountAsync(nearby, after: LocationPreviewCursor.FromAsset(nearbyFirst[36])));
+            Assert.AreEqual(0L, await repository.GetLocationPreviewCountAsync(nearby, after: LocationPreviewCursor.FromAsset(nearbyAssets[^1])));
             Assert.HasCount(0, await repository.GetLocationPreviewBatchAsync(nearby, LocationPreviewCursor.FromAsset(nearbyAssets[^1])));
 
             var exactCity = await repository.GetLocationPreviewBatchAsync(

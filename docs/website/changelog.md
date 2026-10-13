@@ -11,6 +11,7 @@ Technical implementation notes live in [CHANGELOG.md](https://github.com/immich-
 
 ## Unreleased
 
+- Continue unfinished scans from **Saved Scans** after closing the page or restarting the app. The app restores the original options, keeps earlier results, and resumes after the last saved asset. Saved reports also show pause status and recorded progress.
 - Scans that reach their difference limit now show a clear **Paused for review** notice and a **Continue Scan** button that stays visible while reviewing results.
 - **Show only different values** is enabled by default in live and saved scans. Unchanged results no longer load photo previews, even when you choose to show them.
 - Applying a batch now clears it from **Ready to apply** so you can review the next differences. Use **Applied**, **Needs attention**, or **All results** to inspect saved outcomes without applying the same snapshot again.
