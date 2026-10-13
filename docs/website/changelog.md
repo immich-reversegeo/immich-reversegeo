@@ -11,6 +11,7 @@ Technical implementation notes live in [CHANGELOG.md](https://github.com/immich-
 
 ## Unreleased
 
+- Scans that reach their difference limit now show a clear **Paused for review** notice and a **Continue Scan** button that stays visible while reviewing results.
 - **Show only different values** is enabled by default in live and saved scans. Unchanged results no longer load photo previews, even when you choose to show them.
 - Applying a batch now clears it from **Ready to apply** so you can review the next differences. Use **Applied**, **Needs attention**, or **All results** to inspect saved outcomes without applying the same snapshot again.
 - Added **Location Management**: scan and review names, apply selected corrections from live or saved scans, and use Change History to inspect results or undo unchanged applied metadata. Section tabs highlight the current page; history shows clear result counts and remaining undo work. Previous preview links still work. See [Using the App](./using-the-app.md#location-management) and the [technical changelog](https://github.com/immich-reversegeo/immich-reversegeo/blob/master/CHANGELOG.md).

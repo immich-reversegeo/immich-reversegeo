@@ -118,7 +118,13 @@
     {
         <p class="alert alert-error" role="alert">@_saveError</p>
     }
-    @if (_message is not null)
+    @if (!_busy && _pausedAfterDifferences is { } pausedCount)
+    {
+        <p class="preview-pause-status" role="status">
+            <strong>Paused for review</strong> — @pausedCount.ToString("N0") new differences found. More assets remain to scan.
+        </p>
+    }
+    else if (_message is not null)
     {
         <p role="status">@_message</p>
     }
@@ -131,6 +137,17 @@
 @if (_rows.Count > 0 || _review.Count > 0 || _hasMore || (_scanner?.CheckedCount ?? 0) > 0)
 {
     <section class="settings-card wide-card">
+        @if (!_busy && _pausedAfterDifferences is { } reviewCount)
+        {
+            <div class="preview-pause-banner">
+                <div>
+                    <h3>Scan paused for review</h3>
+                    <p>The pause limit of @reviewCount.ToString("N0") new differences was reached. More assets remain.</p>
+                    <p>Review or apply the results below, then continue to check the next group.</p>
+                </div>
+                <button class="btn btn-primary" disabled="@_applying" @onclick="NextAsync">Continue Scan</button>
+            </div>
+        }
         <h3>Review results — page @_differences.Page</h3>
         <p>Selection: @SelectionLabel. Order: @OrderLabel. Start a new scan to use different inputs or updated settings.</p>
         <p>@(_scanner?.CheckedCount ?? 0) checked in total; @(_scanner?.DifferentCount ?? 0) different. Active scan time: @_scanElapsed.Elapsed.ToString(@"hh\:mm\:ss").</p>
@@ -214,7 +231,7 @@
         {
             <p class="alert alert-error" role="alert">@_differenceError</p>
         }
-        @if (!_busy && !_applying && _hasMore)
+        @if (!_busy && !_applying && _hasMore && _pausedAfterDifferences is null)
         {
             <div class="btn-row">
                 <button class="btn btn-secondary" @onclick="NextAsync">@ContinueLabel</button>
@@ -257,6 +274,7 @@
     private int _page => _scanner?.BatchNumber ?? 0;
     private int _pageCount => _scanner?.BatchSize ?? 0;
     private string? _message;
+    private long? _pausedAfterDifferences;
     private string? _error;
     private string? _saveError;
     private Guid? _savedPreviewId;
@@ -405,6 +423,7 @@
 
         _selection = selection;
         _message = null;
+        _pausedAfterDifferences = null;
         _scanner = new LocationPreviewScanner(selection.ScanMode, selection.PauseAfterDifferences);
         _resultFilter = LocationReviewFilter.Ready;
         _onlyChanges = true;
@@ -433,6 +452,7 @@
 
         _busy = true;
         _message = null;
+        _pausedAfterDifferences = null;
         _error = null;
         _cts?.Dispose();
         _cts = new CancellationTokenSource();
@@ -528,6 +548,7 @@
 
             await RefreshDifferencesAsync(force: true);
             await LoadChangeResultsAsync();
+            _pausedAfterDifferences = outcome.Paused ? outcome.NewDifferences : null;
             savedStatus = outcome.Paused ? "Paused" : _hasMore ? "More assets available" : "Complete";
             _message = outcome.Paused
                 ? $"Paused after {outcome.NewDifferences} new differences. Review the saved results, then Continue Scan."
