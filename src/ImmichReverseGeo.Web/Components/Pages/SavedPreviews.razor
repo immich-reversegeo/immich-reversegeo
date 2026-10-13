@@ -10,6 +10,18 @@
     <p>Scan results are saved automatically as each asset is checked. Open a report to compare its saved names without running another lookup.</p>
     <p>Reports are snapshots. Immich metadata and resolver settings may have changed since they were saved.</p>
     <a class="text-link" href="/data/location-management/scan">Start a new scan</a>
+    <div class="review-filter-bar">
+        <label for="saved-scan-filter">Show scans</label>
+        <select id="saved-scan-filter" class="form-control" @bind="_filter" @bind:after="FilterAsync" disabled="@_loading">
+            <option value="@SavedScanFilter.All">All scans</option>
+            <option value="@SavedScanFilter.CanContinue">Can continue</option>
+            <option value="@SavedScanFilter.NeedsAttention">Needs attention</option>
+        </select>
+    </div>
+    @if (_filter == SavedScanFilter.NeedsAttention)
+    {
+        <p class="hint">Failed or interrupted scans, or reports with a saved error. Open a report to inspect the problem before continuing.</p>
+    }
     @if (_error is not null)
     {
         <p class="alert alert-error" role="alert">@_error</p>
@@ -20,13 +32,13 @@
     }
     else if (_reports.Count == 0)
     {
-        <p>No saved scans on this page.</p>
+        <p>@(_filter == SavedScanFilter.All ? "No saved scans on this page." : "No saved scans match this filter on this page.")</p>
     }
     else
     {
-        <div class="table-scroll">
+        <div class="table-scroll" role="region" aria-label="Saved scans; scroll horizontally to see all columns" tabindex="0">
             <table class="data-table">
-                <thead><tr><th>Started</th><th>Selection</th><th>Status</th><th>Checked</th><th>Different</th><th>Report</th></tr></thead>
+                <thead><tr><th scope="col">Started</th><th scope="col">Selection</th><th scope="col">Status</th><th scope="col">Checked</th><th scope="col">Different</th><th scope="col">Report</th></tr></thead>
                 <tbody>
                     @foreach (var report in _reports.Take(25))
                     {
@@ -49,6 +61,7 @@
         </div>
     }
     <div class="btn-row">
+        <span class="hint" role="status">Page @_page</span>
         <button class="btn btn-secondary" disabled="@(_loading || _page == 1)" @onclick="PreviousAsync">Previous</button>
         <button class="btn btn-secondary" disabled="@(_loading || _reports.Count <= 25)" @onclick="NextAsync">Next</button>
         <button class="btn btn-secondary" disabled="@_loading" @onclick="LoadAsync">Refresh</button>
@@ -58,6 +71,7 @@
 @code {
     private IReadOnlyList<SavedLocationPreview> _reports = [];
     private int _page = 1;
+    private SavedScanFilter _filter;
     private bool _loading;
     private string? _error;
 
@@ -69,7 +83,7 @@
         _error = null;
         try
         {
-            _reports = await Saved.GetReportsAsync(_page);
+            _reports = await Saved.GetReportsAsync(_page, filter: _filter);
         }
         catch (Exception ex)
         {
@@ -79,6 +93,12 @@
         {
             _loading = false;
         }
+    }
+
+    private Task FilterAsync()
+    {
+        _page = 1;
+        return LoadAsync();
     }
 
     private Task PreviousAsync()

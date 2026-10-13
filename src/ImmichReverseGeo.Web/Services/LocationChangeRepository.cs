@@ -122,9 +122,13 @@ public sealed class LocationChangeRepository
         }
     }
 
-    public async Task<IReadOnlyList<LocationChangeOperation>> GetOperationsAsync(int page = 1, Guid? id = null)
+    public async Task<IReadOnlyList<LocationChangeOperation>> GetOperationsAsync(int page = 1, Guid? id = null, LocationOperationFilter filter = LocationOperationFilter.All)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(page, 1);
+        if (!Enum.IsDefined(filter))
+        {
+            throw new ArgumentOutOfRangeException(nameof(filter));
+        }
         await _gate.WaitAsync();
         try
         {
@@ -138,8 +142,13 @@ public sealed class LocationChangeRepository
                     sum(c.undo_status IN ('Pending','Writing'))
                 FROM operations o JOIN changes c ON c.operation_id=o.id
                 WHERE ($id IS NULL OR o.id=$id)
-                GROUP BY o.id ORDER BY o.created_at DESC,o.id DESC LIMIT 26 OFFSET $offset
+                GROUP BY o.id
+                HAVING ($id IS NOT NULL OR $filter = 'All'
+                    OR ($filter = 'Pending' AND sum(c.apply_status IN ('Pending','Writing') OR c.undo_status IN ('Pending','Writing')) > 0)
+                    OR ($filter = 'NeedsReview' AND sum(c.apply_status='NeedsReview' OR c.undo_status='NeedsReview') > 0))
+                ORDER BY o.created_at DESC,o.id DESC LIMIT 26 OFFSET $offset
                 """;
+            cmd.Parameters.AddWithValue("$filter", filter.ToString());
             cmd.Parameters.AddWithValue("$id", (object?)id?.ToString() ?? DBNull.Value);
             cmd.Parameters.AddWithValue("$offset", checked((page - 1) * 25));
             var result = new List<LocationChangeOperation>();
