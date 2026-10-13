@@ -69,7 +69,7 @@ In live and saved scans, changed characters are highlighted in both the existing
 
 The **Show results** filter offers **Ready to apply**, **Applied**, **Needs attention**, and **All results**. Applied changes leave Ready to apply immediately, and the page fills with the next available differences. They remain visible in Applied, All results, and Change History. Needs attention includes skipped, pending, interrupted, unresolved, and failed lookup results. Undone changes remain in All results and Change History. Resume pending writes from Change History; inspect uncertain outcomes in Immich. Run a new scan before applying skipped or undone assets again.
 
-Browse saved results from every checked batch with **Previous 100 Results** and **Next 100 Results**. **Scan Next 100** adds results without bringing already handled differences back into the ready list. **Start Scan** clears the selection and begins a new snapshot. After cancellation, you can review completed results and continue after the last checked asset. If cancellation happens before any results are available, start a new scan.
+Browse saved results from every checked batch with **Previous 100 Results** and **Next 100 Results**. **Scan Next 100** adds results without bringing already handled differences back into the ready list. **Start Scan** clears the selection and begins a new snapshot. After cancellation, you can review completed results and continue after the last checked asset. If no results have been saved yet, continuation starts at the beginning.
 
 **Continuous scan** advances through all matching assets automatically. Set **Pause after this many new differences** to stop for review after a chosen number of changed results; use **0** to scan to the end. When the limit is reached, an amber **Paused for review** notice shows how many new differences were found. A pause banner stays above the results while you scroll, with a **Continue Scan** button. Reviewing or applying changes leaves the scan paused until you continue. **Continue Scan** resumes after the last saved asset and pauses after the next group of differences. Unresolved results and errors do not count as differences. The review table shows up to 100 results matching your filter from all checked batches; the saved report contains every completed result.
 
@@ -89,11 +89,23 @@ Photo thumbnails and **Open in Immich** links are available in live scans and sa
 
 Each completed asset result is saved automatically under **Location Management → Saved Scans**, including results checked before you cancel. Open a report later to compare the saved existing and proposed names, filter to differences, and copy GUIDs you have reviewed across pages. Viewing a saved report does not run new lookups or change Immich. Selections made with checkboxes are kept only while that report is open; the saved results remain available after a reload or app restart.
 
-Reports store the selection, processing settings, asset GUIDs, GPS coordinates, names, and lookup failures in `location-previews.db` under your `/data` volume. Preserve that volume to keep reports across container replacements. Reports stay until you delete them from the report page; deleting a report removes only its local snapshot. A report marked **More assets available**, **Paused**, **Cancelled**, or **Interrupted** covers only the assets already checked. After restarting, start a new scan to check any remaining assets.
+Reports store the selection, processing settings, asset GUIDs, GPS coordinates, names, and lookup failures in `location-previews.db` under your `/data` volume. Preserve that volume to keep reports across container replacements. Reports stay until you delete them from the report page; deleting a report removes only its local snapshot. A report marked **More assets available**, **Paused**, **Cancelled**, or **Interrupted** covers only the assets already checked. Choose Continue scan to check remaining assets after a restart, using the original options.
 
 Saved values may be out of date if Immich metadata, coordinates, settings, or source data changed afterward. Run a new scan to check current proposals, or review the saved proposals before applying; changed names and coordinates are skipped. If saving fails, the scan stops with an error; results already saved are retained.
 
 Deleted assets, GUIDs without an Immich metadata row, and assets missing either latitude or longitude are excluded from every scan query, including pasted GUIDs. Unresolved locations and lookup failures are shown separately and cannot be selected for correction. Scanning can help find inconsistent names; it cannot recover missing GPS coordinates or guarantee that a proposed name is correct.
+
+#### Continue an unfinished scan
+
+Saved Scans keeps each scan's status, checked results, original selection and settings, and latest saved position. New scans also save their original asset total, active scan time, batch position, and pause count. A scan interrupted by an app restart is marked **Interrupted**.
+
+1. Open **Location Management → Saved Scans** and choose **Continue scan** on an unfinished report, or open its saved results and choose **Continue scan** there.
+2. The continuation page restores the original scan options and shows the saved results. Choose **Continue Saved Scan** or the pause banner's **Continue Scan** button to start checking remaining assets.
+3. Results are added to the same report. Continuous mode pauses after the next group of new differences; manual mode checks the next page.
+
+Paused, cancelled, interrupted, failed, and unfinished manual scans can be continued. A completed or currently running scan cannot. Only one page can run a given scan at a time. Leaving the page still stops page-owned work; you can continue it again later.
+
+Continuation starts after the last successfully saved asset and skips assets already in the report, including saved failed lookups. Older unfinished reports use their last saved result as the resume position; totals and timing that were never recorded cannot be recovered. Start a new scan to retry earlier failures, use updated settings, or include assets added or moved earlier in the scan order. New lookups use currently available location data.
 
 #### Applying saved proposals
 

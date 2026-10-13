@@ -26,7 +26,15 @@ else
 {
     <section class="settings-card wide-card">
         <p>Started: <LocalTimestamp Timestamp="_report.CreatedAt" />. Last saved: <LocalTimestamp Timestamp="_report.UpdatedAt" />.</p>
-        <p>Status: @_report.Status. @_report.CheckedCount checked; @_report.DifferentCount different.</p>
+        <p>Status: @_report.StatusLabel. @_report.CheckedCount checked; @_report.DifferentCount different.</p>
+        @if (_report.Checkpoint?.TotalCount is { } total)
+        {
+            <p>Scan progress: @_report.CheckedCount.ToString("N0") of @total.ToString("N0") assets checked. Active scan time: @TimeSpan.FromTicks(_report.Checkpoint.ActiveTicks).ToString(@"hh\:mm\:ss").</p>
+        }
+        @if (_report.Status == "Paused")
+        {
+            <p class="preview-pause-status">Paused for review after @(_report.Checkpoint?.PausedDifferences ?? _report.Selection.PauseAfterDifferences) new differences. Continue when you are ready to check more assets.</p>
+        }
         <p>Selection: @SelectionLabel. Order: @(_report.Selection.Order == LocationPreviewOrder.NearbyCoordinates ? "Nearby coordinates" : "Asset GUID").</p>
         <p>Scan mode: @(_report.Selection.ScanMode == LocationPreviewScanMode.Continuous ? "Continuous" : "Manual pages").
             @if (_report.Selection.ScanMode == LocationPreviewScanMode.Continuous)
@@ -47,6 +55,10 @@ else
                 Preferred administrative source: @(_report.Settings.UseGadmAdministrativeAreas && _report.Settings.PreferGadmAdministrativeAreas ? "GADM" : "Overture").</p>
         </details>
         <div class="btn-row">
+            @if (_report.CanResume && !_applying)
+            {
+                <a class="btn btn-primary" href="@($"/data/location-management/scans/{Id}/continue")">Continue scan</a>
+            }
             <button class="btn btn-secondary" disabled="@(_loading || _applying)" @onclick="LoadAsync">Refresh saved results</button>
             <button class="btn btn-secondary" disabled="@(_loading || _applying || _report.Status == "Running")" @onclick="() => _confirmDelete = true">Delete saved report</button>
         </div>
