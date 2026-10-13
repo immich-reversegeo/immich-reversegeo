@@ -104,6 +104,14 @@ The app tries to reconnect after a temporary connection failure. If the server n
 
 If retrying does not work, check that the container is running and your private connection to it is available, then reload.
 
+Disconnecting stops page-owned scans and remaining apply/undo work. A write already underway may finish. After reconnecting:
+
+- Open **Location Management → Saved Scans** and choose **Continue scan** on an unfinished report. Checked results are kept; continuation uses the original scan settings. A completed scan needs no continuation.
+- Open **Change History** to check apply/undo outcomes. Review pending work before resuming it. For **Needs review**, inspect the affected asset in Immich and run a new scan before another change; uncertain writes are not retried automatically.
+- Check the **Dashboard** for background processing status. Reconnecting does not start another processing pass.
+
+Reloading clears live checkbox selections and unsaved form edits. Reopen the saved report and select results again; saved reports and change history remain available as long as the `/data` volume is preserved.
+
 ## Overture release discovery fails
 
 Check that the app can reach `https://stac.overturemaps.org/catalog.json`, then retry the lookup or country download. Overture keeps public releases for only 60 days, so the app does not fall back to a fixed older version. Existing downloaded country caches and built-in data remain usable without release discovery. Optional live Places diagnostics still need internet access.
