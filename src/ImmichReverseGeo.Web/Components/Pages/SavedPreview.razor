@@ -63,6 +63,8 @@ else
         <h3>Saved results — page @_page</h3>
         <ImmichPhotoSetup />
         <div class="form-group">
+            <label><input type="checkbox" @bind="_onlyChanges" @bind:after="FilterAsync" disabled="@(_loading || _applying)" /> Show only different values</label>
+            <span class="hint">Uncheck and choose All results or Needs attention to include unchanged, unresolved, and failed results. Photo previews load only for differences.</span>
             <label for="saved-result-filter">Show results</label>
             <select id="saved-result-filter" class="form-control" @bind="_resultFilter" @bind:after="FilterAsync" disabled="@(_loading || _applying)">
                 <option value="@LocationReviewFilter.Ready">Ready to apply</option>
@@ -93,7 +95,7 @@ else
                             <tr>
                                 <td><input type="checkbox" aria-label="Select asset @row.Asset.Id" checked="@_review.IsSelected(row.Asset.Id)"
                                     disabled="@(_applying || !CanSelect(row))" @onchange="args => _review.Select(row, args.Value is true)" /></td>
-                                <td><PreviewPhoto AssetId="row.Asset.Id" PreviewId="Id" /></td>
+                                <td><PreviewPhoto AssetId="row.Asset.Id" PreviewId="Id" LoadPreview="@row.HasChange" /></td>
                                 <td><code>@row.Asset.Id</code><div class="hint">GPS: @row.Asset.Latitude?.ToString("G", System.Globalization.CultureInfo.InvariantCulture), @row.Asset.Longitude?.ToString("G", System.Globalization.CultureInfo.InvariantCulture)</div></td>
                                 <td><div>City: <LocationDiffValue Value="@row.Asset.Existing.City" OtherValue="@row.Proposed?.City" Highlight="@row.HasChange" /></div><div>State: <LocationDiffValue Value="@row.Asset.Existing.State" OtherValue="@row.Proposed?.State" Highlight="@row.HasChange" /></div><div>Country: <LocationDiffValue Value="@row.Asset.Existing.Country" OtherValue="@row.Proposed?.Country" Highlight="@row.HasChange" /></div></td>
                                 <td><div>City: <LocationDiffValue Value="@row.Proposed?.City" OtherValue="@row.Asset.Existing.City" Highlight="@row.HasChange" /></div><div>State: <LocationDiffValue Value="@row.Proposed?.State" OtherValue="@row.Asset.Existing.State" Highlight="@row.HasChange" /></div><div>Country: <LocationDiffValue Value="@row.Proposed?.Country" OtherValue="@row.Asset.Existing.Country" Highlight="@row.HasChange" /></div></td>
@@ -140,6 +142,7 @@ else
     private bool _loading;
     private bool _applying;
     private Dictionary<Guid, LocationChangeItem> _changeResults = new();
+    private bool _onlyChanges = true;
     private LocationReviewFilter _resultFilter = LocationReviewFilter.Ready;
     private bool CanSelect(LocationPreviewRow row) => row.HasChange && !_changeResults.ContainsKey(row.Asset.Id);
     private bool _confirmDelete;
@@ -163,6 +166,7 @@ else
             _report = null;
             _rows = [];
             _resultFilter = LocationReviewFilter.Ready;
+            _onlyChanges = true;
             _loadedId = Id;
         }
         await LoadAsync();
@@ -174,16 +178,17 @@ else
         var requestedId = Id;
         var requestedPage = _page;
         var filter = _resultFilter;
+        var onlyChanges = _onlyChanges;
         _loading = true;
         _error = null;
         try
         {
             var report = (await Saved.GetReportsAsync(id: requestedId)).SingleOrDefault();
-            var rows = report is null ? [] : await Results.GetRowsAsync(requestedId, requestedPage, filter);
+            var rows = report is null ? [] : await Results.GetRowsAsync(requestedId, requestedPage, filter, onlyChanges);
             while (report is not null && requestedPage > 1 && rows.Count == 0)
             {
                 requestedPage--;
-                rows = await Results.GetRowsAsync(requestedId, requestedPage, filter);
+                rows = await Results.GetRowsAsync(requestedId, requestedPage, filter, onlyChanges);
             }
             var results = await Changes.GetScanResultsAsync(requestedId, rows.Take(100).Select(row => row.Asset.Id).ToArray());
             if (version != _loadVersion || requestedId != Id)

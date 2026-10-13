@@ -65,6 +65,8 @@ Open **Data → Location Management → Scan & Review** to compare existing city
 
 In live and saved scans, changed characters are highlighted in both the existing and proposed names. The comparison is exact, so punctuation, capitalization, and spaces can mark a name as different even when it refers to the same place. Changed spaces appear as `␠`; other invisible characters use symbols or Unicode codes. Hover over a highlight to see its character codes. An empty value appears as `(empty)` and a missing value as `—`.
 
+**Show only different values** is checked by default in live and saved scans. It combines with the status filter below. Uncheck it to include unchanged, unresolved, and failed results; choose **All results** or **Needs attention** to inspect them.
+
 The **Show results** filter offers **Ready to apply**, **Applied**, **Needs attention**, and **All results**. Applied changes leave Ready to apply immediately, and the page fills with the next available differences. They remain visible in Applied, All results, and Change History. Needs attention includes skipped, pending, interrupted, unresolved, and failed lookup results. Undone changes remain in All results and Change History. Resume pending writes from Change History; inspect uncertain outcomes in Immich. Run a new scan before applying skipped or undone assets again.
 
 Browse saved results from every checked batch with **Previous 100 Results** and **Next 100 Results**. **Scan Next 100** adds results without bringing already handled differences back into the ready list. **Start Scan** clears the selection and begins a new snapshot. After cancellation, you can review completed results and continue after the last checked asset. If cancellation happens before any results are available, start a new scan.
@@ -81,7 +83,7 @@ A scan counts all matching assets with both GPS coordinates when you start and s
 
 Settings are loaded once when you start the scan; start again after changing settings. Results may change if settings, source data, or coordinates change before processing.
 
-Photo thumbnails and **Open in Immich** links are available in live scans and saved reports when the optional [Immich connection](./configuration.md#photo-previews-and-immich-links) is configured. Thumbnails load on demand; they are not part of the saved snapshot and may become unavailable if an asset is deleted or access changes.
+Photo thumbnails and **Open in Immich** links are available in live scans and saved reports when the optional [Immich connection](./configuration.md#photo-previews-and-immich-links) is configured. Thumbnails load on demand only for rows with different proposed values. Rows without differences do not request thumbnails, even when shown in All results; they are not part of the saved snapshot and may become unavailable if an asset is deleted or access changes.
 
 #### Saved scans
 

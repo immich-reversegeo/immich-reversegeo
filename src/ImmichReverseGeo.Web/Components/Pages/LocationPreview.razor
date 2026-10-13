@@ -138,6 +138,8 @@
             Results use the settings loaded when you started this scan.</p>
         <p class="hint">@PageSummary Batch elapsed: @_pageElapsed.Elapsed.ToString(@"hh\:mm\:ss").</p>
         <div class="form-group">
+            <label><input type="checkbox" @bind="_onlyChanges" @bind:after="FilterDifferencesAsync" disabled="@(_busy || _applying)" /> Show only different values</label>
+            <span class="hint">Uncheck and choose All results or Needs attention to include unchanged, unresolved, and failed results. Photo previews load only for differences.</span>
             <label for="live-result-filter">Show results</label>
             <select id="live-result-filter" class="form-control" @bind="_resultFilter" @bind:after="FilterDifferencesAsync" disabled="@(_busy || _applying)">
                 <option value="@LocationReviewFilter.Ready">Ready to apply</option>
@@ -170,7 +172,7 @@
                             <td><input type="checkbox" aria-label="Select asset @row.Asset.Id"
                                        checked="@_review.IsSelected(row.Asset.Id)" disabled="@(_busy || _applying || !CanSelect(row))"
                                        @onchange="args => _review.Select(row, args.Value is true)" /></td>
-                            <td><PreviewPhoto AssetId="row.Asset.Id" PreviewId="_savedPreviewId" /></td>
+                            <td><PreviewPhoto AssetId="row.Asset.Id" PreviewId="_savedPreviewId" LoadPreview="@row.HasChange" /></td>
                             <td><code>@row.Asset.Id</code>
                                 <div class="hint">GPS: @(row.Asset.Latitude?.ToString("G", System.Globalization.CultureInfo.InvariantCulture) ?? "—"), @(row.Asset.Longitude?.ToString("G", System.Globalization.CultureInfo.InvariantCulture) ?? "—")</div>
                             </td>
@@ -243,6 +245,7 @@
     private bool _circuitReady;
     private bool _applying;
     private Dictionary<Guid, LocationChangeItem> _changeResults = new();
+    private bool _onlyChanges = true;
     private LocationReviewFilter _resultFilter = LocationReviewFilter.Ready;
     private LocationPreviewDifferencePage _differences = new();
     private string? _differenceError;
@@ -299,7 +302,7 @@
         try
         {
             await _differences.RefreshAsync(_scanner?.CheckedCount ?? 0,
-                page => Results.GetRowsAsync(id, page, _resultFilter), force);
+                page => Results.GetRowsAsync(id, page, _resultFilter, _onlyChanges), force);
             _differenceError = null;
         }
         catch (Exception ex)
@@ -318,7 +321,7 @@
         try
         {
             await _differences.MoveAsync(direction, _scanner?.CheckedCount ?? 0,
-                page => Results.GetRowsAsync(id, page, _resultFilter));
+                page => Results.GetRowsAsync(id, page, _resultFilter, _onlyChanges));
             await LoadChangeResultsAsync();
             _differenceError = null;
         }
@@ -404,6 +407,7 @@
         _message = null;
         _scanner = new LocationPreviewScanner(selection.ScanMode, selection.PauseAfterDifferences);
         _resultFilter = LocationReviewFilter.Ready;
+        _onlyChanges = true;
         _review.Clear();
         _differences = new LocationPreviewDifferencePage();
         _differenceError = null;

@@ -373,6 +373,32 @@ public class LocationManagementTests
         Assert.IsFalse(page.HasNext);
     }
 
+    [TestMethod]
+    public async Task DifferencesOnly_FilterRunsBeforePagingAndCombinesWithStatus()
+    {
+        var (scan, rows) = await ScanAsync(1);
+        // Interleave more than one page of unchanged snapshots before the next difference.
+        for (var index = 0; index < 101; index++)
+        {
+            var names = new GeoResult("France", "Region", "Unchanged city");
+            await _scans.AppendAsync(scan, new(new(Guid.NewGuid(),48,2,names),names));
+        }
+        var later = new LocationPreviewRow(new(Guid.NewGuid(),48,2,new("France",null,"Before")),new("France",null,"After"));
+        await _scans.AppendAsync(scan, later);
+        var failed = new LocationPreviewRow(new(Guid.NewGuid(),48,2,new(null,null,null)),null,"Lookup failed");
+        await _scans.AppendAsync(scan, failed);
+        var results = new LocationReviewResults(_scans,_journal);
+        var different = await results.GetRowsAsync(scan,1,LocationReviewFilter.All,onlyChanges:true);
+        CollectionAssert.AreEqual(new[] { rows[0].Asset.Id,later.Asset.Id },different.Select(row=>row.Asset.Id).ToArray());
+        Assert.AreEqual(101,(await results.GetRowsAsync(scan,1,LocationReviewFilter.All,onlyChanges:false)).Count);
+        Assert.AreEqual(0,(await results.GetRowsAsync(scan,1,LocationReviewFilter.Attention,onlyChanges:true)).Count);
+        Assert.AreEqual(failed.Asset.Id,(await results.GetRowsAsync(scan,1,LocationReviewFilter.Attention,onlyChanges:false)).Single().Asset.Id);
+        var operation = await _service.CreateApplyAsync(scan,[rows[0].Asset.Id]);
+        await _service.RunAsync(operation,false);
+        Assert.AreEqual(rows[0].Asset.Id,(await results.GetRowsAsync(scan,1,LocationReviewFilter.Applied,onlyChanges:true)).Single().Asset.Id);
+        Assert.AreEqual(later.Asset.Id,(await results.GetRowsAsync(scan,1,LocationReviewFilter.Ready,onlyChanges:true)).Single().Asset.Id);
+    }
+
     private sealed class FakeWriter : ILocationChangeWriter
     {
         public Dictionary<Guid, (LocationPreviewAsset Asset, string Revision)> Current { get; } = [];

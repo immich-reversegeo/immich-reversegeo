@@ -217,7 +217,7 @@ public sealed class SavedLocationPreviewRepository
         }
     }
 
-    public async Task<IReadOnlyList<LocationPreviewRow>> GetReviewRowsAsync(Guid id, int page, LocationReviewFilter filter)
+    public async Task<IReadOnlyList<LocationPreviewRow>> GetReviewRowsAsync(Guid id, int page, LocationReviewFilter filter, bool onlyChanges = false)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(page, 1);
         if (!Enum.IsDefined(filter))
@@ -241,7 +241,7 @@ public sealed class SavedLocationPreviewRepository
                 )
                 SELECT r.row_json FROM preview_rows r
                 LEFT JOIN ranked c ON c.asset_id=r.asset_id AND c.position=1
-                WHERE r.preview_id=$id AND (
+                WHERE r.preview_id=$id AND (NOT $onlyChanges OR r.has_change=1) AND (
                     $filter='All'
                     OR ($filter='Ready' AND r.has_change=1 AND c.asset_id IS NULL)
                     OR ($filter='Applied' AND c.apply_status='Applied' AND c.undo_status='NotRequested')
@@ -256,6 +256,7 @@ public sealed class SavedLocationPreviewRepository
                 """;
             command.Parameters.AddWithValue("$id", id.ToString());
             command.Parameters.AddWithValue("$filter", filter.ToString());
+            command.Parameters.AddWithValue("$onlyChanges", onlyChanges);
             command.Parameters.AddWithValue("$offset", checked((page - 1) * 100));
             var result = new List<LocationPreviewRow>();
             await using var reader = await command.ExecuteReaderAsync();
