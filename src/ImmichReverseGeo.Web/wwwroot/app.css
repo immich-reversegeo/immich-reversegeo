@@ -1790,8 +1790,10 @@ input[type="text"].env-readonly {
 #components-reconnect-modal {
     background-color: var(--bg-surface);
     color: var(--text-primary);
-    width: min(24rem, calc(100vw - 2rem));
-    margin: 20vh auto;
+    width: min(28rem, calc(100vw - 2rem));
+    margin: auto;
+    max-height: calc(100dvh - 2rem);
+    overflow-y: auto;
     padding: 2rem;
     border: 1px solid var(--border);
     border-radius: var(--radius-lg);
@@ -2135,3 +2137,5 @@ html { scroll-padding-bottom: 6rem; }
     .review-filter-bar select { width: 100%; }
 }
 .alert-warning { color: #f5cf86; background: rgba(183, 141, 64, .12); border: 1px solid #b78d40; }
+
+.connection-recovery { border-top: 1px solid var(--border); padding-top: 1rem; display: grid; gap: .75rem; color: var(--text-secondary); font-size: .85rem; }

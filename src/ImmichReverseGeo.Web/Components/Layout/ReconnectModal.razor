@@ -1,25 +1,25 @@
-﻿<script type="module" src="@Assets["Components/Layout/ReconnectModal.razor.js"]"></script>
+<script type="module" src="@Assets["Components/Layout/ReconnectModal.razor.js"]"></script>
 
-<dialog id="components-reconnect-modal" data-nosnippet aria-label="Connection status">
+<dialog id="components-reconnect-modal" data-nosnippet aria-label="Connection status" aria-describedby="connection-recovery">
     <div class="components-reconnect-container">
         <div class="components-rejoining-animation" aria-hidden="true">
             <div></div>
             <div></div>
         </div>
         <p class="components-reconnect-first-attempt-visible">
-            Rejoining the server...
+            Connection interrupted. Reconnecting…
         </p>
         <p class="components-reconnect-repeated-attempt-visible">
-            Rejoin failed... trying again in <span id="components-seconds-to-next-attempt"></span> seconds.
+            Still disconnected. Trying again in <span id="components-seconds-to-next-attempt"></span> seconds.
         </p>
         <p class="components-reconnect-failed-visible">
-            Failed to rejoin.<br />Please retry or reload the page.
+            Could not reconnect. Check that the app is running, then retry or reload.
         </p>
         <button id="components-reconnect-button" class="components-reconnect-failed-visible">
             Retry
         </button>
         <p class="components-reconnect-rejected-visible">
-            Your session is no longer available. Reload to continue. Unsaved changes may be lost.
+            Your session has expired. Reload to start a new session.
         </p>
         <button id="components-reload-button" class="components-reconnect-rejected-visible components-reconnect-failed-visible components-resume-failed-visible">
             Reload page
@@ -28,10 +28,15 @@
             The session has been paused by the server.
         </p>
         <p class="components-resume-failed-visible">
-            Failed to resume the session.<br />Please retry or reload the page.
+            Could not resume this session. Retry or reload the page.
         </p>
         <button id="components-resume-button" class="components-pause-visible components-resume-failed-visible">
             Resume
         </button>
+        <div id="connection-recovery" class="connection-recovery">
+            <p>Reloading clears unsaved edits and live selections.</p>
+            <p>Disconnecting stops an active scan. Saved results are kept. After reconnecting, open <strong>Location Management → Saved Scans → Continue scan</strong> to check remaining assets.</p>
+            <p>An apply or undo already underway may finish. Open <strong>Change History</strong> to check outcomes and review pending work. Check uncertain outcomes in Immich before making another change.</p>
+        </div>
     </div>
 </dialog>

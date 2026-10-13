@@ -26,7 +26,7 @@ To correct existing names, open [Location Management](#location-management), sca
 - the last run remains labelled Completed, Completed with errors, Cancelled, or Failed
 - `Cancel` stops the current run
 
-Processing selects GPS-tagged assets only when both city and country are missing (stored as `NULL`). To correct existing location names, back up the database and use a targeted reset from [Data tools](#data-tools) before reprocessing.
+Use **Scan & Review Existing Names** on the Dashboard for the **Scan → Review → Apply** workflow. Reset and reprocessing remain available under **Advanced: reset and reprocess**; back up the database before either reset or apply.
 
 Progress counts examined assets, including those already on the skip list. Missing Location Names includes assets on the skip list; On the Skip List shows the stored count loaded before the run and refreshed afterwards. Cancelling keeps location names already written. A completed pass does not mean every asset received a location.
 

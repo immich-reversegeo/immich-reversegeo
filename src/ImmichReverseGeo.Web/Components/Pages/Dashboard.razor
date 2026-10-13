@@ -18,8 +18,16 @@
     <h3>Which photos will be processed?</h3>
     <p>Runs process assets with GPS coordinates only when both city and country are missing.
         Existing location names are kept, even when they are incorrect. Previously skipped assets are excluded until you clear the skip list under Data.</p>
-    <p>To correct existing names, <a class="text-link" href="/data/location-preview">preview location corrections</a>,
-        then use <a class="text-link" href="/data/reset-geo-data">Reset Immich Geo Data</a> for the assets you want to reprocess.</p>
+    <p>To correct existing names, use <strong>Scan → Review → Apply</strong> in Location Management.
+        Review the exact proposed names and apply only the differences you select. No reset or processing run is needed.</p>
+    <div class="btn-row">
+        <a class="btn btn-secondary" href="/data/location-management/scan">Scan &amp; Review Existing Names</a>
+    </div>
+    <details class="location-help">
+        <summary>Advanced: reset and reprocess</summary>
+        <p><a class="text-link" href="/data/reset-geo-data">Reset Immich Geo Data</a> clears location names before a new processing pass.
+            Use it only when you want to clear names and reprocess instead of applying reviewed proposals. Back up the Immich database first.</p>
+    </details>
 </div>
 
 @if (!_circuitReady)
