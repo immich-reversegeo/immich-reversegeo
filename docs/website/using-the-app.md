@@ -164,7 +164,7 @@ The Reset Immich Geo Data page only clears reverse geo values in `asset_exif`. I
 
 Reset review rechecks the affected count before writing. If it changes, review the updated count and confirm again. Processing, apply/undo, resets, and cache writes cannot overlap; wait for active work to finish before starting another operation. Reset reports partial completion if names were cleared but skip-list cleanup failed.
 
-Country Caches supports country names and codes. Deleting a cache does not change Immich metadata; it downloads again when needed. Bulk deletion is under **Cache Maintenance** and requires confirmation. A failed re-download can leave a cache unavailable; check network access, disk space, and permissions before retrying.
+Country Caches supports country names and codes. Country names and download times wrap within their columns; on narrow screens, scroll the table horizontally to reach the action buttons. Deleting a cache does not change Immich metadata; it downloads again when needed. Bulk deletion is under **Cache Maintenance** and requires confirmation. A failed re-download can leave a cache unavailable; check network access, disk space, and permissions before retrying.
 
 ## Logs
 

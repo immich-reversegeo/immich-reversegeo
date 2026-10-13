@@ -76,7 +76,7 @@
                 {
                     <tr>
                         <td><span class="source-badge @row.SourceCssClass">@row.SourceLabel</span></td>
-                        <td>@CountryName(row.Iso3) <code>@row.Iso3</code></td>
+                        <td><span class="cache-country-name">@CountryName(row.Iso3)</span><code>@row.Iso3</code></td>
                         <td>@row.RowCount.ToString("N0")</td>
                         <td>@(row.Version ?? "—")</td>
                         <td>@FormatFileSize(row.FileSizeBytes)</td>
@@ -87,16 +87,18 @@
                             }
                         </td>
                         <td class="table-actions-cell">
-                            <button @onclick="() => DeleteCache(row)"
-                                    disabled="@(_busy || State.IsRunning)" aria-label="Delete @row.SourceLabel cache for @CountryName(row.Iso3)"
-                                    class="btn btn-danger">
-                                Delete
-                            </button>
-                            <button @onclick="() => RedownloadCache(row)"
-                                    disabled="@(_busy || State.IsRunning)" aria-label="Re-download @row.SourceLabel cache for @CountryName(row.Iso3)"
-                                    class="btn btn-secondary">
-                                Re-download
-                            </button>
+                            <div class="cache-row-actions">
+                                <button @onclick="() => DeleteCache(row)"
+                                        disabled="@(_busy || State.IsRunning)" aria-label="Delete @row.SourceLabel cache for @CountryName(row.Iso3)"
+                                        class="btn btn-danger">
+                                    Delete
+                                </button>
+                                <button @onclick="() => RedownloadCache(row)"
+                                        disabled="@(_busy || State.IsRunning)" aria-label="Re-download @row.SourceLabel cache for @CountryName(row.Iso3)"
+                                        class="btn btn-secondary">
+                                    Re-download
+                                </button>
+                            </div>
                         </td>
                     </tr>
                 }
