@@ -1,0 +1,16 @@
+<div class="selection-action-bar" role="region" aria-label="Selection actions">
+    <strong role="status">@Count.ToString("N0") selected</strong>
+    <button class="btn btn-secondary" disabled="@Disabled" @onclick="Clear">Clear</button>
+    <button class="btn btn-primary" @ref="_reviewButton" disabled="@Disabled" @onclick="Review">@ReviewLabel</button>
+</div>
+
+@code {
+    [Parameter] public int Count { get; set; }
+    [Parameter] public bool Disabled { get; set; }
+    [Parameter] public string ReviewLabel { get; set; } = "Review changes";
+    [Parameter] public EventCallback Clear { get; set; }
+    [Parameter] public EventCallback Review { get; set; }
+    private ElementReference _reviewButton;
+
+    public ValueTask FocusReviewAsync() => _reviewButton.FocusAsync();
+}

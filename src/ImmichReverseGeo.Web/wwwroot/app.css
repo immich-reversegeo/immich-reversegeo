@@ -2139,3 +2139,24 @@ html { scroll-padding-bottom: 6rem; }
 .alert-warning { color: #f5cf86; background: rgba(183, 141, 64, .12); border: 1px solid #b78d40; }
 
 .connection-recovery { border-top: 1px solid var(--border); padding-top: 1rem; display: grid; gap: .75rem; color: var(--text-secondary); font-size: .85rem; }
+
+.selection-action-bar {
+    position: sticky;
+    bottom: 1rem;
+    z-index: 8;
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+    padding: .75rem;
+    margin-top: 1rem;
+    background: var(--bg-elevated);
+    border: 1px solid var(--accent-border);
+    border-radius: var(--radius-lg);
+    box-shadow: 0 3px 12px rgba(0, 0, 0, .3);
+}
+.selection-action-bar strong { flex: 1; min-width: 5rem; font-size: .85rem; }
+.selection-action-bar .btn { white-space: nowrap; }
+.review-actions h3[tabindex="-1"], .location-confirmation h3[tabindex="-1"] { scroll-margin-top: 1rem; }
+
+.review-focus-target:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }

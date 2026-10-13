@@ -5,11 +5,11 @@
 @implements IDisposable
 
 <section class="settings-card location-apply-panel">
-    <h3>Apply Selected Changes</h3>
+    <h3 class="review-focus-target" tabindex="-1" @ref="_reviewHeading">@(_reviewed is null ? "Apply Selected Changes" : $"Review {_reviewed.Count} selected changes")</h3>
     <p class="hint">Applies exact saved names; later edits are skipped. Select up to 1,000 differences.</p>
     @if (_reviewed is null)
     {
-        <button class="btn btn-primary" @onclick="ReviewAsync" disabled="@(Disabled || _busy || SelectedIds.Count == 0)">Review @SelectedIds.Count Selected Changes</button>
+        <button class="btn btn-primary" @ref="_reviewButton" @onclick="ReviewFromPanelAsync" disabled="@(Disabled || _busy || SelectedIds.Count == 0)">Review @SelectedIds.Count Selected Changes</button>
     }
     else
     {
@@ -24,7 +24,7 @@
         <label><input type="checkbox" @bind="_acknowledged" disabled="@_busy" /> I have reviewed these changes and understand that they update Immich.</label>
         <div class="btn-row">
             <button class="btn btn-primary" @onclick="ApplyAsync" disabled="@(Disabled || _busy || !_acknowledged)">Confirm Apply @_reviewed.Count Changes</button>
-            <button class="btn btn-secondary" @onclick="ClearReview" disabled="@_busy">Back to Selection</button>
+            <button class="btn btn-secondary" @onclick="BackToSelectionAsync" disabled="@_busy">Back to Selection</button>
         </div>
     }
     @if (_busy && _operationId is not null)
@@ -42,7 +42,7 @@
     }
     @if (_error is not null)
     {
-        <p class="alert alert-error" role="alert">@_error</p>
+        <p class="alert alert-error" role="alert" tabindex="-1" @ref="_errorMessage">@_error</p>
     }
 </section>
 
@@ -52,6 +52,16 @@
     [Parameter] public bool Disabled { get; set; }
     [Parameter] public EventCallback<bool> BusyChanged { get; set; }
     [Parameter] public EventCallback<IReadOnlyList<LocationChangeItem>> ResultsChanged { get; set; }
+    [Parameter] public EventCallback<bool> ReviewChanged { get; set; }
+    [Parameter] public EventCallback SelectionFocusRequested { get; set; }
+    private ElementReference _reviewHeading;
+    private ElementReference _reviewButton;
+    private ElementReference _errorMessage;
+    private bool _reviewFromBar;
+    private bool _focusHeading;
+    private bool _focusSelection;
+    private bool _focusError;
+
     private IReadOnlyList<LocationPreviewRow>? _reviewed;
     private Guid[] _reviewedIds = [];
     private Guid? _reviewedScanId;
@@ -66,14 +76,70 @@
     private string? _error;
 
     protected override void OnInitialized() => Lifetime.Disconnected += Cancel;
-    protected override void OnParametersSet()
+    protected override async Task OnParametersSetAsync()
     {
         if (!_busy && _loadedScanId != ScanId)
         {
             _loadedScanId = ScanId;
+            var hadReview = _reviewed is not null;
             ClearReview();
+            if (hadReview)
+            {
+                await ReviewChanged.InvokeAsync(false);
+            }
             _operationId = null;
             _summary = null;
+        }
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_disposed)
+        {
+            return;
+        }
+        if (_focusHeading)
+        {
+            _focusHeading = false;
+            await _reviewHeading.FocusAsync();
+        }
+        else if (_focusError)
+        {
+            _focusError = false;
+            await _errorMessage.FocusAsync();
+        }
+        else if (_focusSelection)
+        {
+            _focusSelection = false;
+            await FocusSelectionAsync();
+        }
+    }
+
+    public Task ReviewFromSelectionAsync()
+    {
+        _reviewFromBar = true;
+        return ReviewAsync();
+    }
+
+    private Task ReviewFromPanelAsync()
+    {
+        _reviewFromBar = false;
+        return ReviewAsync();
+    }
+
+    public ValueTask FocusSelectionAsync() => SelectedIds.Count > 0 ? _reviewButton.FocusAsync() : _reviewHeading.FocusAsync();
+
+    private async Task BackToSelectionAsync()
+    {
+        ClearReview();
+        await ReviewChanged.InvokeAsync(false);
+        if (_reviewFromBar)
+        {
+            await SelectionFocusRequested.InvokeAsync();
+        }
+        else
+        {
+            _focusSelection = true;
         }
     }
 
@@ -93,10 +159,12 @@
             }
             _reviewed = reviewed;
             _reviewedScanId = id;
+            _focusHeading = true;
+            await ReviewChanged.InvokeAsync(true);
             _page = 1;
             _acknowledged = false;
         }
-        catch (Exception ex) { _error = ex.Message; }
+        catch (Exception ex) { _error = ex.Message; _focusError = true; }
         finally
         {
             _busy = false;
@@ -126,7 +194,7 @@
             await InvokeAsync(StateHasChanged);
             await Management.RunAsync(_operationId.Value, undo: false, updated: RefreshSummaryAsync, ct: _cts.Token);
         }
-        catch (Exception ex) { _error = ex.Message; }
+        catch (Exception ex) { _error = ex.Message; _focusError = true; }
         finally
         {
             if (_operationId is { } operation)
@@ -142,7 +210,11 @@
             _cts.Dispose();
             _cts = null;
             ClearReview();
-            if (!_disposed) { await BusyChanged.InvokeAsync(false); }
+            if (!_disposed)
+            {
+                await ReviewChanged.InvokeAsync(false);
+                await BusyChanged.InvokeAsync(false);
+            }
         }
     }
 
