@@ -2091,3 +2091,47 @@ html { scroll-padding-bottom: 6rem; }
     .nav-tools { display: none; }
     .nav-expanded .nav-tools { display: flex; }
 }
+
+/* Location management: setup, progress, and review. */
+.location-section-header {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    justify-content: space-between;
+    gap: .5rem 1rem;
+    margin-bottom: 1rem;
+}
+.location-section-header h3 { margin: 0; }
+.location-metadata {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 180px), 1fr));
+    gap: 1rem;
+    margin: 1rem 0;
+}
+.location-metadata dt { color: var(--text-muted); font-size: .8rem; }
+.location-metadata dd { margin: .25rem 0 0; font-weight: 600; overflow-wrap: anywhere; }
+.scan-metrics dd { font-size: 1.15rem; }
+.scan-setup-grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 1rem; }
+.scan-setup-grid .form-group { min-width: 0; margin-bottom: 0; }
+.scan-setup-grid .scan-input { grid-column: 1 / -1; }
+.scan-setup-grid textarea { min-height: 5rem; }
+.location-help { margin-top: .75rem; padding-top: .75rem; border-top: 1px solid var(--border); }
+.location-help > summary { cursor: pointer; color: var(--text-muted); }
+.location-help[open] > summary { margin-bottom: .75rem; }
+.location-help p { margin: .75rem 0; }
+.location-help-topics dt { font-weight: 600; margin-top: 1rem; }
+.location-help-topics dd { margin: .35rem 0 1rem; }
+.scan-status-paused { border-color: #b78d40; }
+.scan-state { padding: .25rem .65rem; border-radius: 1rem; background: var(--bg-elevated); font-size: .85rem; }
+.scan-activity { overflow-wrap: anywhere; }
+.review-filter-bar { display: flex; flex-wrap: wrap; align-items: center; gap: .75rem 1rem; margin: 1rem 0; }
+.review-filter-bar select { width: auto; min-width: 160px; }
+.review-actions { margin: 1rem 0; }
+.review-actions .location-apply-panel { max-width: none; margin: 0; }
+@media (max-width: 640px) {
+    .scan-setup-grid { grid-template-columns: 1fr; }
+    .location-metadata { grid-template-columns: repeat(2, minmax(0, 1fr)); }
+    .review-filter-bar { align-items: stretch; }
+    .review-filter-bar select { width: 100%; }
+}
+.alert-warning { color: #f5cf86; background: rgba(183, 141, 64, .12); border: 1px solid #b78d40; }

@@ -130,6 +130,12 @@ Cancel or leave the page to stop remaining work. A write already underway may co
 
 Previous names and operation results are saved in `location-changes.db` under `/data`, separately from saved scans. Preserve this volume to retain history and undo information. Deleting a saved scan does not delete its change history. The journal contains location metadata; protect it along with your other app data. It does not replace an Immich database backup, and undo cannot restore deleted assets or override later edits.
 
+#### Reviewing location results
+
+Scan setup, progress, and results appear in separate sections. On a continued saved scan, expand **Original scan options** to see the settings used for that scan. Pause reasons and errors remain visible beside the scan action.
+
+Select differences in the results table, then review the exact names before applying. Expand **Review help** for filter descriptions, highlighted differences, and photo setup. Saved reports keep scan details and deletion controls in expandable sections. Change history shows recorded outcomes and warns when a write needs checking in Immich.
+
 ### Maintenance actions
 
 The Data area contains maintenance tools that change downloaded caches or Immich reverse geo values.
