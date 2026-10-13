@@ -170,6 +170,8 @@ Reset review rechecks the affected count before writing. If it changes, review t
 
 Country Caches supports country names and codes. Country names and download times wrap within their columns; on narrow screens, scroll the table horizontally to reach the action buttons. Deleting a cache does not change Immich metadata; it downloads again when needed. Bulk deletion is under **Cache Maintenance** and requires confirmation. A failed re-download can leave a cache unavailable; check network access, disk space, and permissions before retrying.
 
+Overture administrative names prefer English when available, including names taken from parent areas. Local names remain the fallback when English is unavailable. If an older cache still shows a local name despite an English name being available, use **Re-download Overture cache** for that country, then check the coordinates in **Lookup**. Re-downloading does not update existing Immich metadata; use **Preview Location Corrections** to review and apply any desired changes.
+
 ## Logs
 
 Use the Logs page when you want to inspect recent activity outside the Dashboard summary.

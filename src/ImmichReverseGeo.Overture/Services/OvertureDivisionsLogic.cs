@@ -58,9 +58,22 @@ public static class OvertureDivisionsLogic
             : $"WHERE {OvertureCountrySourceCodes.BuildCountryFilter(alpha2)}";
         return $"""
             (
-                SELECT a.*, to_json(d.hierarchies[1]) AS hierarchy_json
+                WITH division_names AS MATERIALIZED (
+                    SELECT id, hierarchies,
+                        COALESCE(NULLIF(trim(names.common['en']), ''), NULLIF(trim(names.primary), '')) AS name
+                    FROM read_parquet('{divisionUrl}', hive_partitioning = 1) {countryFilter}
+                )
+                SELECT a.*, (
+                    SELECT to_json(list(struct_pack(
+                        division_id := entry.division_id,
+                        subtype := entry.subtype,
+                        name := COALESCE(parent.name, entry.name)
+                    ) ORDER BY position))
+                    FROM UNNEST(d.hierarchies[1]) WITH ORDINALITY AS ancestors(entry, position)
+                    LEFT JOIN division_names parent ON parent.id = entry.division_id
+                ) AS hierarchy_json
                 FROM (SELECT * FROM read_parquet('{releaseUrl}', hive_partitioning = 1) {countryFilter}) a
-                LEFT JOIN (SELECT id, hierarchies FROM read_parquet('{divisionUrl}', hive_partitioning = 1) {countryFilter}) d
+                LEFT JOIN division_names d
                     ON a.division_id = d.id
             )
             """;
