@@ -8,6 +8,8 @@ docs_dir: docs/website
 site_dir: _out/website
 use_directory_urls: true
 strict: true
+exclude_docs: |
+  /requirements.txt
 
 validation:
   invalid_links: true
