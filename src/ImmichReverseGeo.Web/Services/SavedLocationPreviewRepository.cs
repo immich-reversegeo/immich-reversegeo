@@ -203,15 +203,26 @@ public sealed class SavedLocationPreviewRepository
         FROM previews p
         """;
 
-    public async Task<IReadOnlyList<SavedLocationPreview>> GetReportsAsync(int page = 1, Guid? id = null, CancellationToken ct = default)
+    public async Task<IReadOnlyList<SavedLocationPreview>> GetReportsAsync(int page = 1, Guid? id = null, CancellationToken ct = default, SavedScanFilter filter = SavedScanFilter.All)
     {
         ArgumentOutOfRangeException.ThrowIfLessThan(page, 1);
+        if (!Enum.IsDefined(filter))
+        {
+            throw new ArgumentOutOfRangeException(nameof(filter));
+        }
         await _gate.WaitAsync(ct);
         try
         {
             await using var connection = await OpenAsync(ct);
             await using var command = connection.CreateCommand();
-            command.CommandText = SummarySql + " WHERE ($id IS NULL OR p.id = $id) ORDER BY p.created_at DESC, p.id DESC LIMIT 26 OFFSET $offset";
+            command.CommandText = SummarySql + """
+                 WHERE ($id IS NULL OR p.id = $id)
+                   AND ($id IS NOT NULL OR $filter = 'All'
+                       OR ($filter = 'CanContinue' AND p.status IN ('Paused','More assets available','Cancelled','Interrupted','Failed'))
+                       OR ($filter = 'NeedsAttention' AND (p.status IN ('Failed','Interrupted') OR p.error IS NOT NULL)))
+                 ORDER BY p.created_at DESC, p.id DESC LIMIT 26 OFFSET $offset
+                """;
+            command.Parameters.AddWithValue("$filter", filter.ToString());
             command.Parameters.AddWithValue("$id", (object?)id?.ToString() ?? DBNull.Value);
             command.Parameters.AddWithValue("$offset", checked((page - 1) * 25));
             var result = new List<SavedLocationPreview>();

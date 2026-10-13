@@ -92,6 +92,8 @@ Photo thumbnails and **Open in Immich** links are available in live scans and sa
 
 #### Saved scans
 
+Use **Show scans → Can continue** to find unfinished scans. **Needs attention** finds failed or interrupted scans and reports with a saved error. Filters search all saved reports, including older pages; changing a filter returns to page 1.
+
 Each completed asset result is saved automatically under **Location Management → Saved Scans**, including results checked before you cancel. Open a report later to compare the saved existing and proposed names, filter to differences, and copy GUIDs you have reviewed across pages. Viewing a saved report does not run new lookups or change Immich. Selections made with checkboxes are kept only while that report is open; the saved results remain available after a reload or app restart.
 
 Reports store the selection, processing settings, asset GUIDs, GPS coordinates, names, and lookup failures in `location-previews.db` under your `/data` volume. Preserve that volume to keep reports across container replacements. Reports stay until you delete them from the report page; deleting a report removes only its local snapshot. A report marked **More assets available**, **Paused**, **Cancelled**, or **Interrupted** covers only the assets already checked. Choose Continue scan to check remaining assets after a restart, using the original options.
@@ -121,6 +123,8 @@ You can apply selected differences from a live scan or a saved scan. The app use
 Applying changes updates only city, state, and country. GPS coordinates and other metadata are preserved. Refresh the asset in Immich to see its new names. Scheduled metadata extraction or other apps can subsequently replace those names; run a new scan if the current results differ.
 
 #### Change history, undo, and interruption
+
+Use **Show operations → Pending work** to find operations with apply or undo work waiting or underway. **Needs review** finds uncertain write outcomes that need checking in Immich. These filters cover all operations before pagination, and an operation can match both. Open it to check current outcomes before resuming work.
 
 **Location Management → Change History** records each selected operation and its per-asset outcomes. Open an operation to see its saved previous names, exact proposals, timestamps, and applied, skipped, pending, or **Needs review** results. Select applied rows, review the previous names to restore, and confirm **Undo**. Undo requires the current applied names, GPS coordinates, and metadata version to match; any later metadata edit is skipped, even if its location names are identical.
 

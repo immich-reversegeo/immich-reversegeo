@@ -11,6 +11,25 @@
 <h2>@(Id is null ? "Change History" : "Change Details")</h2>
 <LocationManagementNav ActiveSection="history" />
 <p class="hint">Review recorded changes, continue pending work, or undo selected changes.</p>
+@if (Id is null)
+{
+    <div class="review-filter-bar">
+        <label for="operation-filter">Show operations</label>
+        <select id="operation-filter" class="form-control" @bind="_filter" @bind:after="FilterAsync" disabled="@_loading">
+            <option value="@LocationOperationFilter.All">All operations</option>
+            <option value="@LocationOperationFilter.Pending">Pending work</option>
+            <option value="@LocationOperationFilter.NeedsReview">Needs review</option>
+        </select>
+    </div>
+    @if (_filter == LocationOperationFilter.Pending)
+    {
+        <p class="hint">Operations with apply or undo work waiting or underway. Open an operation to check its current status before resuming.</p>
+    }
+    else if (_filter == LocationOperationFilter.NeedsReview)
+    {
+        <p class="hint">Uncertain apply or undo outcomes. Check the affected assets in Immich before making another change.</p>
+    }
+}
 @if (_error is not null) { <p class="alert alert-error" role="alert">@_error</p> }
 @if (_loading) { <p role="status">Loading change history…</p> }
 else if (Id is null)
@@ -25,11 +44,12 @@ else if (Id is null)
                     <td><a class="text-link" href="@($"/data/location-management/history/{operation.Id}")">View</a></td></tr>
             }</tbody>
         </table></div>
-        @if (_operations.Count == 0) { <p>No change operations on this page.</p> }
+        @if (_operations.Count == 0) { <p>@(_filter == LocationOperationFilter.All ? "No change operations on this page." : "No operations match this filter on this page.")</p> }
         <div class="btn-row">
-            <button class="btn btn-secondary" disabled="@(_page == 1)" @onclick="async () => { _page--; await LoadAsync(); }">Previous</button>
-            <button class="btn btn-secondary" disabled="@(_operations.Count <= 25)" @onclick="async () => { _page++; await LoadAsync(); }">Next</button>
-            <button class="btn btn-secondary" @onclick="LoadAsync">Refresh</button>
+            <span class="hint" role="status">Page @_page</span>
+            <button class="btn btn-secondary" disabled="@(_loading || _page == 1)" @onclick="async () => { _page--; await LoadAsync(); }">Previous</button>
+            <button class="btn btn-secondary" disabled="@(_loading || _operations.Count <= 25)" @onclick="async () => { _page++; await LoadAsync(); }">Next</button>
+            <button class="btn btn-secondary" disabled="@_loading" @onclick="LoadAsync">Refresh</button>
         </div>
     </section>
 }
@@ -126,6 +146,7 @@ else
     private bool _undo;
     private bool _acknowledged;
     private int _page = 1;
+    private LocationOperationFilter _filter;
     private int _itemPage = 1;
     private int _confirmPage = 1;
     private string? _error;
@@ -154,7 +175,7 @@ else
         _error = null;
         try
         {
-            var operations = await Changes.GetOperationsAsync(requestedPage, requestedId);
+            var operations = await Changes.GetOperationsAsync(requestedPage, requestedId, requestedId is null ? _filter : LocationOperationFilter.All);
             var items = requestedId is { } id ? await Changes.GetItemsAsync(id) : [];
             if (_disposed || version != _loadVersion || requestedId != Id)
             {
@@ -179,6 +200,11 @@ else
                 _loading = false;
             }
         }
+    }
+    private Task FilterAsync()
+    {
+        _page = 1;
+        return LoadAsync();
     }
     private void SelectUndo(LocationChangeItem item, bool selected)
     {
