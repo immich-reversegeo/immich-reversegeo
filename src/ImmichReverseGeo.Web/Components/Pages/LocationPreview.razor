@@ -232,7 +232,7 @@
         <div class="review-actions">
             @if (_savedPreviewId is not null)
             {
-                <ApplyLocationChanges ScanId="_savedPreviewId" SelectedIds="_review.SelectedIds" Disabled="_busy"
+                <ApplyLocationChanges @ref="_applyReview" ReviewChanged="reviewing => _reviewing = reviewing" SelectionFocusRequested="RequestSelectionFocus" ScanId="_savedPreviewId" SelectedIds="_review.SelectedIds" Disabled="_busy"
                     BusyChanged="busy => _applying = busy" ResultsChanged="OnChangeResults" />
             }
         </div>
@@ -304,10 +304,44 @@
         }
 
         <LocationReviewHelp />
+        @if (_review.Count > 0 && !_reviewing)
+        {
+            <LocationSelectionBar @ref="_selectionBar" Count="_review.Count" Disabled="@(_busy || _applying)"
+                Clear="ClearFromSelectionBar" Review="ReviewFromSelectionBarAsync" />
+        }
     </section>
 }
 
 @code {
+    private ApplyLocationChanges? _applyReview;
+    private LocationSelectionBar? _selectionBar;
+    private bool _reviewing;
+    private bool _focusSelectionBar;
+
+    private Task ReviewFromSelectionBarAsync() => _applyReview?.ReviewFromSelectionAsync() ?? Task.CompletedTask;
+    private void RequestSelectionFocus() => _focusSelectionBar = true;
+    private void ClearFromSelectionBar()
+    {
+        _review.Clear();
+        RequestSelectionFocus();
+    }
+    private async Task FocusSelectionBarAsync()
+    {
+        if (!_focusSelectionBar || _busy || _applying)
+        {
+            return;
+        }
+        _focusSelectionBar = false;
+        if (_review.Count > 0 && !_reviewing && _selectionBar is not null)
+        {
+            await _selectionBar.FocusReviewAsync();
+        }
+        else if (_applyReview is not null)
+        {
+            await _applyReview.FocusSelectionAsync();
+        }
+    }
+
     [Parameter] public Guid? ResumeScanId { get; set; }
     private bool _resumeLoaded;
     private Guid? _scanRunToken;
@@ -481,6 +515,7 @@
 
     protected override async Task OnAfterRenderAsync(bool firstRender)
     {
+        await FocusSelectionBarAsync();
         if (!firstRender)
         {
             return;
@@ -642,6 +677,7 @@
         _message = null;
         _pausedAfterDifferences = null;
         _scanner = new LocationPreviewScanner(selection.ScanMode, selection.PauseAfterDifferences);
+        _reviewing = false;
         _resultFilter = LocationReviewFilter.Ready;
         _onlyChanges = true;
         _review.Clear();

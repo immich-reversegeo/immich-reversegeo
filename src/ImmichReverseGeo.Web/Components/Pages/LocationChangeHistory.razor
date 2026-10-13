@@ -80,9 +80,9 @@ else
         </div>
         <div class="btn-row">
             <button class="btn btn-secondary" disabled="@_busy" @onclick="LoadAsync">Refresh Results</button>
-            <button class="btn btn-secondary" disabled="@(_busy || _operation.Pending == 0)" @onclick="() => PrepareResume(false)">Resume Pending Apply</button>
-            <button class="btn btn-secondary" disabled="@(_busy || _operation.UndoPending == 0)" @onclick="() => PrepareResume(true)">Resume Pending Undo</button>
-            <button class="btn btn-secondary" disabled="@(_busy || _selected.Count == 0)" @onclick="PrepareUndo">Review Selected Undo (@_selected.Count)</button>
+            <button class="btn btn-secondary" disabled="@(_busy || _operation.Pending == 0)" @ref="_resumeApplyButton" @onclick="() => PrepareResume(false)">Resume Pending Apply</button>
+            <button class="btn btn-secondary" disabled="@(_busy || _operation.UndoPending == 0)" @ref="_resumeUndoButton" @onclick="() => PrepareResume(true)">Resume Pending Undo</button>
+            <button class="btn btn-secondary" disabled="@(_busy || _selected.Count == 0)" @ref="_undoReviewButton" @onclick="PrepareUndo">Review Selected Undo (@_selected.Count)</button>
         </div>
         @if (_busy)
         {
@@ -92,7 +92,7 @@ else
         @if (_confirmation is not null)
         {
             <div class="location-confirmation">
-                <h3>@_confirmation</h3>
+                <h3 class="review-focus-target" tabindex="-1" @ref="_confirmationHeading">@_confirmation</h3>
                 @if (_undoIds.Length > 0)
                 {
                     <LocationChangeTable Rows="_items.Where(item => _undoIds.Contains(item.AssetId)).Select(item => item.Snapshot).Skip((_confirmPage - 1) * 100).Take(100)" Reverse="true" />
@@ -105,11 +105,11 @@ else
                 <label><input type="checkbox" @bind="_acknowledged" disabled="@_busy" /> I have reviewed this operation and understand that it updates Immich.</label>
                 <div class="btn-row">
                     <button class="btn btn-primary" disabled="@(_busy || !_acknowledged)" @onclick="ExecuteAsync">Confirm</button>
-                    <button class="btn btn-secondary" disabled="@_busy" @onclick="() => _confirmation = null">Keep Results</button>
+                    <button class="btn btn-secondary" disabled="@_busy" @onclick="CloseConfirmation">Keep Results</button>
                 </div>
             </div>
         }
-        <h3>Operation results — page @_itemPage</h3>
+        <h3 class="review-focus-target" tabindex="-1" @ref="_resultsHeading">Operation results — page @_itemPage</h3>
         <div class="table-scroll" role="region" aria-label="Change history results" tabindex="0"><table class="data-table">
             <thead><tr><th scope="col">Undo</th><th scope="col">Asset GUID</th><th scope="col">Previous names</th><th scope="col">Applied proposal</th><th scope="col">Result</th></tr></thead>
             <tbody>@foreach (var item in _items.Skip((_itemPage - 1) * 100).Take(100))
@@ -128,10 +128,71 @@ else
             <button class="btn btn-secondary" disabled="@(_busy || _itemPage * 100 >= _items.Count)" @onclick="() => _itemPage++">Next 100</button>
 
         </div>
+        @if (_selected.Count > 0 && _confirmation is null)
+        {
+            <LocationSelectionBar @ref="_selectionBar" Count="_selected.Count" Disabled="_busy" ReviewLabel="Review undo"
+                Clear="ClearFromSelectionBar" Review="ReviewUndoFromSelectionBar" />
+        }
     </section>
 }
 
 @code {
+    private ElementReference _confirmationHeading;
+    private ElementReference _resultsHeading;
+    private ElementReference _undoReviewButton;
+    private ElementReference _resumeApplyButton;
+    private ElementReference _resumeUndoButton;
+    private ElementReference _confirmationTrigger;
+    private LocationSelectionBar? _selectionBar;
+    private bool _focusConfirmation;
+    private bool _focusReturn;
+    private bool _returnToSelectionBar;
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (_disposed || _loading || Id is null || _operation is null)
+        {
+            return;
+        }
+        if (_focusConfirmation && _confirmation is not null)
+        {
+            _focusConfirmation = false;
+            await _confirmationHeading.FocusAsync();
+        }
+        else if (_focusReturn)
+        {
+            _focusReturn = false;
+            if (_returnToSelectionBar && _selected.Count > 0 && _selectionBar is not null)
+            {
+                await _selectionBar.FocusReviewAsync();
+            }
+            else if (_returnToSelectionBar || (_undoIds.Length > 0 && _selected.Count == 0))
+            {
+                await _resultsHeading.FocusAsync();
+            }
+            else
+            {
+                await _confirmationTrigger.FocusAsync();
+            }
+        }
+    }
+    private void CloseConfirmation()
+    {
+        _confirmation = null;
+        _focusReturn = true;
+    }
+    private void ReviewUndoFromSelectionBar()
+    {
+        PrepareUndo();
+        _returnToSelectionBar = true;
+    }
+    private void ClearFromSelectionBar()
+    {
+        _selected.Clear();
+        _returnToSelectionBar = true;
+        _focusReturn = true;
+    }
+
     [Parameter] public Guid? Id { get; set; }
     private Guid? _loadedId;
     private IReadOnlyList<LocationChangeOperation> _operations = [];
@@ -160,6 +221,7 @@ else
         {
             Cancel();
             _loadedId = Id;
+            _focusConfirmation = _focusReturn = false;
             _selected.Clear();
             _confirmation = null;
             _page = _itemPage = 1;
@@ -217,6 +279,9 @@ else
     }
     private void PrepareUndo()
     {
+        _confirmationTrigger = _undoReviewButton;
+        _returnToSelectionBar = false;
+        _focusConfirmation = true;
         _undoIds = _selected.ToArray();
         _undo = true;
         _confirmation = $"Undo {_undoIds.Length} selected changes";
@@ -225,6 +290,9 @@ else
     }
     private void PrepareResume(bool undo)
     {
+        _confirmationTrigger = undo ? _resumeUndoButton : _resumeApplyButton;
+        _returnToSelectionBar = false;
+        _focusConfirmation = true;
         _undoIds = [];
         _undo = undo;
         _confirmation = undo ? $"Resume {_operation!.UndoPending} pending undo writes" : $"Resume {_operation!.Pending} pending apply writes";

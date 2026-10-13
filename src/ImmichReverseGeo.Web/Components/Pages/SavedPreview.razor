@@ -102,7 +102,7 @@ else
             <button class="btn btn-secondary" @onclick="_review.Clear" disabled="@(_applying || _review.Count == 0)">Clear selection</button>
         </div>
         <div class="review-actions">
-            <ApplyLocationChanges ScanId="Id" SelectedIds="_review.SelectedIds" Disabled="_loading" BusyChanged="busy => _applying = busy" ResultsChanged="OnChangeResults" />
+            <ApplyLocationChanges @ref="_applyReview" ReviewChanged="reviewing => _reviewing = reviewing" SelectionFocusRequested="RequestSelectionFocus" ScanId="Id" SelectedIds="_review.SelectedIds" Disabled="_loading" BusyChanged="busy => _applying = busy" ResultsChanged="OnChangeResults" />
         </div>
         @if (_rows.Count == 0)
         {
@@ -156,10 +156,44 @@ else
         }
 
         <LocationReviewHelp />
+        @if (_review.Count > 0 && !_reviewing)
+        {
+            <LocationSelectionBar @ref="_selectionBar" Count="_review.Count" Disabled="@(_loading || _applying)"
+                Clear="ClearFromSelectionBar" Review="ReviewFromSelectionBarAsync" />
+        }
     </section>
 }
 
 @code {
+    private ApplyLocationChanges? _applyReview;
+    private LocationSelectionBar? _selectionBar;
+    private bool _reviewing;
+    private bool _focusSelectionBar;
+
+    private Task ReviewFromSelectionBarAsync() => _applyReview?.ReviewFromSelectionAsync() ?? Task.CompletedTask;
+    private void RequestSelectionFocus() => _focusSelectionBar = true;
+    private void ClearFromSelectionBar()
+    {
+        _review.Clear();
+        RequestSelectionFocus();
+    }
+    private async Task FocusSelectionBarAsync()
+    {
+        if (!_focusSelectionBar || _loading || _applying)
+        {
+            return;
+        }
+        _focusSelectionBar = false;
+        if (_review.Count > 0 && !_reviewing && _selectionBar is not null)
+        {
+            await _selectionBar.FocusReviewAsync();
+        }
+        else if (_applyReview is not null)
+        {
+            await _applyReview.FocusSelectionAsync();
+        }
+    }
+
     [Parameter] public Guid Id { get; set; }
     private SavedLocationPreview? _report;
     private IReadOnlyList<LocationPreviewRow> _rows = [];
@@ -182,6 +216,8 @@ else
         LocationPreviewScope.AssetIds => $"{_report.Selection.AssetIds.Length} GUID(s)",
         _ => $"{_report.Selection.Scope}: {_report.Selection.Value}"
     };
+
+    protected override Task OnAfterRenderAsync(bool firstRender) => FocusSelectionBarAsync();
 
     protected override async Task OnParametersSetAsync()
     {
@@ -207,6 +243,7 @@ else
         var filter = _resultFilter;
         var onlyChanges = _onlyChanges;
         _loading = true;
+        _reviewing = false;
         _error = null;
         try
         {

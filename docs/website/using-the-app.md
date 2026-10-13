@@ -136,6 +136,8 @@ Previous names and operation results are saved in `location-changes.db` under `/
 
 #### Reviewing location results
 
+After selecting results, a sticky bar keeps the selected count, **Clear**, and **Review changes** within reach. Change History offers **Review undo** for selected applied rows. Review still opens the exact-name confirmation; the bar does not apply or undo changes. Keyboard focus moves to the review heading and returns to the initiating control when you cancel.
+
 Scan setup, progress, and results appear in separate sections. On a continued saved scan, expand **Original scan options** to see the settings used for that scan. Pause reasons and errors remain visible beside the scan action.
 
 Select differences in the results table, then review the exact names before applying. Expand **Review help** for filter descriptions, highlighted differences, and photo setup. Saved reports keep scan details and deletion controls in expandable sections. Change history shows recorded outcomes and warns when a write needs checking in Immich.
