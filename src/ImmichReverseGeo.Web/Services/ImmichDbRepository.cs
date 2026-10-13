@@ -328,20 +328,33 @@ public class ImmichDbRepository(NpgsqlDataSource dataSource, ILogger<ImmichDbRep
     }
 
     public async Task<long> GetLocationPreviewCountAsync(
-        LocationPreviewSelection selection, CancellationToken ct = default)
+        LocationPreviewSelection selection, CancellationToken ct = default, LocationPreviewCursor? after = null)
     {
+        var seek = selection.Order switch
+        {
+            LocationPreviewOrder.AssetId => "a.id > @afterId",
+            LocationPreviewOrder.NearbyCoordinates => "(floor(e.latitude * 4), floor(e.longitude * 4), a.id) > (@afterLatitudeTile, @afterLongitudeTile, @afterId)",
+            _ => throw new ArgumentOutOfRangeException(nameof(selection))
+        };
         var sql = $"""
             SELECT count(*)
             FROM asset a
             INNER JOIN asset_exif e ON e."assetId" = a.id
             WHERE a."deletedAt" IS NULL
               AND ({GetPreviewPredicate(selection)})
+              AND (@afterId IS NULL OR ({seek}))
               AND e.latitude IS NOT NULL
               AND e.longitude IS NOT NULL
             """;
         await using var conn = await dataSource.OpenConnectionAsync(ct);
         await using var cmd = new NpgsqlCommand(sql, conn);
         AddPreviewParameters(cmd, selection);
+        cmd.Parameters.AddWithValue("afterId", NpgsqlDbType.Uuid, (object?)after?.Id ?? DBNull.Value);
+        if (selection.Order == LocationPreviewOrder.NearbyCoordinates)
+        {
+            cmd.Parameters.AddWithValue("afterLatitudeTile", NpgsqlDbType.Double, (object?)after?.LatitudeTile ?? DBNull.Value);
+            cmd.Parameters.AddWithValue("afterLongitudeTile", NpgsqlDbType.Double, (object?)after?.LongitudeTile ?? DBNull.Value);
+        }
         return (long)(await cmd.ExecuteScalarAsync(ct))!;
     }
 

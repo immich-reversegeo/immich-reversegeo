@@ -16,20 +16,25 @@
 @inject PreviewCircuitLifetime CircuitLifetime
 @implements IDisposable
 
-<PageTitle>Scan &amp; Review - Immich ReverseGeo</PageTitle>
+<PageTitle>@(ResumeScanId is null ? "Scan & Review" : "Continue Saved Scan") - Immich ReverseGeo</PageTitle>
 
-<h2>Scan &amp; Review</h2>
+<h2>@(ResumeScanId is null ? "Scan & Review" : "Continue Saved Scan")</h2>
 <LocationManagementNav ActiveSection="scan" />
 
 <section class="settings-card">
-    <p>Compare the names stored in Immich with the results from your current processing settings.
+    @if (ResumeScanId is not null)
+    {
+        <p>Continue this saved scan using its original selection, ordering, and processing settings. Previously saved results are kept and are not checked again.</p>
+        <p><a class="text-link" href="@($"/data/location-management/scans/{ResumeScanId}")">View saved results</a> · <a class="text-link" href="/data/location-management/scan">Start a new scan with current settings</a></p>
+    }
+    <p>Compare the names stored in Immich with the results from @(ResumeScanId is null ? "your current processing settings" : "the saved processing settings").
         Scanning does not change Immich data or the skip list. Applying selected changes is a separate confirmed action. It may download country caches.
         Deleted assets, GUIDs without an Immich metadata row, and assets missing either GPS coordinate are excluded.</p>
     <p>A different result is a suggestion, not proof that the existing name is wrong.
         Check unfamiliar results in <a class="text-link" href="/lookup">Lookup</a> before selecting changes to apply.</p>
     <div class="form-group">
         <label for="preview-scope">Check assets by</label>
-        <select id="preview-scope" class="form-control" @bind="_scope" disabled="@(_busy || _applying || !_circuitReady)">
+        <select id="preview-scope" class="form-control" @bind="_scope" disabled="@(_busy || _applying || !_circuitReady || ResumeScanId is not null)">
             <option value="@LocationPreviewScope.AssetIds">Asset GUIDs</option>
             <option value="@LocationPreviewScope.City">Existing city</option>
             <option value="@LocationPreviewScope.State">Existing state</option>
@@ -41,7 +46,7 @@
     {
         <div class="form-group">
             <label for="preview-input">@(_scope == LocationPreviewScope.AssetIds ? "Asset GUIDs" : "Existing location name")</label>
-            <textarea id="preview-input" class="form-control reset-textarea" @bind="_input" @bind:event="oninput" disabled="@(_busy || _applying || !_circuitReady)"></textarea>
+            <textarea id="preview-input" class="form-control reset-textarea" @bind="_input" @bind:event="oninput" disabled="@(_busy || _applying || !_circuitReady || ResumeScanId is not null)"></textarea>
             <span class="hint">@(_scope == LocationPreviewScope.AssetIds
                 ? "Paste up to 1,000 GUIDs, separated by commas, spaces, or new lines."
                 : "Enter the exact city, state, or country name stored in Immich. Assets with that value and both GPS coordinates are included.")</span>
@@ -49,7 +54,7 @@
     }
     <div class="form-group">
         <label for="preview-order">Order by</label>
-        <select id="preview-order" class="form-control" @bind="_order" disabled="@(_busy || _applying || !_circuitReady)">
+        <select id="preview-order" class="form-control" @bind="_order" disabled="@(_busy || _applying || !_circuitReady || ResumeScanId is not null)">
             <option value="@LocationPreviewOrder.AssetId">Asset GUID</option>
             <option value="@LocationPreviewOrder.NearbyCoordinates">Nearby coordinates</option>
         </select>
@@ -57,28 +62,28 @@
     </div>
     <div class="form-group">
         <label for="preview-mode">Scan mode</label>
-        <select id="preview-mode" class="form-control" @bind="_scanMode" disabled="@(_busy || _applying || !_circuitReady)">
+        <select id="preview-mode" class="form-control" @bind="_scanMode" disabled="@(_busy || _applying || !_circuitReady || ResumeScanId is not null)">
             <option value="@LocationPreviewScanMode.ManualPages">Manual pages</option>
             <option value="@LocationPreviewScanMode.Continuous">Continuous scan</option>
         </select>
-        <span class="hint">Continuous scan advances automatically while this page stays open. Leaving or reloading stops it; completed results remain saved.</span>
+        <span class="hint">Continuous scan advances automatically while this page stays open. Leaving or reloading stops it; continue unfinished scans from Saved Scans.</span>
     </div>
     @if (_scanMode == LocationPreviewScanMode.Continuous)
     {
         <div class="form-group">
             <label for="preview-limit">Pause after this many new differences</label>
-            <input id="preview-limit" class="form-control" type="number" min="0" @bind="_pauseAfterDifferences" @bind:event="oninput" disabled="@(_busy || _applying || !_circuitReady)" />
+            <input id="preview-limit" class="form-control" type="number" min="0" @bind="_pauseAfterDifferences" @bind:event="oninput" disabled="@(_busy || _applying || !_circuitReady || ResumeScanId is not null)" />
             <span class="hint">Use 0 to scan to the end. Continue Scan checks until the next group of differences is found.</span>
         </div>
     }
     <div class="btn-row">
-        <button class="btn btn-primary" @onclick="StartAsync" disabled="@(_busy || _applying || !_circuitReady)">@(_circuitReady ? "Start Scan" : "Starting UI…")</button>
+        <button class="btn btn-primary" @onclick="StartAsync" disabled="@(_busy || _applying || !_circuitReady || (ResumeScanId is not null && (!_resumeLoaded || !_hasMore)))">@(!_circuitReady ? "Starting UI…" : ResumeScanId is null ? "Start Scan" : "Continue Saved Scan")</button>
         @if (_busy)
         {
             <button class="btn btn-secondary" @onclick="Cancel">Cancel</button>
         }
     </div>
-    <p class="hint">Starting a new scan clears your selected GUIDs. Selections are kept when you move to the next page.</p>
+    <p class="hint">@(ResumeScanId is null ? "Starting a new scan clears your selected GUIDs. Selections are kept when you move to the next page." : "Continuation keeps previously checked assets and appends new results to the same saved scan.")</p>
     @if (_estimate is not null)
     {
         <div class="preview-progress" role="status">
@@ -150,10 +155,13 @@
         }
         <h3>Review results — page @_differences.Page</h3>
         <p>Selection: @SelectionLabel. Order: @OrderLabel. Start a new scan to use different inputs or updated settings.</p>
-        <p>@(_scanner?.CheckedCount ?? 0) checked in total; @(_scanner?.DifferentCount ?? 0) different. Active scan time: @_scanElapsed.Elapsed.ToString(@"hh\:mm\:ss").</p>
-        <p>@_rows.Count checked in the current scan batch; @_rows.Count(row => row.HasChange) have different proposed values.
-            Results use the settings loaded when you started this scan.</p>
-        <p class="hint">@PageSummary Batch elapsed: @_pageElapsed.Elapsed.ToString(@"hh\:mm\:ss").</p>
+        <p>@(_scanner?.CheckedCount ?? 0) checked in total; @(_scanner?.DifferentCount ?? 0) different. Active scan time: @ActiveScanTime.ToString(@"hh\:mm\:ss").</p>
+        @if (_pageCount > 0)
+        {
+            <p>@_rows.Count checked in the current scan batch; @_rows.Count(row => row.HasChange) have different proposed values.
+                Results use the settings saved when you started this scan.</p>
+            <p class="hint">@PageSummary Batch elapsed: @_pageElapsed.Elapsed.ToString(@"hh\:mm\:ss").</p>
+        }
         <div class="form-group">
             <label><input type="checkbox" @bind="_onlyChanges" @bind:after="FilterDifferencesAsync" disabled="@(_busy || _applying)" /> Show only different values</label>
             <span class="hint">Uncheck and choose All results or Needs attention to include unchanged, unresolved, and failed results. Photo previews load only for differences.</span>
@@ -256,6 +264,12 @@
 }
 
 @code {
+    [Parameter] public Guid? ResumeScanId { get; set; }
+    private bool _resumeLoaded;
+    private Guid? _scanRunToken;
+    private TimeSpan _elapsedBeforeResume;
+    private TimeSpan ActiveScanTime => _elapsedBeforeResume + _scanElapsed.Elapsed;
+    private LocationPreviewCheckpoint Checkpoint => new(_estimate?.Total, ActiveScanTime.Ticks, _page, _pausedAfterDifferences);
     private LocationPreviewScope _scope = LocationPreviewScope.AssetIds;
     private string? _input;
     private bool _busy;
@@ -386,14 +400,57 @@
 
     private string OrderLabel => _selection?.Order == LocationPreviewOrder.NearbyCoordinates ? "Nearby coordinates" : "Asset GUID";
 
-    protected override void OnAfterRender(bool firstRender)
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
         if (firstRender)
         {
             CircuitLifetime.Disconnected += Cancel;
+            if (ResumeScanId is { } id)
+            {
+                try
+                {
+                    var saved = await SavedPreviews.GetResumeStateAsync(id);
+                    if (!saved.Report.CanResume)
+                    {
+                        throw new InvalidOperationException("This scan is running or complete. Open its saved results to check the current status.");
+                    }
+                    RestoreSavedScan(saved);
+                    _savedPreviewId = id;
+                    _previewId = id.ToString("N")[..8];
+                    _resumeLoaded = true;
+                    _pausedAfterDifferences = saved.Report.Status == "Paused"
+                        ? saved.Report.Checkpoint?.PausedDifferences ?? saved.Report.Selection.PauseAfterDifferences : null;
+                    _message = $"Saved status: {saved.Report.StatusLabel}. Continue after the last saved asset.";
+                    await RefreshDifferencesAsync(force: true);
+                    await LoadChangeResultsAsync();
+                }
+                catch (Exception ex)
+                {
+                    _error = "Could not load saved scan for continuation: " + ex.Message;
+                }
+            }
             _circuitReady = true;
-            StateHasChanged();
+            if (!_disposed)
+            {
+                await InvokeAsync(StateHasChanged);
+            }
         }
+    }
+
+    private void RestoreSavedScan(LocationPreviewResumeState saved)
+    {
+        _selection = saved.Report.Selection;
+        _settings = saved.Report.Settings;
+        _scope = _selection.Scope;
+        _input = _scope == LocationPreviewScope.AssetIds ? string.Join(Environment.NewLine, _selection.AssetIds) : _selection.Value;
+        _order = _selection.Order;
+        _scanMode = _selection.ScanMode;
+        _pauseAfterDifferences = _selection.PauseAfterDifferences;
+        _scanner = LocationPreviewScanner.FromSaved(saved);
+        _elapsedBeforeResume = TimeSpan.FromTicks(Math.Max(0, saved.Report.Checkpoint?.ActiveTicks ?? 0));
+        _scanElapsed.Reset();
+        _estimate = saved.Report.Checkpoint?.TotalCount is { } total
+            ? new LocationPreviewScanEstimate(total, saved.Report.CheckedCount, ActiveScanTime) : null;
     }
 
     private async Task StartAsync()
@@ -404,6 +461,14 @@
         }
 
         _error = null;
+        if (ResumeScanId is not null)
+        {
+            if (_resumeLoaded)
+            {
+                await PreviewPageAsync(reloadSettings: false);
+            }
+            return;
+        }
         LocationPreviewSelection selection;
         try
         {
@@ -433,6 +498,7 @@
         _changeResults.Clear();
         _observedBatch = 0;
         _scanElapsed.Reset();
+        _elapsedBeforeResume = TimeSpan.Zero;
         _estimate = null;
         _savedPreviewId = null;
         _saveError = null;
@@ -471,19 +537,25 @@
             if (reloadSettings)
             {
                 _settings = (await Config.GetConfigAsync()).Processing;
-                _savedPreviewId = await SavedPreviews.CreateAsync(_selection, _settings, ct);
+                var owner = Guid.NewGuid();
+                _savedPreviewId = await SavedPreviews.CreateAsync(_selection, _settings, ct, runToken: owner);
+                _scanRunToken = owner;
                 LogPreview($"Saving results to report {_savedPreviewId}.");
             }
             else if (_savedPreviewId is not null)
             {
-                await SavedPreviews.SetStatusAsync(_savedPreviewId.Value, "Running", ct: ct);
+                var owner = Guid.NewGuid();
+                var saved = await SavedPreviews.ClaimResumeAsync(_savedPreviewId.Value, owner, ct);
+                _scanRunToken = owner;
+                RestoreSavedScan(saved);
             }
 
             if (_estimate is null)
             {
                 SetStage("Counting matching assets…");
-                var total = await Db.GetLocationPreviewCountAsync(_selection, ct);
-                _estimate = new LocationPreviewScanEstimate(total);
+                var checkedCount = _scanner?.CheckedCount ?? 0;
+                var remaining = await Db.GetLocationPreviewCountAsync(_selection, ct, after: _scanner?.Cursor);
+                _estimate = new LocationPreviewScanEstimate(checkedCount + remaining, checkedCount, ActiveScanTime);
                 await InvokeAsync(StateHasChanged);
             }
             _scanElapsed.Start();
@@ -491,7 +563,8 @@
             var outcome = await _scanner!.RunAsync(
                 async (cursor, token) =>
                 {
-                    var assets = await Db.GetLocationPreviewBatchAsync(_selection, cursor, token);
+                    var assets = await SavedPreviews.LoadUnseenBatchAsync(_savedPreviewId!.Value, cursor,
+                        (after, cancellation) => Db.GetLocationPreviewBatchAsync(_selection, after, cancellation), token);
                     LogPreview($"Page {_page}: checking {Math.Min(assets.Count, 100)} matching assets.");
                     return assets;
                 },
@@ -522,8 +595,8 @@
                 {
                     try
                     {
-                        await SavedPreviews.AppendAsync(_savedPreviewId!.Value, row);
-                        _estimate.RecordChecked(_scanElapsed.Elapsed);
+                        await SavedPreviews.AppendAsync(_savedPreviewId!.Value, row, runToken: _scanRunToken, checkpoint: Checkpoint);
+                        _estimate.RecordChecked(ActiveScanTime);
                     }
                     catch (Exception ex)
                     {
@@ -572,11 +645,11 @@
         }
         finally
         {
-            if (_savedPreviewId is not null)
+            if (_savedPreviewId is not null && _scanRunToken is { } owner)
             {
                 try
                 {
-                    await SavedPreviews.SetStatusAsync(_savedPreviewId.Value, savedStatus, _error);
+                    await SavedPreviews.FinishRunAsync(_savedPreviewId.Value, owner, savedStatus, _error, Checkpoint);
                 }
                 catch (Exception ex)
                 {
@@ -584,9 +657,10 @@
                     LogPreview($"[ERROR] {_saveError}");
                 }
             }
+            _scanRunToken = null;
             _currentAssetId = null;
             _scanElapsed.Stop();
-            _estimate?.UpdateElapsed(_scanElapsed.Elapsed);
+            _estimate?.UpdateElapsed(ActiveScanTime);
             _pageElapsed.Stop();
             _stageElapsed.Stop();
             pageCts.Cancel();
@@ -649,7 +723,7 @@
                 {
                     return;
                 }
-                _estimate?.UpdateElapsed(_scanElapsed.Elapsed);
+                _estimate?.UpdateElapsed(ActiveScanTime);
                 await InvokeAsync(StateHasChanged);
             }
         }

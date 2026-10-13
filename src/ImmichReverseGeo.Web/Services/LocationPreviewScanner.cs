@@ -33,6 +33,19 @@ public sealed class LocationPreviewScanner
         _pauseAfterDifferences = pauseAfterDifferences;
     }
 
+    public static LocationPreviewScanner FromSaved(LocationPreviewResumeState saved)
+    {
+        var selection = saved.Report.Selection;
+        return new(selection.ScanMode, selection.PauseAfterDifferences)
+        {
+            Cursor = saved.Cursor,
+            CheckedCount = saved.Report.CheckedCount,
+            DifferentCount = saved.Report.DifferentCount,
+            BatchNumber = saved.Report.Checkpoint?.BatchNumber ?? (int)Math.Min(int.MaxValue, (saved.Report.CheckedCount + 99) / 100),
+            HasMore = true
+        };
+    }
+
     public async Task<LocationPreviewScanOutcome> RunAsync(
         Func<LocationPreviewCursor?, CancellationToken, Task<IReadOnlyList<LocationPreviewAsset>>> load,
         Func<LocationPreviewAsset, CancellationToken, Task<LocationPreviewRow>> resolve,

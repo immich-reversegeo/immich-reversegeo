@@ -2,6 +2,7 @@ using System;
 using System.Collections.Generic;
 using System.Globalization;
 using System.IO;
+using System.Linq;
 using System.Text.Json;
 using System.Threading;
 using System.Threading.Tasks;
@@ -13,7 +14,11 @@ namespace ImmichReverseGeo.Web.Services;
 public sealed record SavedLocationPreview(
     Guid Id, DateTimeOffset CreatedAt, DateTimeOffset UpdatedAt,
     LocationPreviewSelection Selection, ProcessingConfig Settings,
-    string Status, string? Error, long CheckedCount, long DifferentCount);
+    string Status, string? Error, long CheckedCount, long DifferentCount, LocationPreviewCheckpoint? Checkpoint = null)
+{
+    public bool CanResume => Status is "Paused" or "More assets available" or "Cancelled" or "Interrupted" or "Failed";
+    public string StatusLabel => Status == "Paused" ? "Paused for review" : Status;
+}
 
 /// <summary>Local snapshots only; this repository never connects to Immich.</summary>
 public sealed class SavedLocationPreviewRepository
@@ -67,6 +72,28 @@ public sealed class SavedLocationPreviewRepository
                     UPDATE previews SET status = 'Interrupted' WHERE status = 'Running';
                     """;
                 await command.ExecuteNonQueryAsync(ct);
+                var columns = new HashSet<string>(StringComparer.Ordinal);
+                await using (var info = connection.CreateCommand())
+                {
+                    info.CommandText = "PRAGMA table_info(previews)";
+                    await using var reader = await info.ExecuteReaderAsync(ct);
+                    while (await reader.ReadAsync(ct))
+                    {
+                        columns.Add(reader.GetString(1));
+                    }
+                }
+                foreach (var column in new[] { "checkpoint_json", "run_token" })
+                {
+                    if (!columns.Contains(column))
+                    {
+                        await using var alter = connection.CreateCommand();
+                        alter.CommandText = $"ALTER TABLE previews ADD COLUMN {column} TEXT";
+                        await alter.ExecuteNonQueryAsync(ct);
+                    }
+                }
+                await using var recovery = connection.CreateCommand();
+                recovery.CommandText = "UPDATE previews SET run_token=NULL WHERE status='Interrupted'";
+                await recovery.ExecuteNonQueryAsync(ct);
                 _initialised = true;
             }
             return connection;
@@ -78,7 +105,7 @@ public sealed class SavedLocationPreviewRepository
         }
     }
 
-    public async Task<Guid> CreateAsync(LocationPreviewSelection selection, ProcessingConfig settings, CancellationToken ct = default)
+    public async Task<Guid> CreateAsync(LocationPreviewSelection selection, ProcessingConfig settings, CancellationToken ct = default, Guid? runToken = null)
     {
         await _gate.WaitAsync(ct);
         try
@@ -87,12 +114,13 @@ public sealed class SavedLocationPreviewRepository
             await using var command = connection.CreateCommand();
             var id = Guid.NewGuid();
             command.CommandText = """
-                INSERT INTO previews VALUES ($id, $at, $at, $selection, $settings, 'Running', NULL)
+                INSERT INTO previews(id,created_at,updated_at,selection_json,settings_json,status,error,run_token) VALUES ($id, $at, $at, $selection, $settings, 'Running', NULL, $token)
                 """;
             command.Parameters.AddWithValue("$id", id.ToString());
             command.Parameters.AddWithValue("$at", DateTimeOffset.UtcNow.ToString("O"));
             command.Parameters.AddWithValue("$selection", JsonSerializer.Serialize(selection));
             command.Parameters.AddWithValue("$settings", JsonSerializer.Serialize(settings));
+            command.Parameters.AddWithValue("$token", (object?)runToken?.ToString() ?? DBNull.Value);
             await command.ExecuteNonQueryAsync(ct);
             return id;
         }
@@ -102,25 +130,39 @@ public sealed class SavedLocationPreviewRepository
         }
     }
 
-    public async Task AppendAsync(Guid previewId, LocationPreviewRow row, CancellationToken ct = default)
+    public async Task AppendAsync(Guid previewId, LocationPreviewRow row, CancellationToken ct = default, Guid? runToken = null, LocationPreviewCheckpoint? checkpoint = null)
     {
         await _gate.WaitAsync(ct);
         try
         {
             await using var connection = await OpenAsync(ct);
             using var transaction = connection.BeginTransaction();
+            if (runToken is { } owner)
+            {
+                await RequireOwnerAsync(connection, transaction, previewId, owner, ct);
+                await using var duplicate = connection.CreateCommand();
+                duplicate.Transaction = transaction;
+                duplicate.CommandText = "SELECT EXISTS(SELECT 1 FROM preview_rows WHERE preview_id=$id AND asset_id=$asset)";
+                duplicate.Parameters.AddWithValue("$id", previewId.ToString());
+                duplicate.Parameters.AddWithValue("$asset", row.Asset.Id.ToString());
+                if ((long)(await duplicate.ExecuteScalarAsync(ct))! == 1)
+                {
+                    throw new InvalidOperationException("This asset was already saved in the scan. Refresh the saved results before continuing.");
+                }
+            }
             await using var command = connection.CreateCommand();
             command.Transaction = transaction;
             command.CommandText = """
                 INSERT INTO preview_rows(preview_id, asset_id, row_json, has_change)
                 VALUES ($id, $asset, $row, $changed)
                 ON CONFLICT(preview_id, asset_id) DO NOTHING;
-                UPDATE previews SET updated_at = $at WHERE id = $id;
+                UPDATE previews SET updated_at = $at,checkpoint_json=coalesce($checkpoint,checkpoint_json) WHERE id = $id;
                 """;
             command.Parameters.AddWithValue("$id", previewId.ToString());
             command.Parameters.AddWithValue("$asset", row.Asset.Id.ToString());
             command.Parameters.AddWithValue("$row", JsonSerializer.Serialize(row));
             command.Parameters.AddWithValue("$changed", row.HasChange);
+            command.Parameters.AddWithValue("$checkpoint", checkpoint is null ? DBNull.Value : JsonSerializer.Serialize(checkpoint));
             command.Parameters.AddWithValue("$at", DateTimeOffset.UtcNow.ToString("O"));
             await command.ExecuteNonQueryAsync(ct);
             transaction.Commit();
@@ -138,12 +180,15 @@ public sealed class SavedLocationPreviewRepository
         {
             await using var connection = await OpenAsync(ct);
             await using var command = connection.CreateCommand();
-            command.CommandText = "UPDATE previews SET status = $status, error = $error, updated_at = $at WHERE id = $id";
+            command.CommandText = "UPDATE previews SET status = $status, error = $error, updated_at = $at WHERE id = $id AND run_token IS NULL";
             command.Parameters.AddWithValue("$id", id.ToString());
             command.Parameters.AddWithValue("$status", status);
             command.Parameters.AddWithValue("$error", (object?)error ?? DBNull.Value);
             command.Parameters.AddWithValue("$at", DateTimeOffset.UtcNow.ToString("O"));
-            await command.ExecuteNonQueryAsync(ct);
+            if (await command.ExecuteNonQueryAsync(ct) != 1)
+            {
+                throw new InvalidOperationException("This scan is running or no longer exists. Only its owning page can update its status.");
+            }
         }
         finally
         {
@@ -154,7 +199,7 @@ public sealed class SavedLocationPreviewRepository
     private const string SummarySql = """
         SELECT p.id, p.created_at, p.updated_at, p.selection_json, p.settings_json, p.status, p.error,
             (SELECT count(*) FROM preview_rows r WHERE r.preview_id = p.id),
-            (SELECT count(*) FROM preview_rows r WHERE r.preview_id = p.id AND r.has_change = 1)
+            (SELECT count(*) FROM preview_rows r WHERE r.preview_id = p.id AND r.has_change = 1), p.checkpoint_json
         FROM previews p
         """;
 
@@ -178,7 +223,8 @@ public sealed class SavedLocationPreviewRepository
                     DateTimeOffset.Parse(reader.GetString(2), CultureInfo.InvariantCulture),
                     JsonSerializer.Deserialize<LocationPreviewSelection>(reader.GetString(3))!,
                     JsonSerializer.Deserialize<ProcessingConfig>(reader.GetString(4))!,
-                    reader.GetString(5), reader.IsDBNull(6) ? null : reader.GetString(6), reader.GetInt64(7), reader.GetInt64(8)));
+                    reader.GetString(5), reader.IsDBNull(6) ? null : reader.GetString(6), reader.GetInt64(7), reader.GetInt64(8),
+                    reader.IsDBNull(9) ? null : JsonSerializer.Deserialize<LocationPreviewCheckpoint>(reader.GetString(9))));
             }
             return result;
         }
@@ -307,6 +353,180 @@ public sealed class SavedLocationPreviewRepository
         }
     }
 
+
+    private static async Task RequireOwnerAsync(SqliteConnection connection, SqliteTransaction transaction,
+        Guid id, Guid token, CancellationToken ct)
+    {
+        await using var command = connection.CreateCommand();
+        command.Transaction = transaction;
+        command.CommandText = "SELECT EXISTS(SELECT 1 FROM previews WHERE id=$id AND run_token=$token AND status='Running')";
+        command.Parameters.AddWithValue("$id", id.ToString());
+        command.Parameters.AddWithValue("$token", token.ToString());
+        if ((long)(await command.ExecuteScalarAsync(ct))! != 1)
+        {
+            throw new InvalidOperationException("This scan is no longer owned by this page. Open the saved scan to check its status.");
+        }
+    }
+
+    public async Task<LocationPreviewResumeState> GetResumeStateAsync(Guid id, CancellationToken ct = default)
+    {
+        var report = (await GetReportsAsync(id: id, ct: ct)).SingleOrDefault()
+            ?? throw new ArgumentException("This saved scan no longer exists.");
+        await _gate.WaitAsync(ct);
+        try
+        {
+            await using var connection = await OpenAsync(ct);
+            await using var command = connection.CreateCommand();
+            command.CommandText = "SELECT row_json FROM preview_rows WHERE preview_id=$id ORDER BY row_id DESC LIMIT 1";
+            command.Parameters.AddWithValue("$id", id.ToString());
+            var json = (string?)await command.ExecuteScalarAsync(ct);
+            var cursor = json is null ? null : LocationPreviewCursor.FromAsset(JsonSerializer.Deserialize<LocationPreviewRow>(json)!.Asset);
+            return new(report, cursor);
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task<LocationPreviewResumeState> ClaimResumeAsync(Guid id, Guid token, CancellationToken ct = default)
+    {
+        await _gate.WaitAsync(ct);
+        try
+        {
+            await using var connection = await OpenAsync(ct);
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                UPDATE previews SET status='Running',run_token=$token,error=NULL,updated_at=$at
+                WHERE id=$id AND run_token IS NULL
+                    AND status IN ('Paused','More assets available','Cancelled','Interrupted','Failed')
+                """;
+            command.Parameters.AddWithValue("$id", id.ToString());
+            command.Parameters.AddWithValue("$token", token.ToString());
+            command.Parameters.AddWithValue("$at", DateTimeOffset.UtcNow.ToString("O"));
+            if (await command.ExecuteNonQueryAsync(ct) != 1)
+            {
+                throw new InvalidOperationException("This scan is already running, complete, or deleted. Refresh its saved results before continuing.");
+            }
+        }
+        finally
+        {
+            _gate.Release();
+        }
+        // The ownership claim prevents another run from appending while this snapshot is read.
+        try
+        {
+            return await GetResumeStateAsync(id, ct);
+        }
+        catch
+        {
+            await _gate.WaitAsync();
+            try
+            {
+                await using var connection = await OpenAsync(CancellationToken.None);
+                await using var release = connection.CreateCommand();
+                release.CommandText = "UPDATE previews SET status='Interrupted',run_token=NULL WHERE id=$id AND run_token=$token";
+                release.Parameters.AddWithValue("$id", id.ToString());
+                release.Parameters.AddWithValue("$token", token.ToString());
+                await release.ExecuteNonQueryAsync();
+            }
+            finally
+            {
+                _gate.Release();
+            }
+            throw;
+        }
+    }
+
+    public async Task FinishRunAsync(Guid id, Guid token, string status, string? error, LocationPreviewCheckpoint checkpoint)
+    {
+        await _gate.WaitAsync();
+        try
+        {
+            await using var connection = await OpenAsync(CancellationToken.None);
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                UPDATE previews SET status=$status,error=$error,checkpoint_json=$checkpoint,run_token=NULL,updated_at=$at
+                WHERE id=$id AND run_token=$token
+                """;
+            command.Parameters.AddWithValue("$id", id.ToString());
+            command.Parameters.AddWithValue("$token", token.ToString());
+            command.Parameters.AddWithValue("$status", status);
+            command.Parameters.AddWithValue("$error", (object?)error ?? DBNull.Value);
+            command.Parameters.AddWithValue("$checkpoint", JsonSerializer.Serialize(checkpoint));
+            command.Parameters.AddWithValue("$at", DateTimeOffset.UtcNow.ToString("O"));
+            if (await command.ExecuteNonQueryAsync() != 1)
+            {
+                throw new InvalidOperationException("The scan outcome could not be saved because this page no longer owns the scan.");
+            }
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
+    public async Task<IReadOnlyList<LocationPreviewAsset>> LoadUnseenBatchAsync(Guid id, LocationPreviewCursor? cursor,
+        Func<LocationPreviewCursor?, CancellationToken, Task<IReadOnlyList<LocationPreviewAsset>>> load, CancellationToken ct)
+    {
+        var result = new List<LocationPreviewAsset>();
+        var seen = new HashSet<Guid>();
+        while (result.Count < 101)
+        {
+            ct.ThrowIfCancellationRequested();
+            var batch = await load(cursor, ct);
+            if (batch.Count == 0)
+            {
+                break;
+            }
+            var saved = await GetSavedIdsAsync(id, batch.Select(asset => asset.Id).ToArray(), ct);
+            foreach (var asset in batch)
+            {
+                if (!saved.Contains(asset.Id) && seen.Add(asset.Id))
+                {
+                    result.Add(asset);
+                    if (result.Count == 101)
+                    {
+                        return result;
+                    }
+                }
+            }
+            cursor = LocationPreviewCursor.FromAsset(batch[^1]);
+            if (batch.Count < 101)
+            {
+                break;
+            }
+        }
+        return result;
+    }
+
+    private async Task<HashSet<Guid>> GetSavedIdsAsync(Guid id, IReadOnlyList<Guid> ids, CancellationToken ct)
+    {
+        await _gate.WaitAsync(ct);
+        try
+        {
+            await using var connection = await OpenAsync(ct);
+            await using var command = connection.CreateCommand();
+            var parameters = ids.Select((_, index) => "$asset" + index).ToArray();
+            command.CommandText = $"SELECT asset_id FROM preview_rows WHERE preview_id=$id AND asset_id IN ({string.Join(',', parameters)})";
+            command.Parameters.AddWithValue("$id", id.ToString());
+            for (var index = 0; index < ids.Count; index++)
+            {
+                command.Parameters.AddWithValue(parameters[index], ids[index].ToString());
+            }
+            var result = new HashSet<Guid>();
+            await using var reader = await command.ExecuteReaderAsync(ct);
+            while (await reader.ReadAsync(ct))
+            {
+                result.Add(Guid.Parse(reader.GetString(0)));
+            }
+            return result;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
 
     public async Task<bool> ContainsAssetAsync(Guid id, Guid assetId, CancellationToken ct = default)
     {
