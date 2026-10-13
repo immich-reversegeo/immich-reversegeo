@@ -217,6 +217,60 @@ public sealed class SavedLocationPreviewRepository
         }
     }
 
+    public async Task<IReadOnlyList<LocationPreviewRow>> GetReviewRowsAsync(Guid id, int page, LocationReviewFilter filter)
+    {
+        ArgumentOutOfRangeException.ThrowIfLessThan(page, 1);
+        if (!Enum.IsDefined(filter))
+        {
+            throw new ArgumentException("Choose a valid result filter.", nameof(filter));
+        }
+        await _gate.WaitAsync();
+        try
+        {
+            await using var connection = await OpenAsync(CancellationToken.None);
+            await using var attach = connection.CreateCommand();
+            attach.CommandText = "ATTACH DATABASE $path AS journal";
+            attach.Parameters.AddWithValue("$path", Path.Combine(_dataDir, "location-changes.db"));
+            await attach.ExecuteNonQueryAsync();
+            await using var command = connection.CreateCommand();
+            command.CommandText = """
+                WITH ranked AS (
+                    SELECT c.asset_id,c.apply_status,c.undo_status,
+                        ROW_NUMBER() OVER (PARTITION BY c.asset_id ORDER BY o.created_at DESC,o.id DESC) AS position
+                    FROM journal.changes c JOIN journal.operations o ON o.id=c.operation_id WHERE o.scan_id=$id
+                )
+                SELECT r.row_json FROM preview_rows r
+                LEFT JOIN ranked c ON c.asset_id=r.asset_id AND c.position=1
+                WHERE r.preview_id=$id AND (
+                    $filter='All'
+                    OR ($filter='Ready' AND r.has_change=1 AND c.asset_id IS NULL)
+                    OR ($filter='Applied' AND c.apply_status='Applied' AND c.undo_status='NotRequested')
+                    OR ($filter='Attention' AND (
+                        (c.asset_id IS NOT NULL AND c.undo_status<>'Undone'
+                            AND NOT (c.apply_status='Applied' AND c.undo_status='NotRequested'))
+                        OR (c.asset_id IS NULL AND (json_extract(r.row_json,'$.Error') IS NOT NULL
+                            OR json_extract(r.row_json,'$.Proposed.City') IS NULL
+                            OR json_extract(r.row_json,'$.Proposed.Country') IS NULL))
+                    ))
+                ) ORDER BY r.row_id LIMIT 101 OFFSET $offset
+                """;
+            command.Parameters.AddWithValue("$id", id.ToString());
+            command.Parameters.AddWithValue("$filter", filter.ToString());
+            command.Parameters.AddWithValue("$offset", checked((page - 1) * 100));
+            var result = new List<LocationPreviewRow>();
+            await using var reader = await command.ExecuteReaderAsync();
+            while (await reader.ReadAsync())
+            {
+                result.Add(JsonSerializer.Deserialize<LocationPreviewRow>(reader.GetString(0))!);
+            }
+            return result;
+        }
+        finally
+        {
+            _gate.Release();
+        }
+    }
+
     public async Task<IReadOnlyList<LocationPreviewRow>> GetSelectedRowsAsync(Guid id, IReadOnlyCollection<Guid> assetIds)
     {
         var ids = System.Linq.Enumerable.ToArray(System.Linq.Enumerable.Distinct(assetIds));

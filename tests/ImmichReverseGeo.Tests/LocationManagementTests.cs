@@ -178,17 +178,23 @@ public class LocationManagementTests
     }
 
     [TestMethod]
-    public async Task Results_AreLinkedToTheirScanAndLatestOperation()
+    public async Task HandledSelection_RequiresFreshScanAndRetainsOriginalOutcome()
     {
         var (scan, rows) = await ScanAsync(1);
         var first = await _service.CreateApplyAsync(scan, [rows[0].Asset.Id]);
         await _service.RunAsync(first, false);
-        var second = await _service.CreateApplyAsync(scan, [rows[0].Asset.Id]);
-        await _service.RunAsync(second, false);
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateApplyAsync(scan, [rows[0].Asset.Id]));
+        await Assert.ThrowsAsync<ArgumentException>(() => _journal.CreateAsync(scan, rows));
         var results = await _journal.GetScanResultsAsync(scan, [rows[0].Asset.Id]);
-        Assert.AreEqual(second, results[rows[0].Asset.Id].OperationId);
-        Assert.AreEqual(LocationChangeStatus.Skipped, results[rows[0].Asset.Id].ApplyStatus);
+        Assert.AreEqual(first, results[rows[0].Asset.Id].OperationId);
+        Assert.AreEqual(LocationChangeStatus.Applied, results[rows[0].Asset.Id].ApplyStatus);
         Assert.AreEqual(0, (await _journal.GetScanResultsAsync(Guid.NewGuid(), [rows[0].Asset.Id])).Count);
+        var freshScan = await _scans.CreateAsync(LocationPreviewSelection.Create(LocationPreviewScope.AssetIds, rows[0].Asset.Id.ToString()), new());
+        var freshRow = new LocationPreviewRow(_writer.Current[rows[0].Asset.Id].Asset, new GeoResult("France", "Region", "Newly reviewed city"));
+        await _scans.AppendAsync(freshScan, freshRow);
+        var freshOperation = await _service.CreateApplyAsync(freshScan, [freshRow.Asset.Id]);
+        await _service.RunAsync(freshOperation, false);
+        Assert.AreEqual(freshRow.Proposed, _writer.Current[freshRow.Asset.Id].Asset.Existing);
     }
 
     [TestMethod]
@@ -226,9 +232,9 @@ public class LocationManagementTests
     [TestMethod]
     public async Task ConcurrentOperation_IsLeftPendingUntilExecutionLockIsAvailable()
     {
-        var (scan, rows) = await ScanAsync(1);
+        var (scan, rows) = await ScanAsync();
         var first = await _service.CreateApplyAsync(scan, [rows[0].Asset.Id]);
-        var second = await _service.CreateApplyAsync(scan, [rows[0].Asset.Id]);
+        var second = await _service.CreateApplyAsync(scan, [rows[1].Asset.Id]);
         var reached = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var release = new TaskCompletionSource(TaskCreationOptions.RunContinuationsAsynchronously);
         var running = _service.RunAsync(first, false, () => { reached.SetResult(); return release.Task; });
@@ -244,7 +250,7 @@ public class LocationManagementTests
             await running;
         }
         await _service.RunAsync(second, false);
-        Assert.AreEqual(LocationChangeStatus.Skipped, (await _journal.GetItemsAsync(second)).Single().ApplyStatus);
+        Assert.AreEqual(LocationChangeStatus.Applied, (await _journal.GetItemsAsync(second)).Single().ApplyStatus);
         Assert.AreEqual(2, _writer.Calls);
     }
 
@@ -288,6 +294,83 @@ public class LocationManagementTests
             [rows[0].Asset.Id, rows[1].Asset.Id]));
         Assert.IsTrue((await _journal.GetItemsAsync(id)).All(item => item.UndoStatus == LocationUndoStatus.NotRequested));
         Assert.AreEqual(2, _writer.Calls);
+    }
+
+    [TestMethod]
+    public async Task ReadyResults_AdvanceAfterEachHundredAndSurviveReload()
+    {
+        var (scan, rows) = await ScanAsync(201);
+        var results = new LocationReviewResults(_scans, _journal);
+        var page = new LocationPreviewDifferencePage();
+        Task<IReadOnlyList<LocationPreviewRow>> Load(int number) => results.GetRowsAsync(scan, number, LocationReviewFilter.Ready);
+        await page.RefreshAsync(201, Load);
+        Assert.AreEqual(100, page.Rows.Count());
+        Assert.IsTrue(page.HasNext);
+        var first = await _service.CreateApplyAsync(scan, page.Rows.Select(row => row.Asset.Id).ToArray());
+        await _service.RunAsync(first, false);
+        await page.RefreshAsync(201, Load, force: true);
+        CollectionAssert.AreEqual(rows.Skip(100).Take(100).Select(row => row.Asset.Id).ToArray(), page.Rows.Select(row => row.Asset.Id).ToArray());
+        var second = await _service.CreateApplyAsync(scan, page.Rows.Select(row => row.Asset.Id).ToArray());
+        await _service.RunAsync(second, false);
+        await page.RefreshAsync(201, Load, force: true);
+        Assert.AreEqual(rows[200].Asset.Id, page.Rows.Single().Asset.Id);
+        var restarted = new LocationReviewResults(new(_directory), new(_directory));
+        Assert.AreEqual(rows[200].Asset.Id, (await restarted.GetRowsAsync(scan, 1, LocationReviewFilter.Ready)).Single().Asset.Id);
+        Assert.AreEqual(101, (await restarted.GetRowsAsync(scan, 1, LocationReviewFilter.Applied)).Count);
+        Assert.AreEqual(100, (await restarted.GetRowsAsync(scan, 2, LocationReviewFilter.Applied)).Count);
+        Assert.AreEqual(101, (await restarted.GetRowsAsync(scan, 1, LocationReviewFilter.All)).Count);
+        Assert.AreEqual(0, (await restarted.GetRowsAsync(scan, 1, LocationReviewFilter.Attention)).Count);
+        Assert.AreEqual(200, _writer.Calls);
+        await page.MoveAsync(1, 201, Load);
+        Assert.AreEqual(1, page.Page);
+    }
+
+    [TestMethod]
+    public async Task AttentionResults_KeepSkippedPendingUncertainAndUndoneOutOfReady()
+    {
+        var (scan, rows) = await ScanAsync(4);
+        var results = new LocationReviewResults(_scans, _journal);
+        _writer.Current.Remove(rows[0].Asset.Id);
+        var skipped = await _service.CreateApplyAsync(scan, [rows[0].Asset.Id]);
+        await _service.RunAsync(skipped, false);
+        await _service.CreateApplyAsync(scan, [rows[1].Asset.Id]);
+        var uncertain = await _service.CreateApplyAsync(scan, [rows[2].Asset.Id]);
+        _writer.FailAfterWrite = true;
+        await _service.RunAsync(uncertain, false);
+        _writer.FailAfterWrite = false;
+        var undone = await _service.CreateApplyAsync(scan, [rows[3].Asset.Id]);
+        await _service.RunAsync(undone, false);
+        await _journal.QueueUndoAsync(undone, [rows[3].Asset.Id]);
+        await _service.RunAsync(undone, true);
+        Assert.AreEqual(0, (await results.GetRowsAsync(scan, 1, LocationReviewFilter.Ready)).Count);
+        Assert.AreEqual(0, (await results.GetRowsAsync(scan, 1, LocationReviewFilter.Applied)).Count);
+        Assert.AreEqual(3, (await results.GetRowsAsync(scan, 1, LocationReviewFilter.Attention)).Count);
+        Assert.AreEqual(4, (await results.GetRowsAsync(scan, 1, LocationReviewFilter.All)).Count);
+        var failure = new LocationPreviewRow(new(Guid.NewGuid(), 48, 2, new(null,null,null)), null, "Lookup failed");
+        await _scans.AppendAsync(scan, failure);
+        Assert.AreEqual(4, (await results.GetRowsAsync(scan, 1, LocationReviewFilter.Attention)).Count);
+        var unresolved = new LocationPreviewRow(new(Guid.NewGuid(), 48, 2, new(null,null,null)), new GeoResult(null,null,null));
+        await _scans.AppendAsync(scan, unresolved);
+        Assert.AreEqual(5, (await results.GetRowsAsync(scan, 1, LocationReviewFilter.Attention)).Count);
+        await Assert.ThrowsAsync<ArgumentException>(() => _service.CreateApplyAsync(scan, [rows[3].Asset.Id]));
+    }
+
+    [TestMethod]
+    public async Task FilteredPage_ReturnsToEarlierPageWhenLastPageIsHandled()
+    {
+        var (scan, rows) = await ScanAsync(101);
+        var results = new LocationReviewResults(_scans, _journal);
+        var page = new LocationPreviewDifferencePage();
+        Task<IReadOnlyList<LocationPreviewRow>> Load(int number) => results.GetRowsAsync(scan, number, LocationReviewFilter.Ready);
+        await page.RefreshAsync(101, Load);
+        await page.MoveAsync(1, 101, Load);
+        Assert.AreEqual(2, page.Page);
+        var operation = await _service.CreateApplyAsync(scan, [rows[100].Asset.Id]);
+        await _service.RunAsync(operation, false);
+        await page.RefreshAsync(101, Load, force: true);
+        Assert.AreEqual(1, page.Page);
+        Assert.AreEqual(100, page.Rows.Count());
+        Assert.IsFalse(page.HasNext);
     }
 
     private sealed class FakeWriter : ILocationChangeWriter

@@ -2,6 +2,7 @@
 @page "/data/location-management/scans/{Id:guid}"
 @rendermode InteractiveServer
 @inject LocationChangeRepository Changes
+@inject LocationReviewResults Results
 @inject SavedLocationPreviewRepository Saved
 @inject NavigationManager Navigation
 
@@ -61,17 +62,26 @@ else
     <section class="settings-card wide-card">
         <h3>Saved results — page @_page</h3>
         <ImmichPhotoSetup />
-        <label><input type="checkbox" @bind="_onlyChanges" @bind:after="FilterAsync" disabled="@(_loading || _applying)" /> Show only different values</label>
+        <div class="form-group">
+            <label for="saved-result-filter">Show results</label>
+            <select id="saved-result-filter" class="form-control" @bind="_resultFilter" @bind:after="FilterAsync" disabled="@(_loading || _applying)">
+                <option value="@LocationReviewFilter.Ready">Ready to apply</option>
+                <option value="@LocationReviewFilter.Applied">Applied</option>
+                <option value="@LocationReviewFilter.Attention">Needs attention</option>
+                <option value="@LocationReviewFilter.All">All results</option>
+            </select>
+            <span class="hint">Ready to apply shows differences not yet attempted. Resume pending work in Change History; run a new scan for skipped or undone changes.</span>
+        </div>
         <p class="hint">Highlighted characters differ between the existing and proposed names.
             Changed spaces appear as ␠; other invisible characters use symbols or Unicode codes. Hover over a highlight for character codes.</p>
         @if (_rows.Count == 0)
         {
-            <p>@(_onlyChanges ? "No different values saved on this page. Uncheck Show only different values to inspect all saved results." : "No results saved on this page.")</p>
+            <p>No results match this filter. Choose All results to inspect the saved snapshots.</p>
         }
         else
         {
             <div class="btn-row">
-                <button class="btn btn-secondary" disabled="@_applying" @onclick="SelectPageChanges">Select different values on this page</button>
+                <button class="btn btn-secondary" disabled="@(_loading || _applying || !_rows.Take(100).Any(CanSelect))" @onclick="SelectPageChanges">Select different values on this page</button>
                 <button class="btn btn-secondary" @onclick="_review.Clear" disabled="@(_applying || _review.Count == 0)">Clear selection</button>
             </div>
             <div class="table-scroll">
@@ -82,15 +92,16 @@ else
                         {
                             <tr>
                                 <td><input type="checkbox" aria-label="Select asset @row.Asset.Id" checked="@_review.IsSelected(row.Asset.Id)"
-                                    disabled="@(_applying || !row.HasChange)" @onchange="args => _review.Select(row, args.Value is true)" /></td>
+                                    disabled="@(_applying || !CanSelect(row))" @onchange="args => _review.Select(row, args.Value is true)" /></td>
                                 <td><PreviewPhoto AssetId="row.Asset.Id" PreviewId="Id" /></td>
                                 <td><code>@row.Asset.Id</code><div class="hint">GPS: @row.Asset.Latitude?.ToString("G", System.Globalization.CultureInfo.InvariantCulture), @row.Asset.Longitude?.ToString("G", System.Globalization.CultureInfo.InvariantCulture)</div></td>
                                 <td><div>City: <LocationDiffValue Value="@row.Asset.Existing.City" OtherValue="@row.Proposed?.City" Highlight="@row.HasChange" /></div><div>State: <LocationDiffValue Value="@row.Asset.Existing.State" OtherValue="@row.Proposed?.State" Highlight="@row.HasChange" /></div><div>Country: <LocationDiffValue Value="@row.Asset.Existing.Country" OtherValue="@row.Proposed?.Country" Highlight="@row.HasChange" /></div></td>
                                 <td><div>City: <LocationDiffValue Value="@row.Proposed?.City" OtherValue="@row.Asset.Existing.City" Highlight="@row.HasChange" /></div><div>State: <LocationDiffValue Value="@row.Proposed?.State" OtherValue="@row.Asset.Existing.State" Highlight="@row.HasChange" /></div><div>Country: <LocationDiffValue Value="@row.Proposed?.Country" OtherValue="@row.Asset.Existing.Country" Highlight="@row.HasChange" /></div></td>
-                                <td>@row.Status
+                                <td>@(_changeResults.TryGetValue(row.Asset.Id, out var outcome) ? outcome.Label : row.Status)
                                 @if (_changeResults.TryGetValue(row.Asset.Id, out var change))
                                 {
-                                    <div class="hint">@change.Label @if (change.Message is not null) { <span>: @change.Message</span> }</div>
+                                    <div class="hint">@change.Message</div>
+                                    <a class="text-link" href="@($"/data/location-management/history/{change.OperationId}")">View change</a>
                                 }
                                     @if (row.Error is not null)
                                     {
@@ -129,7 +140,8 @@ else
     private bool _loading;
     private bool _applying;
     private Dictionary<Guid, LocationChangeItem> _changeResults = new();
-    private bool _onlyChanges = true;
+    private LocationReviewFilter _resultFilter = LocationReviewFilter.Ready;
+    private bool CanSelect(LocationPreviewRow row) => row.HasChange && !_changeResults.ContainsKey(row.Asset.Id);
     private bool _confirmDelete;
     private int _page = 1;
     private string? _error;
@@ -150,7 +162,7 @@ else
             _confirmDelete = false;
             _report = null;
             _rows = [];
-            _onlyChanges = true;
+            _resultFilter = LocationReviewFilter.Ready;
             _loadedId = Id;
         }
         await LoadAsync();
@@ -161,19 +173,25 @@ else
         var version = ++_loadVersion;
         var requestedId = Id;
         var requestedPage = _page;
-        var onlyChanges = _onlyChanges;
+        var filter = _resultFilter;
         _loading = true;
         _error = null;
         try
         {
             var report = (await Saved.GetReportsAsync(id: requestedId)).SingleOrDefault();
-            var rows = report is null ? [] : await Saved.GetRowsAsync(requestedId, requestedPage, onlyChanges);
+            var rows = report is null ? [] : await Results.GetRowsAsync(requestedId, requestedPage, filter);
+            while (report is not null && requestedPage > 1 && rows.Count == 0)
+            {
+                requestedPage--;
+                rows = await Results.GetRowsAsync(requestedId, requestedPage, filter);
+            }
             var results = await Changes.GetScanResultsAsync(requestedId, rows.Take(100).Select(row => row.Asset.Id).ToArray());
             if (version != _loadVersion || requestedId != Id)
             {
                 return;
             }
             _report = report;
+            _page = requestedPage;
             _rows = rows;
             _changeResults = new Dictionary<Guid, LocationChangeItem>(results);
         }
@@ -211,15 +229,14 @@ else
         return LoadAsync();
     }
 
-    private void OnChangeResults(IReadOnlyList<LocationChangeItem> items)
+    private async Task OnChangeResults(IReadOnlyList<LocationChangeItem> items)
     {
-        _changeResults.Clear();
-        foreach (var item in items.Where(item => _rows.Take(100).Any(row => row.Asset.Id == item.AssetId))) { _changeResults[item.AssetId] = item; }
         _review.Clear();
+        await LoadAsync();
     }
     private void SelectPageChanges()
     {
-        foreach (var row in _rows.Take(100).Where(row => row.HasChange))
+        foreach (var row in _rows.Take(100).Where(CanSelect))
         {
             _review.Select(row, true);
         }

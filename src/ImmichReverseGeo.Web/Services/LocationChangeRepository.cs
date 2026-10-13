@@ -79,6 +79,20 @@ public sealed class LocationChangeRepository
         {
             await using var conn = await OpenAsync();
             using var transaction = conn.BeginTransaction();
+            // Recheck inside the transaction so concurrent confirmations cannot queue the same scan row twice.
+            await using var eligibility = conn.CreateCommand();
+            eligibility.Transaction = transaction;
+            var assets = rows.Select((_, index) => "$asset" + index).ToArray();
+            eligibility.CommandText = $"SELECT count(*) FROM changes c JOIN operations o ON o.id=c.operation_id WHERE o.scan_id=$scan AND c.asset_id IN ({string.Join(',', assets)})";
+            eligibility.Parameters.AddWithValue("$scan", scanId.ToString());
+            for (var index = 0; index < rows.Count; index++)
+            {
+                eligibility.Parameters.AddWithValue(assets[index], rows[index].Asset.Id.ToString());
+            }
+            if ((long)(await eligibility.ExecuteScalarAsync())! > 0)
+            {
+                throw new ArgumentException("The selection contains differences already attempted in this scan. Refresh results or open Change History.");
+            }
             var id = Guid.NewGuid();
             var at = DateTimeOffset.UtcNow.ToString("O");
             await using var operation = conn.CreateCommand();
