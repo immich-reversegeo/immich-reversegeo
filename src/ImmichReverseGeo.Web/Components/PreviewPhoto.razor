@@ -1,11 +1,15 @@
 @inject ImmichPhotoOptions Photos
 
 <div class="preview-photo">
-    @if (Photos.ThumbnailsEnabled && PreviewId is not null && !_failed && _ready)
+    @if (LoadPreview && Photos.ThumbnailsEnabled && PreviewId is not null && !_failed && _ready)
     {
         <img src="@($"/api/location-previews/{PreviewId}/assets/{AssetId}/thumbnail")"
              alt="Immich photo preview" width="144" height="96" loading="lazy" decoding="async"
              @onerror="() => _failed = true" />
+    }
+    else if (!LoadPreview)
+    {
+        <span class="hint" aria-label="No photo preview for a result without differences">—</span>
     }
     else
     {
@@ -18,6 +22,7 @@
 </div>
 
 @code {
+    [Parameter] public bool LoadPreview { get; set; } = true;
     [Parameter] public Guid AssetId { get; set; }
     [Parameter] public Guid? PreviewId { get; set; }
     private (Guid? PreviewId, Guid AssetId) _loaded;

@@ -6,6 +6,7 @@ For a shorter user-facing summary, see [docs/website/changelog.md](./docs/websit
 
 ## Unreleased
 
+- Default live and saved reviews to differences-only within the selected status filter, filter before pagination, and render photo-preview components only for rows with proposed differences.
 - Keep live and saved scan reviews actionable after apply: default to unattempted differences, page results by journal status before limiting, refresh and refill after writes, and reject repeated confirmations of handled snapshots. Preserve applied, skipped, pending, uncertain, and undone history through explicit result filters.
 - Expand preview into Location Management with compatible legacy routes, exact-snapshot selected apply, per-asset PostgreSQL row locks and stale-value guards, an independent SQLite write-ahead journal, resumable pending work, and metadata-revision-guarded undo. Undo selections are queued atomically; history exposes pending undo and ignores stale navigation loads. Section tabs indicate the current page and change details use separate result cards. Uncertain interrupted writes require review. See [user-facing release notes](docs/website/changelog.md).
 
