@@ -3,7 +3,7 @@
 @inject ProcessingState State
 @implements IDisposable
 
-<nav class="nav-menu" aria-label="Main navigation">
+<nav class="nav-menu @(_expanded ? "nav-expanded" : "")" aria-label="Main navigation">
     <div class="nav-brand">
         <a class="nav-brand-header" href="/" aria-label="Immich ReverseGeo dashboard">
             <img class="nav-logo" src="brand/logo-mark.svg" alt="" width="40" height="40" />
@@ -15,30 +15,37 @@
         <p class="nav-tagline">Reverse geocoding for your Immich library.</p>
     </div>
 
-    <div class="nav-section">
+    <button type="button" class="btn btn-secondary nav-toggle" aria-controls="navigation-tools" aria-expanded="@_expanded.ToString().ToLowerInvariant()" @onclick="() => _expanded = !_expanded">@(_expanded ? "Close Navigation" : "Open Navigation")</button>
+    <div id="navigation-tools" class="nav-tools">
+    <div class="nav-section" @onclick="() => _expanded = false">
         <NavLink href="/" Match="NavLinkMatch.All">Dashboard</NavLink>
+        <NavLink href="/lookup">Coordinate Lookup</NavLink>
         <div class="nav-subsection">
-            <NavLink href="/data" Match="NavLinkMatch.Prefix">Data</NavLink>
+            <NavLink href="/data" Match="NavLinkMatch.All">Library &amp; Data</NavLink>
             <div class="nav-submenu">
+                <span class="nav-section-title">Library corrections</span>
                 <NavLink href="/data/location-management">Location Management</NavLink>
                 <NavLink href="/data/reset-geo-data">Reset Immich Geo Data</NavLink>
-                <NavLink href="/data/geoboundaries">Administrative Areas</NavLink>
+                <span class="nav-section-title">Geodata</span>
+                <NavLink href="/data/geoboundaries">Country Caches</NavLink>
             </div>
         </div>
-        <NavLink href="/lookup">Lookup</NavLink>
         <div class="nav-subsection">
             <NavLink href="/settings">Settings</NavLink>
             <div class="nav-submenu">
+                <span class="nav-section-title">Advanced settings</span>
                 <NavLink href="/city-resolver">City Resolver</NavLink>
             </div>
         </div>
         <NavLink href="/logs">Logs</NavLink>
     </div>
     <a class="nav-help" href="https://immich-reversegeo.github.io/" target="_blank" rel="noopener noreferrer">Help &amp; setup</a>
+    </div>
 </nav>
 
 @code {
     private Action? _handler;
+    private bool _expanded = false;
 
     protected override void OnInitialized()
     {

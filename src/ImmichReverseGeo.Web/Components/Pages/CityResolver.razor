@@ -19,7 +19,6 @@
     <div class="btn-row">
         <a class="btn btn-secondary" href="/lookup">Open Lookup</a>
         <a class="btn btn-secondary" href="https://immich-reversegeo.github.io/configuration/#city-resolver" target="_blank" rel="noopener">Open Docs</a>
-        <a class="btn btn-secondary" href="https://github.com/immich-reversegeo/immich-reversegeo/blob/master/CONTRIBUTING.md#city-resolver-defaults" target="_blank" rel="noopener">PR Guide</a>
     </div>
     <p class="hint">`admin_level` is shown in Lookup, but it is not a user-facing control here. The current resolver mainly uses subtype order and broader-vs-tighter tie-breaks, with admin level only as a secondary internal signal when present.</p>
 </section>
@@ -69,15 +68,15 @@ else
             </div>
 
             <div class="form-group">
-                <label>Tie-break mode</label>
+                <label>Tie-break mode
                 <select class="form-control" @bind="_defaultTieBreakMode">
                     <option value="@CityResolverTieBreakModes.SmallestArea">Prefer tighter area</option>
                     <option value="@CityResolverTieBreakModes.LargestArea">Prefer broader area</option>
-                </select>
+                </select></label>
             </div>
 
             <div class="form-group">
-                <label>Preferred subtype order</label>
+                <div class="field-label">Preferred place types, in order</div>
                 <div class="resolver-subtype-list">
                     @if (_defaultSubtypeOrder.Count == 0)
                     {
@@ -92,9 +91,9 @@ else
                                 <span class="resolver-subtype-rank">@(index + 1)</span>
                                 <span class="resolver-subtype-name">@SubtypeLabel(subtype)</span>
                                 <div class="resolver-subtype-actions">
-                                    <button type="button" class="btn btn-secondary" @onclick="() => MoveSubtype(_defaultSubtypeOrder, subtype, -1)" disabled="@(index == 0)">Up</button>
-                                    <button type="button" class="btn btn-secondary" @onclick="() => MoveSubtype(_defaultSubtypeOrder, subtype, 1)" disabled="@(index == _defaultSubtypeOrder.Count - 1)">Down</button>
-                                    <button type="button" class="btn btn-danger" @onclick="() => RemoveSubtype(_defaultSubtypeOrder, subtype)">Remove</button>
+                                    <button type="button" class="btn btn-secondary" aria-label="Move @SubtypeLabel(subtype) up in the global override" @onclick="() => MoveSubtype(_defaultSubtypeOrder, subtype, -1)" disabled="@(index == 0)">Up</button>
+                                    <button type="button" class="btn btn-secondary" aria-label="Move @SubtypeLabel(subtype) down in the global override" @onclick="() => MoveSubtype(_defaultSubtypeOrder, subtype, 1)" disabled="@(index == _defaultSubtypeOrder.Count - 1)">Down</button>
+                                    <button type="button" class="btn btn-danger" aria-label="Remove @SubtypeLabel(subtype) from the global override" @onclick="() => RemoveSubtype(_defaultSubtypeOrder, subtype)">Remove</button>
                                 </div>
                             </div>
                         }
@@ -102,7 +101,7 @@ else
                 </div>
 
                 <div class="resolver-add-row">
-                    <select class="form-control" @bind="_defaultPendingSubtype">
+                    <select class="form-control" @bind="_defaultPendingSubtype" aria-label="Place type to add to the global override">
                         <option value="">Add subtype...</option>
                         @foreach (var subtype in GetAvailableSubtypeOptions(_defaultSubtypeOrder))
                         {
@@ -127,9 +126,9 @@ else
 
     <div class="resolver-add-country">
         <div class="form-group">
-            <label>Country</label>
+            <label for="resolver-country">Country</label>
             <div class="resolver-add-country-controls">
-                <input class="form-control"
+                <input id="resolver-country" class="form-control"
                        list="city-resolver-country-options"
                        @bind="_newCountryInput"
                        placeholder="Search by country or ISO3, for example Germany or DEU" />
@@ -147,7 +146,7 @@ else
 
     @if (_countryInputError is not null)
     {
-        <div class="error">@_countryInputError</div>
+        <div class="alert alert-error" role="alert">@_countryInputError</div>
     }
 
     @if (_countryEditors.Count == 0)
@@ -163,7 +162,7 @@ else
         @foreach (var editor in _countryEditors)
         {
             var effectiveProfile = GetEffectiveCountryProfile(editor);
-            <details class="resolver-card resolver-disclosure">
+            <details @key="editor.Country.Iso3" class="resolver-card resolver-disclosure" open="@(editor.Country.Iso3 == _newlyAddedCountry)">
                 <summary class="resolver-card-header resolver-card-summary">
                     <div>
                         <div class="resolver-country-name">@editor.Country.DisplayName</div>
@@ -177,19 +176,19 @@ else
                         <div class="resolver-country-name">@editor.Country.DisplayName override</div>
                         <div class="resolver-country-meta">Adjust this country without changing the global defaults.</div>
                     </div>
-                    <button type="button" class="btn btn-danger" @onclick="() => RemoveCountryOverride(editor)">Remove</button>
+                    <button type="button" class="btn btn-danger" aria-label="Remove the override for @editor.Country.DisplayName" @onclick="() => RemoveCountryOverride(editor)">Remove</button>
                 </div>
 
                 <div class="form-group">
-                    <label>Tie-break mode</label>
+                    <label>Tie-break mode
                     <select class="form-control" @bind="editor.TieBreakMode">
                         <option value="@CityResolverTieBreakModes.SmallestArea">Prefer tighter area</option>
                         <option value="@CityResolverTieBreakModes.LargestArea">Prefer broader area</option>
-                    </select>
+                    </select></label>
                 </div>
 
                 <div class="form-group">
-                    <label>Preferred subtype order</label>
+                    <div class="field-label">Preferred place types, in order</div>
                     <div class="resolver-subtype-list">
                         @if (editor.PreferredSubtypes.Count == 0)
                         {
@@ -204,9 +203,9 @@ else
                                     <span class="resolver-subtype-rank">@(index + 1)</span>
                                     <span class="resolver-subtype-name">@SubtypeLabel(subtype)</span>
                                     <div class="resolver-subtype-actions">
-                                        <button type="button" class="btn btn-secondary" @onclick="() => MoveSubtype(editor.PreferredSubtypes, subtype, -1)" disabled="@(index == 0)">Up</button>
-                                        <button type="button" class="btn btn-secondary" @onclick="() => MoveSubtype(editor.PreferredSubtypes, subtype, 1)" disabled="@(index == editor.PreferredSubtypes.Count - 1)">Down</button>
-                                        <button type="button" class="btn btn-danger" @onclick="() => RemoveSubtype(editor.PreferredSubtypes, subtype)">Remove</button>
+                                        <button type="button" class="btn btn-secondary" aria-label="Move @SubtypeLabel(subtype) up for @editor.Country.DisplayName" @onclick="() => MoveSubtype(editor.PreferredSubtypes, subtype, -1)" disabled="@(index == 0)">Up</button>
+                                        <button type="button" class="btn btn-secondary" aria-label="Move @SubtypeLabel(subtype) down for @editor.Country.DisplayName" @onclick="() => MoveSubtype(editor.PreferredSubtypes, subtype, 1)" disabled="@(index == editor.PreferredSubtypes.Count - 1)">Down</button>
+                                        <button type="button" class="btn btn-danger" aria-label="Remove @SubtypeLabel(subtype) for @editor.Country.DisplayName" @onclick="() => RemoveSubtype(editor.PreferredSubtypes, subtype)">Remove</button>
                                     </div>
                                 </div>
                             }
@@ -214,7 +213,7 @@ else
                     </div>
 
                     <div class="resolver-add-row">
-                        <select class="form-control" @bind="editor.PendingSubtype">
+                        <select class="form-control" @bind="editor.PendingSubtype" aria-label="Place type to add for @editor.Country.DisplayName">
                             <option value="">Add subtype...</option>
                             @foreach (var subtype in GetAvailableSubtypeOptions(editor.PreferredSubtypes))
                             {
@@ -235,7 +234,7 @@ else
     }
 </section>
 
-<div class="btn-row">
+<div class="btn-row settings-save-bar">
     <span role="status">@(_saveState.IsSaving ? "Saving..." : HasChanges ? "Unsaved changes" : "All changes saved")</span>
     <button @onclick="Save" class="btn btn-primary" disabled="@(_saveState.IsSaving || !HasChanges)">@(_saveState.IsSaving ? "Saving..." : "Save changes")</button>
 </div>
@@ -268,6 +267,7 @@ else
     private string _defaultPendingSubtype = string.Empty;
     private string _newCountryInput = string.Empty;
     private string? _countryInputError;
+    private string? _newlyAddedCountry;
     private List<CountryOverrideEditor> _countryEditors = [];
     private readonly SettingsSaveState _saveState = new();
     private string? _loadError;
@@ -367,6 +367,7 @@ else
         }
 
         var startingProfile = CityResolverCatalog.GetProfile(BuildCityResolverConfig(), country.Iso3);
+        _newlyAddedCountry = country.Iso3;
         _countryEditors.Add(new CountryOverrideEditor
         {
             Country = country,

@@ -1,370 +1,309 @@
 @page "/data/reset-geo-data"
 @rendermode InteractiveServer
-@using System.Linq
 @inject ImmichDbRepository Db
 @inject SkippedAssetsRepository Skipped
+@inject ProcessingState State
+@inject ProcessingBackgroundService Processor
+@inject LocationPreviewSession PreviewSession
+@implements IDisposable
 
 <PageTitle>Reset Immich Geo Data - Immich ReverseGeo</PageTitle>
-
 <h2>Reset Immich Geo Data</h2>
-<p class="section-intro"><a class="text-link" href="/data/location-preview">Preview location corrections</a> first to compare existing names with the current resolver results.</p>
-
-<section class="settings-card">
-    <h3>Reset Reverse Geo Fields</h3>
-    <p class="section-intro">Clear reverse geo location fields in Immich and let those assets be processed again on the next run.</p>
-    <div class="alert alert-info">
-        This ONLY resets the reverse geo location in <code>asset_exif</code> by clearing <code>city</code>, <code>state</code>, and <code>country</code>. It does not touch any other Immich metadata.
-    </div>
-
-    <div class="reset-grid">
-        <div class="reset-option-card">
-            <h4>Reset All Data</h4>
-            <p>Clear all reverse geo values from Immich and wipe the skip list so everything can be retried from scratch.</p>
-            @if (_resetAllConfirm)
-            {
-                <p class="alert alert-error">This will clear reverse geo location data for every matching asset. It does not touch any other metadata. Continue?</p>
-                <div class="btn-row">
-                    <button @onclick="ResetAllConfirmed" class="btn btn-primary">Yes, reset all geo data</button>
-                    <button @onclick="CancelResetAll" class="btn btn-secondary">Cancel</button>
-                </div>
-            }
-            else
-            {
-                <div class="btn-row">
-                    <button @onclick="BeginResetAll" class="btn btn-secondary">Reset All Data…</button>
-                </div>
-            }
-            @if (_resetAllResult is not null)
-            {
-                <p class="alert alert-success">@_resetAllResult</p>
-            }
+<p class="section-intro"><a class="text-link" href="/data/location-preview">Preview location corrections</a> first, then reset only the assets you want to reprocess.</p>
+<p>Reset clears city, state, and country names. GPS coordinates and other Immich metadata are kept. Take an Immich database backup before confirming a reset.</p>
+@if (State.IsRunning)
+{
+    <p class="alert alert-info" role="status">Wait for processing to finish, or cancel it from the Dashboard, before resetting location names.</p>
+}
+@if (_error is not null)
+{
+    <p class="alert alert-error" role="alert">@_error</p>
+}
+@if (_result is not null)
+{
+    <section class="settings-card" role="status">
+        <p>@_result</p>
+        <a class="btn btn-primary" href="/">Go to Dashboard to Reprocess</a>
+        <a class="text-link" href="/data/location-preview">Return to preview</a>
+    </section>
+}
+@if (_busy)
+{
+    <p role="status">@_activity</p>
+}
+@if (_pending is not null)
+{
+    <section class="settings-card reset-confirmation" aria-labelledby="reset-confirm-title">
+        <h3 id="reset-confirm-title">Review Reset</h3>
+        <p><strong>@_pending.Description</strong></p>
+        <p>Clear city, state, and country names for <strong>@_pending.Count.ToString("N0") assets</strong> with stored location names.</p>
+        <p>@(_pending.Kind == ResetKind.All ? "The entire skip list will also be cleared." : "Selected assets will also be removed from the skip list, even if they have no location names to clear.")</p>
+        <p>Reset does not apply the proposed names. Processing must run afterwards, and may produce different results if settings, coordinates, or source data have changed.</p>
+        <div class="btn-row">
+            <button class="btn btn-danger" @onclick="ConfirmResetAsync" disabled="@(_busy || State.IsRunning)">Confirm Reset</button>
+            <button class="btn btn-secondary" @onclick="() => _pending = null" disabled="@_busy">Keep Location Names</button>
         </div>
-
-        <div class="reset-option-card">
-            <h4>Reset Single Item(s)</h4>
-            <p>Paste one or more asset GUIDs to clear only those assets. Matching assets are also removed from the skip list so they can be retried.</p>
+    </section>
+}
+<fieldset class="maintenance-fields" disabled="@(_busy || _pending is not null || State.IsRunning)">
+    <section class="settings-card">
+        <h3>Reset Selected Assets</h3>
+        @if (_fromPreview)
+        {
+            <p class="alert alert-info">Your reviewed preview selection is ready below. Review the reset before confirming.</p>
+        }
+        <div class="form-group">
+            <label for="asset-reset-ids">Asset GUIDs</label>
+            <textarea id="asset-reset-ids" class="form-control reset-textarea" @bind="_assetIdsInput" @bind:event="oninput" placeholder="Paste asset GUIDs separated by commas, spaces, or new lines"></textarea>
+        </div>
+        <button class="btn btn-secondary" @onclick="ReviewAssetsAsync" disabled="@string.IsNullOrWhiteSpace(_assetIdsInput)">Review Selected Assets</button>
+    </section>
+    <section class="settings-card">
+        <h3>Reset by Existing Location</h3>
+        <p>Select an existing location. The reset clears all three location fields for matching active assets.</p>
+        @if (_loadingLocations)
+        {
+            <p role="status">Loading existing locations…</p>
+        }
+        @if (_locationLoadError is not null)
+        {
+            <p class="alert alert-error" role="alert">@_locationLoadError</p>
+            <button class="btn btn-secondary" @onclick="LoadLocationOptionsAsync">Retry Loading Locations</button>
+        }
+        <div class="reset-select-grid">
             <div class="form-group">
-                <label for="asset-reset-ids">Asset GUIDs</label>
-                <textarea id="asset-reset-ids"
-                          class="form-control reset-textarea"
-                          @bind="_assetIdsInput"
-                          placeholder="Paste one or more asset GUIDs, separated by commas, spaces, or new lines"></textarea>
-                <div class="hint">Example: <code>f3f2d7e3-0e29-4e11-9d2a-7cb0dc7d97f1</code></div>
+                <label for="reset-scope">Match by</label>
+                <select id="reset-scope" class="form-control" value="@_scope" @onchange="OnScopeChanged">
+                    @foreach (var scope in Enum.GetValues<LocationResetScope>())
+                    {
+                        <option value="@scope">@scope</option>
+                    }
+                </select>
             </div>
-            <div class="btn-row">
-                <button @onclick="ResetSelectedAssetsAsync"
-                        class="btn btn-secondary"
-                        disabled="@string.IsNullOrWhiteSpace(_assetIdsInput)">
-                    Reset Selected Items
-                </button>
+            <div class="form-group">
+                <label for="reset-sort">Sort locations</label>
+                <select id="reset-sort" class="form-control" @bind="_sortByName">
+                    <option value="false">Number of assets</option>
+                    <option value="true">Name</option>
+                </select>
             </div>
-            @if (_singleResetError is not null)
-            {
-                <p class="alert alert-error">@_singleResetError</p>
-            }
-            @if (_singleResetResult is not null)
-            {
-                <p class="alert alert-success">@_singleResetResult</p>
-            }
+            <div class="form-group">
+                <label for="reset-value">Existing location</label>
+                <select id="reset-value" class="form-control" @bind="_value" disabled="@(_loadingLocations || _locationLoadError is not null)">
+                    <option value="">Choose a location…</option>
+                    @foreach (var option in CurrentOptions)
+                    {
+                        <option value="@option.Value">@option.Value (@option.AssetCount.ToString("N0"))</option>
+                    }
+                </select>
+            </div>
         </div>
-
-        <div class="reset-option-card">
-            <h4>Reset Specific Locations</h4>
-            <p>Select an existing city, state, or country from Immich and clear reverse geo data for every matching asset.</p>
-            <div class="alert alert-info">
-                Matching is based on the selected city, state, or country value, but the reset clears ALL reverse geo fields for those assets: <code>city</code>, <code>state</code>, and <code>country</code>.
-            </div>
-            <div class="reset-select-grid">
-                <div class="form-group">
-                    <label for="reset-scope">Reset By</label>
-                    <select id="reset-scope" class="form-control" value="@_selectedLocationScope" @onchange="OnLocationScopeChanged">
-                        @foreach (var scope in Enum.GetValues<LocationResetScope>())
-                        {
-                            <option value="@scope">@GetScopeDisplayName(scope)</option>
-                        }
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="reset-location-sort">Sort Locations</label>
-                    <select id="reset-location-sort" class="form-control" value="@_locationSortMode" @onchange="OnLocationSortChanged">
-                        @foreach (var sortMode in Enum.GetValues<LocationValueSortMode>())
-                        {
-                            <option value="@sortMode">@GetSortModeDisplayName(sortMode)</option>
-                        }
-                    </select>
-                </div>
-                <div class="form-group">
-                    <label for="reset-location-value">Existing Value</label>
-                    <select id="reset-location-value"
-                            class="form-control"
-                            @bind="_selectedLocationValue"
-                            disabled="@(CurrentLocationOptions.Count == 0)">
-                        @if (CurrentLocationOptions.Count == 0)
-                        {
-                            <option value="">No @(GetScopeDisplayName(_selectedLocationScope).ToLowerInvariant()) values found</option>
-                        }
-                        else
-                        {
-                            @foreach (var option in CurrentLocationOptions)
-                            {
-                                <option value="@option.Value">@($"{option.Value} ({option.AssetCount:N0})")</option>
-                            }
-                        }
-                    </select>
-                    <div class="hint">This list comes from current reverse geo values stored in Immich.</div>
-                </div>
-            </div>
-            <div class="btn-row">
-                <button @onclick="ResetSelectedLocationAsync"
-                        class="btn btn-secondary"
-                        disabled="@string.IsNullOrWhiteSpace(_selectedLocationValue)">
-                    Reset Matching @GetScopeDisplayName(_selectedLocationScope)
-                </button>
-            </div>
-            @if (_locationResetError is not null)
-            {
-                <p class="alert alert-error">@_locationResetError</p>
-            }
-            @if (_locationResetResult is not null)
-            {
-                <p class="alert alert-success">@_locationResetResult</p>
-            }
-        </div>
-    </div>
-</section>
+        @if (!_loadingLocations && _locationLoadError is null && !CurrentOptions.Any())
+        {
+            <p>No stored @_scope.ToString().ToLowerInvariant() names were found.</p>
+        }
+        <button class="btn btn-secondary" @onclick="ReviewLocationAsync" disabled="@string.IsNullOrWhiteSpace(_value)">Review Matching Assets</button>
+    </section>
+    <section class="settings-card">
+        <details class="settings-disclosure">
+            <summary>Advanced: Reset All Location Names</summary>
+            <p>Clear names from every Immich metadata row with stored location names, including deleted assets, and clear the entire skip list. Use a targeted reset when possible.</p>
+            <button class="btn btn-danger" @onclick="ReviewAllAsync">Review Full Reset</button>
+        </details>
+    </section>
+</fieldset>
 
 @code {
-    private bool _resetAllConfirm;
-    private string? _resetAllResult;
-    private string? _singleResetResult;
-    private string? _singleResetError;
-    private string? _locationResetResult;
-    private string? _locationResetError;
-    private string? _assetIdsInput;
-    private LocationResetScope _selectedLocationScope = LocationResetScope.City;
-    private LocationValueSortMode _locationSortMode = LocationValueSortMode.AssetCount;
-    private string? _selectedLocationValue;
-    private IReadOnlyList<LocationValueOption> _cityOptions = Array.Empty<LocationValueOption>();
-    private IReadOnlyList<LocationValueOption> _stateOptions = Array.Empty<LocationValueOption>();
-    private IReadOnlyList<LocationValueOption> _countryOptions = Array.Empty<LocationValueOption>();
+    private bool _busy, _fromPreview, _sortByName;
+    private bool _loadingLocations = true;
+    private string? _assetIdsInput, _value, _error, _result, _locationLoadError;
+    private string _activity = "";
+    private LocationResetScope _scope = LocationResetScope.City;
+    private ResetRequest? _pending;
+    private readonly Dictionary<LocationResetScope, IReadOnlyList<LocationValueOption>> _options = [];
+    private IEnumerable<LocationValueOption> CurrentOptions => _sortByName
+        ? _options.GetValueOrDefault(_scope, []).OrderBy(option => option.Value, StringComparer.OrdinalIgnoreCase)
+        : _options.GetValueOrDefault(_scope, []).OrderByDescending(option => option.AssetCount).ThenBy(option => option.Value, StringComparer.OrdinalIgnoreCase);
 
-    private IReadOnlyList<LocationValueOption> CurrentLocationOptions =>
-        SortLocationOptions(_selectedLocationScope switch
+    protected override void OnInitialized()
+    {
+        State.OnChanged += Refresh;
+        var ids = PreviewSession.TakeResetIds();
+        _fromPreview = ids.Length > 0;
+        if (_fromPreview)
         {
-            LocationResetScope.City => _cityOptions,
-            LocationResetScope.State => _stateOptions,
-            LocationResetScope.Country => _countryOptions,
-            _ => Array.Empty<LocationValueOption>()
-        });
-
-    protected override async Task OnInitializedAsync()
-    {
-        await LoadLocationOptionsAsync();
-    }
-
-    private void BeginResetAll()
-    {
-        _resetAllConfirm = true;
-        _resetAllResult = null;
-    }
-
-    private void CancelResetAll()
-    {
-        _resetAllConfirm = false;
-    }
-
-    private async Task ResetAllConfirmed()
-    {
-        _resetAllConfirm = false;
-        _singleResetResult = null;
-        _singleResetError = null;
-        _locationResetResult = null;
-        _locationResetError = null;
-
-        var rows = await Db.ClearAllLocationDataAsync();
-        await Skipped.ClearAllAsync();
-        await LoadLocationOptionsAsync();
-
-        _resetAllResult = $"Cleared reverse geo data from {rows:N0} asset(s). Skip list also cleared. Ready to reprocess.";
-    }
-
-    private async Task ResetSelectedAssetsAsync()
-    {
-        _resetAllResult = null;
-        _singleResetResult = null;
-        _singleResetError = null;
-        _locationResetResult = null;
-        _locationResetError = null;
-
-        var (assetIds, invalidTokens) = ParseAssetIds(_assetIdsInput);
-        if (assetIds.Count == 0)
-        {
-            _singleResetError = invalidTokens.Count > 0
-                ? $"No valid asset GUIDs were found. Invalid token(s): {FormatInvalidTokens(invalidTokens)}"
-                : "Paste at least one asset GUID to reset.";
-            return;
+            _assetIdsInput = string.Join(Environment.NewLine, ids);
         }
-
-        var clearedIds = await Db.ClearLocationDataForAssetsAsync(assetIds);
-        var removedSkipped = await Skipped.RemoveAsync(assetIds);
-        await LoadLocationOptionsAsync();
-
-        var invalidSuffix = invalidTokens.Count > 0
-            ? $" Ignored {invalidTokens.Count:N0} invalid token(s): {FormatInvalidTokens(invalidTokens)}."
-            : string.Empty;
-
-        _singleResetResult = clearedIds.Count > 0
-            ? $"Cleared reverse geo data for {clearedIds.Count:N0} asset(s). Removed {removedSkipped:N0} matching asset(s) from the skip list.{invalidSuffix}"
-            : $"No reverse geo fields were set for the selected asset IDs. Removed {removedSkipped:N0} matching asset(s) from the skip list.{invalidSuffix}";
     }
 
-    private async Task ResetSelectedLocationAsync()
+    protected override async Task OnAfterRenderAsync(bool firstRender)
     {
-        _resetAllResult = null;
-        _singleResetResult = null;
-        _singleResetError = null;
-        _locationResetResult = null;
-        _locationResetError = null;
-
-        if (string.IsNullOrWhiteSpace(_selectedLocationValue))
+        if (firstRender)
         {
-            _locationResetError = $"Select a {GetScopeDisplayName(_selectedLocationScope).ToLowerInvariant()} value to reset.";
-            return;
+            await LoadLocationOptionsAsync();
+            StateHasChanged();
         }
-
-        var selectedValue = _selectedLocationValue;
-        var clearedIds = await Db.ClearLocationDataByValueAsync(_selectedLocationScope, selectedValue);
-        var removedSkipped = await Skipped.RemoveAsync(clearedIds);
-        await LoadLocationOptionsAsync();
-
-        _locationResetResult = clearedIds.Count > 0
-            ? $"Cleared reverse geo data for {clearedIds.Count:N0} asset(s) matching {GetScopeDisplayName(_selectedLocationScope).ToLowerInvariant()} \"{selectedValue}\". Removed {removedSkipped:N0} matching asset(s) from the skip list."
-            : $"No reverse geo fields were set for assets matching {GetScopeDisplayName(_selectedLocationScope).ToLowerInvariant()} \"{selectedValue}\".";
     }
+
+    private void Refresh() => _ = InvokeAsync(StateHasChanged);
+    public void Dispose() => State.OnChanged -= Refresh;
 
     private async Task LoadLocationOptionsAsync()
     {
-        var cityTask = Db.GetLocationValueOptionsAsync(LocationResetScope.City);
-        var stateTask = Db.GetLocationValueOptionsAsync(LocationResetScope.State);
-        var countryTask = Db.GetLocationValueOptionsAsync(LocationResetScope.Country);
-
-        await Task.WhenAll(cityTask, stateTask, countryTask);
-
-        _cityOptions = cityTask.Result;
-        _stateOptions = stateTask.Result;
-        _countryOptions = countryTask.Result;
-
-        RefreshSelectedLocationValue();
+        _loadingLocations = true;
+        _locationLoadError = null;
+        try
+        {
+            var scopes = Enum.GetValues<LocationResetScope>();
+            var results = await Task.WhenAll(scopes.Select(scope => Db.GetLocationValueOptionsAsync(scope)));
+            for (var index = 0; index < scopes.Length; index++)
+            {
+                _options[scopes[index]] = results[index];
+            }
+            if (!CurrentOptions.Any(option => option.Value == _value))
+            {
+                _value = null;
+            }
+        }
+        catch (Exception)
+        {
+            _locationLoadError = "Could not load locations. Check the database connection and retry. Your pasted GUIDs are still here.";
+        }
+        finally
+        {
+            _loadingLocations = false;
+        }
     }
 
-    private void OnLocationScopeChanged(ChangeEventArgs args)
+    private void OnScopeChanged(ChangeEventArgs args)
     {
         if (Enum.TryParse<LocationResetScope>(args.Value?.ToString(), out var scope))
         {
-            _selectedLocationScope = scope;
-            RefreshSelectedLocationValue();
+            _scope = scope;
+            _value = null;
         }
     }
 
-    private void OnLocationSortChanged(ChangeEventArgs args)
+    private Task ReviewAssetsAsync()
     {
-        if (Enum.TryParse<LocationValueSortMode>(args.Value?.ToString(), out var sortMode))
+        _error = null;
+        var ids = new HashSet<Guid>();
+        foreach (var token in (_assetIdsInput ?? "").Split(['\r', '\n', ',', ';', ' ', '\t'], StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries))
         {
-            _locationSortMode = sortMode;
-            RefreshSelectedLocationValue();
+            if (!Guid.TryParse(token, out var id))
+            {
+                _error = $"Invalid asset GUID: {token}. Correct it before reviewing; nothing has been reset.";
+                return Task.CompletedTask;
+            }
+            ids.Add(id);
         }
+        return ids.Count == 0 ? Task.CompletedTask
+            : ReviewAsync(new ResetRequest(ResetKind.Assets, ids.ToArray(), null, null, 0, $"{ids.Count:N0} selected asset GUIDs"));
     }
 
-    private void RefreshSelectedLocationValue()
+    private Task ReviewLocationAsync() => string.IsNullOrWhiteSpace(_value) ? Task.CompletedTask
+        : ReviewAsync(new ResetRequest(ResetKind.Location, [], _scope, _value, 0, $"{_scope}: {_value}"));
+    private Task ReviewAllAsync() => ReviewAsync(new ResetRequest(ResetKind.All, [], null, null, 0, "All Immich location names"));
+    private Task<long> CountAsync(ResetRequest request) => Db.GetResetCountAsync(
+        request.Kind == ResetKind.Assets ? request.Ids : null, request.Scope, request.Value);
+
+    private async Task ReviewAsync(ResetRequest request)
     {
-        if (CurrentLocationOptions.Count == 0)
+        if (_busy || State.IsRunning)
         {
-            _selectedLocationValue = null;
             return;
         }
-
-        if (string.IsNullOrWhiteSpace(_selectedLocationValue)
-            || !CurrentLocationOptions.Any(option => option.Value == _selectedLocationValue))
+        _busy = true;
+        _activity = "Counting assets for reset review…";
+        _error = null;
+        _result = null;
+        try
         {
-            _selectedLocationValue = CurrentLocationOptions[0].Value;
+            _pending = request with { Count = await CountAsync(request) };
+        }
+        catch (Exception)
+        {
+            _error = "Could not count the affected assets. Check the database connection and retry the review. Nothing has been reset.";
+        }
+        finally
+        {
+            _busy = false;
         }
     }
 
-    private static (List<Guid> AssetIds, List<string> InvalidTokens) ParseAssetIds(string? input)
+    private async Task ConfirmResetAsync()
     {
-        var assetIds = new List<Guid>();
-        var invalidTokens = new List<string>();
-        var seen = new HashSet<Guid>();
-
-        if (string.IsNullOrWhiteSpace(input))
+        if (_busy || _pending is null || State.IsRunning)
         {
-            return (assetIds, invalidTokens);
+            return;
         }
-
-        var tokens = input.Split(
-            ['\r', '\n', ',', ';', ' ', '\t'],
-            StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries);
-
-        foreach (var token in tokens)
+        using var maintenance = Processor.TryBeginMaintenance();
+        if (maintenance is null)
         {
-            if (Guid.TryParse(token, out var assetId))
+            _error = "Processing or another maintenance action started. Wait for it to finish, then review the reset again.";
+            return;
+        }
+        var request = _pending;
+        _busy = true;
+        _activity = "Resetting selected location names…";
+        _error = null;
+        var locationWriteCompleted = false;
+        long cleared = 0;
+        try
+        {
+            var currentCount = await CountAsync(request);
+            if (currentCount != request.Count)
             {
-                if (seen.Add(assetId))
-                {
-                    assetIds.Add(assetId);
-                }
+                _pending = request with { Count = currentCount };
+                _error = "The affected count changed since review. Check the updated count and confirm again. Nothing has been reset yet.";
+                return;
+            }
+            if (State.IsRunning)
+            {
+                _error = "Processing started during review. Wait for it to finish before confirming.";
+                return;
+            }
+            if (request.Kind == ResetKind.All)
+            {
+                cleared = await Db.ClearAllLocationDataAsync();
+                locationWriteCompleted = true;
+                await Skipped.ClearAllAsync();
+                PreviewSession.ResetAll = true;
+                PreviewSession.Review.Clear();
             }
             else
             {
-                invalidTokens.Add(token);
+                var clearedIds = request.Kind == ResetKind.Assets
+                    ? await Db.ClearLocationDataForAssetsAsync(request.Ids)
+                    : await Db.ClearLocationDataByValueAsync(request.Scope!.Value, request.Value!);
+                cleared = clearedIds.Count;
+                locationWriteCompleted = true;
+                await Skipped.RemoveAsync(request.Kind == ResetKind.Assets ? request.Ids : clearedIds);
+                PreviewSession.RemoveResetAssets(request.Kind == ResetKind.Assets ? request.Ids : clearedIds);
             }
+            _pending = null;
+            _result = $"Cleared location names for {cleared:N0} assets and updated the skip list. Run processing from the Dashboard to resolve location names again.";
+            await LoadLocationOptionsAsync();
         }
-
-        return (assetIds, invalidTokens);
+        catch (Exception)
+        {
+            // PostgreSQL and SQLite are separate stores: report partial completion explicitly.
+            _pending = null;
+            _error = locationWriteCompleted
+                ? $"Location names were cleared for {cleared:N0} assets, but the skip list could not be updated. Check Data and the database connection before reviewing a retry."
+                : "Reset could not be confirmed. Check the database connection and review before retrying; a lost connection can leave the write outcome uncertain.";
+        }
+        finally
+        {
+            _busy = false;
+        }
     }
 
-    private static string FormatInvalidTokens(IReadOnlyList<string> invalidTokens)
+    private enum ResetKind
     {
-        const int maxPreview = 5;
-        var preview = invalidTokens.Take(maxPreview);
-        return invalidTokens.Count > maxPreview
-            ? $"{string.Join(", ", preview)}, ..."
-            : string.Join(", ", preview);
+        Assets,
+        Location,
+        All
     }
-
-    private static string GetScopeDisplayName(LocationResetScope scope) =>
-        scope switch
-        {
-            LocationResetScope.City => "City",
-            LocationResetScope.State => "State",
-            LocationResetScope.Country => "Country",
-            _ => "Location"
-        };
-
-    private IReadOnlyList<LocationValueOption> SortLocationOptions(IReadOnlyList<LocationValueOption> options) =>
-        _locationSortMode switch
-        {
-            LocationValueSortMode.Name => options
-                .OrderBy(option => option.Value, StringComparer.OrdinalIgnoreCase)
-                .ThenByDescending(option => option.AssetCount)
-                .ToArray(),
-            _ => options
-                .OrderByDescending(option => option.AssetCount)
-                .ThenBy(option => option.Value, StringComparer.OrdinalIgnoreCase)
-                .ToArray()
-        };
-
-    private static string GetSortModeDisplayName(LocationValueSortMode sortMode) =>
-        sortMode switch
-        {
-            LocationValueSortMode.AssetCount => "Number Of Assets",
-            LocationValueSortMode.Name => "Name",
-            _ => "Number Of Assets"
-        };
-
-    private enum LocationValueSortMode
-    {
-        AssetCount,
-        Name
-    }
+    private sealed record ResetRequest(ResetKind Kind, Guid[] Ids, LocationResetScope? Scope, string? Value, long Count, string Description);
 }

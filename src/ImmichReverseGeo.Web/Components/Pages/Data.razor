@@ -6,10 +6,10 @@
 
 <PageTitle>Data - Immich ReverseGeo</PageTitle>
 
-<h2>Data Management</h2>
+<h2>Library &amp; Data</h2>
 
 <section class="settings-card">
-    <h3>Management Sections</h3>
+    <h3>Library Corrections and Country Caches</h3>
     <p class="section-intro">Use this page to manage downloaded administrative caches and reverse geo maintenance tools.</p>
     <div class="data-grid">
         <a class="data-link-card" href="/data/location-management">
@@ -21,7 +21,7 @@
             <span class="data-card-meta">Clear only reverse geo city, state, and country fields</span>
         </a>
         <a class="data-link-card" href="/data/geoboundaries">
-            <span class="data-card-title">Administrative Areas</span>
+            <span class="data-card-title">Country Caches</span>
             <span class="data-card-meta">@_overtureDivisionCountryCount Overture cache(s), @_gadmDivisionCountryCount GADM cache(s)</span>
         </a>
     </div>
@@ -32,20 +32,27 @@
     <p class="section-intro">Assets whose GPS coordinates fell outside all country boundaries (ocean, unmapped territories,
        or simplified-boundary false negatives near coastlines). These are permanently excluded from processing
        to prevent endless retries. Clear the list to re-attempt them on the next run.</p>
-    <p>@_skippedCount asset(s) permanently skipped.</p>
+    <p>@_skippedCount.ToString("N0") assets on the skip list.</p>
     <div class="btn-row">
-        <button @onclick="ClearSkipped" class="btn btn-secondary" disabled="@(_skippedCount == 0)">
-            Clear Skip List
+        <button @onclick="ClearSkipped" class="btn btn-secondary" disabled="@(_skippedCount == 0 || _clearing || _skipError is not null)">
+            @(_clearing ? "Clearing…" : "Clear Skip List")
         </button>
     </div>
     @if (_skipClearResult is not null)
     {
-        <p class="alert alert-success">@_skipClearResult</p>
+        <p class="alert alert-success" role="status">@_skipClearResult</p>
+    }
+    @if (_skipError is not null)
+    {
+        <p class="alert alert-error" role="alert">@_skipError</p>
+        <button class="btn btn-secondary" @onclick="RefreshPageState">Retry Loading Skip List</button>
     }
 </section>
 
 @code {
     private long _skippedCount;
+    private bool _clearing = false;
+    private string? _skipError;
     private string? _skipClearResult;
     private int _overtureDivisionCountryCount;
     private int _gadmDivisionCountryCount;
@@ -57,14 +64,32 @@
 
     private async Task ClearSkipped()
     {
-        var prev = _skippedCount;
-        await Skipped.ClearAllAsync();
-        _skippedCount = 0;
-        _skipClearResult = $"Cleared {prev:N0} skipped asset(s). They will be retried on the next run.";
+        if (_clearing)
+        {
+            return;
+        }
+        _clearing = true;
+        _skipClearResult = null;
+        try
+        {
+            var prev = _skippedCount;
+            await Skipped.ClearAllAsync();
+            _skippedCount = 0;
+            _skipClearResult = $"Cleared {prev:N0} skipped asset(s). They will be retried on the next run.";
+        }
+        catch (Exception)
+        {
+            _skipError = "Could not confirm the skip-list update. Check data-volume permissions, then reload the count before retrying.";
+        }
+        finally
+        {
+            _clearing = false;
+        }
     }
 
     private async Task RefreshPageState()
     {
+        _skipError = null;
         _overtureDivisionCountryCount = OvertureCache.GetStatus().Count;
         _gadmDivisionCountryCount = GadmCache.GetStatus().Count;
         try
@@ -73,7 +98,7 @@
         }
         catch
         {
-            /* SQLite not yet initialised — ignore */
+            _skipError = "The skip list is unavailable. Wait for startup to finish or check data-volume permissions, then retry.";
         }
     }
 }

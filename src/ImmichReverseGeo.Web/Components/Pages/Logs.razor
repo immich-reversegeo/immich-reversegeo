@@ -8,6 +8,7 @@
 
 <h2>Logs</h2>
 <p class="run-info">Times are shown in your browser's timezone. Downloads use UTC.</p>
+<p class="hint">Only the latest 100 activity entries are kept, and they are cleared when the app restarts. The download contains the current filtered view.</p>
 
 <div class="log-controls">
     <label>Filter
@@ -17,8 +18,12 @@
             <option value="[WARN]">Warnings+</option>
         </select>
     </label>
-    <button @onclick="DownloadLog" class="btn btn-secondary">↓ Download</button>
+    <button @onclick="DownloadLog" class="btn btn-secondary" disabled="@(!FilteredLog.Any())">↓ Download Filtered Recent Logs</button>
 </div>
+@if (!FilteredLog.Any())
+{
+    <p role="status">No recent entries match this filter.</p>
+}
 
 <div class="log-full">
     @foreach (var entry in FilteredLog)
@@ -31,9 +36,7 @@
     private string _levelFilter = "";
 
     private IEnumerable<ProcessingLogEntry> FilteredLog =>
-        string.IsNullOrEmpty(_levelFilter)
-            ? State.GetRecentLogEntries()
-            : State.GetRecentLogEntries().Where(entry => entry.Message.Contains(_levelFilter));
+        State.GetRecentLogEntries().Where(entry => entry.MatchesFilter(_levelFilter));
 
     protected override void OnInitialized() => State.OnChanged += Refresh;
     public void Dispose() => State.OnChanged -= Refresh;

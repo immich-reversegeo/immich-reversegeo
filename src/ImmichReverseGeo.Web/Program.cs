@@ -113,6 +113,7 @@ builder.Services.AddSingleton<LocationChangeRepository>();
 builder.Services.AddSingleton<LocationManagementService>();
 builder.Services.AddSingleton<LocationReviewResults>();
 builder.Services.AddSingleton<ProcessingState>();
+builder.Services.AddScoped<LocationPreviewSession>();
 builder.Services.AddSingleton<ProcessingBackgroundService>();
 builder.Services.AddHostedService(sp => sp.GetRequiredService<ProcessingBackgroundService>());
 

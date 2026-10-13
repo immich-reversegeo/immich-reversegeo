@@ -28,27 +28,27 @@ else
 <section class="settings-card">
     <details class="settings-disclosure">
         <summary>Database Connection Details</summary>
-        <p class="section-intro">Pre-populated from environment variables. These values come from the current running process, so if you change Windows or user environment variables after Visual Studio was already open, restart Visual Studio before running again.</p>
+        <p class="section-intro">These read-only values come from the running app's environment. Change database values in Docker Compose or your host environment, then restart Immich ReverseGeo.</p>
         <div class="form-group">
-            <label>Host</label>
-            <input value="@_dbHost" class="form-control env-readonly" readonly aria-readonly="true" />
+            <label>Host
+            <input value="@_dbHost" class="form-control env-readonly" readonly aria-readonly="true" /></label>
             <div class="hint env-field-hint">Environment value</div>
         </div>
         <div class="form-group">
-            <label>Port</label>
-            <input type="number" value="@_dbPort" class="form-control env-readonly" readonly aria-readonly="true" />
+            <label>Port
+            <input type="number" value="@_dbPort" class="form-control env-readonly" readonly aria-readonly="true" /></label>
         </div>
         <div class="form-group">
-            <label>Database</label>
-            <input value="@_dbName" class="form-control env-readonly" readonly aria-readonly="true" />
+            <label>Database
+            <input value="@_dbName" class="form-control env-readonly" readonly aria-readonly="true" /></label>
         </div>
         <div class="form-group">
-            <label>Username</label>
-            <input value="@_dbUser" class="form-control env-readonly" readonly aria-readonly="true" />
+            <label>Username
+            <input value="@_dbUser" class="form-control env-readonly" readonly aria-readonly="true" /></label>
         </div>
         <div class="form-group">
-            <label>Password</label>
-            <input type="password" value="@_dbPassword" class="form-control env-readonly" readonly aria-readonly="true" />
+            <label>Password
+            <input type="password" value="@_dbPassword" class="form-control env-readonly" readonly aria-readonly="true" /></label>
         </div>
         <div class="btn-row">
             <button @onclick="TestConnection" class="btn btn-secondary" disabled="@_testingConnection">@(_testingConnection ? "Testing..." : "Test Connection")</button>
@@ -69,7 +69,7 @@ else
 
 <section class="settings-card">
     <h3>Schedule</h3>
-    <p class="section-intro">Choose when automatic processing should run. Manual runs from the dashboard still work at any time.</p>
+    <p class="section-intro">Schedule times use UTC. Manual runs from the Dashboard work even when scheduling is disabled.</p>
     <div class="form-group">
         <label><input type="checkbox" @bind="_cfg.Schedule.Enabled" /> Run processing automatically on a schedule</label>
     </div>
@@ -78,7 +78,7 @@ else
     {
         <div class="schedule-builder">
             <div class="form-group">
-                <label>How often?</label>
+                <label>How often?
                 <select @bind="_schedule.Mode" class="form-control">
                     <option value="@ScheduleEditorState.ModeHourly">Every hour</option>
                     <option value="@ScheduleEditorState.ModeEveryMinutes">Every few minutes</option>
@@ -86,34 +86,34 @@ else
                     <option value="@ScheduleEditorState.ModeDaily">Every day</option>
                     <option value="@ScheduleEditorState.ModeWeekly">Once a week</option>
                     <option value="@ScheduleEditorState.ModeCustom">Advanced custom schedule</option>
-                </select>
+                </select></label>
             </div>
 
             @if (_schedule.Mode == ScheduleEditorState.ModeHourly)
             {
                 <div class="form-group">
-                    <label>Minute past the hour</label>
-                    <input type="number" min="0" max="59" @bind="_schedule.Minute" class="form-control" />
+                    <label>Minute past the hour
+                    <input type="number" min="0" max="59" @bind="_schedule.Minute" @bind:event="oninput" class="form-control" /></label>
                 </div>
             }
 
             @if (_schedule.Mode == ScheduleEditorState.ModeEveryMinutes)
             {
                 <div class="form-group">
-                    <label>Run every</label>
+                    <label>Run every
                     <select @bind="_schedule.MinuteInterval" class="form-control">
                         <option value="5">5 minutes</option>
                         <option value="10">10 minutes</option>
                         <option value="15">15 minutes</option>
                         <option value="30">30 minutes</option>
-                    </select>
+                    </select></label>
                 </div>
             }
 
             @if (_schedule.Mode == ScheduleEditorState.ModeEveryHours)
             {
                 <div class="form-group">
-                    <label>Run every</label>
+                    <label>Run every
                     <select @bind="_schedule.HourInterval" class="form-control">
                         <option value="2">2 hours</option>
                         <option value="3">3 hours</option>
@@ -121,27 +121,27 @@ else
                         <option value="6">6 hours</option>
                         <option value="8">8 hours</option>
                         <option value="12">12 hours</option>
-                    </select>
+                    </select></label>
                 </div>
 
                 <div class="form-group">
-                    <label>Minute past the hour</label>
-                    <input type="number" min="0" max="59" @bind="_schedule.Minute" class="form-control" />
+                    <label>Minute past the hour
+                    <input type="number" min="0" max="59" @bind="_schedule.Minute" @bind:event="oninput" class="form-control" /></label>
                 </div>
             }
 
             @if (_schedule.Mode == ScheduleEditorState.ModeDaily || _schedule.Mode == ScheduleEditorState.ModeWeekly)
             {
                 <div class="form-group">
-                    <label>What time?</label>
-                    <input type="time" value="@_schedule.Time" @onchange="OnScheduleTimeChanged" class="form-control" />
+                    <label>What time?
+                    <input type="time" value="@_schedule.Time" @onchange="OnScheduleTimeChanged" class="form-control" /></label>
                 </div>
             }
 
             @if (_schedule.Mode == ScheduleEditorState.ModeWeekly)
             {
                 <div class="form-group">
-                    <label>Which day?</label>
+                    <label>Which day?
                     <select @bind="_schedule.WeeklyDay" class="form-control">
                         <option value="MON">Monday</option>
                         <option value="TUE">Tuesday</option>
@@ -150,7 +150,7 @@ else
                         <option value="FRI">Friday</option>
                         <option value="SAT">Saturday</option>
                         <option value="SUN">Sunday</option>
-                    </select>
+                    </select></label>
                 </div>
             }
         </div>
@@ -158,8 +158,8 @@ else
         @if (_schedule.Mode == ScheduleEditorState.ModeCustom)
         {
             <div class="form-group">
-                <label>Cron Expression</label>
-                <input @bind="_cfg.Schedule.Cron" class="form-control" />
+                <label>Cron Expression
+                <input @bind="_cfg.Schedule.Cron" @bind:event="oninput" class="form-control" /></label>
                 <span class="hint">Use standard 5-part cron syntax. Example: <code>0 2 * * *</code> runs every day at 02:00.</span>
             </div>
         }
@@ -167,9 +167,13 @@ else
         {
             <div class="schedule-summary">
                 <div class="schedule-summary-label">Scheduled Run</div>
-                <div class="schedule-summary-value">@_schedule.Describe()</div>
-                <div class="schedule-summary-detail">Cron: <code>@_schedule.ToCron()</code></div>
+                <div class="schedule-summary-value">@_schedule.Describe() (UTC)</div>
+                <details><summary>Show cron expression</summary><code>@_schedule.ToCron()</code></details>
             </div>
+        }
+        @if (NextRun is { } next)
+        {
+            <p>Next run after saving: <LocalTimestamp Timestamp="@(new DateTimeOffset(next))" /></p>
         }
     }
     else
@@ -188,35 +192,40 @@ else
         <label><input type="checkbox" @bind="_cfg.Processing.LowMemoryMode" /> Low-memory mode</label>
         <span class="hint">Uses one processing worker, batches of at most 25 assets, and less memory for downloads. Country boundaries are read from disk as needed. Processing can be slower. Save before starting a run; work already in progress keeps its current limits.</span>
     </div>
-    <div class="form-group">
-        <label><input type="checkbox" @bind="_cfg.Processing.UseBoundedCountryCache" /> Limit country boundary cache</label>
-        <span class="hint">Uses less RAM for country matching while keeping your processing parallelism. Lookups can be slower than the default full index. Low-memory mode overrides this option and reads boundaries without retaining them.</span>
-    </div>
-    @if (_cfg.Processing.UseBoundedCountryCache)
-    {
+    <details class="settings-disclosure">
+        <summary>Advanced Processing Limits</summary>
         <div class="form-group">
-            <label>Country boundary cache budget (MiB)
-                <input type="number" min="1" max="1024" @bind="_cfg.Processing.CountryCacheMiB" />
-            </label>
-            <span class="hint">Default: 256. Range: 1–1024. This estimates cached geometry size, not total RAM. Active lookups and garbage collection can use additional memory. Save to apply; changing the cache settings releases the existing country cache.</span>
+            <label><input type="checkbox" @bind="_cfg.Processing.UseBoundedCountryCache" /> Limit country boundary cache</label>
+            <span class="hint">Uses less RAM for country matching while keeping your processing parallelism. Lookups can be slower than the default full index. Low-memory mode overrides this option and reads boundaries without retaining them.</span>
         </div>
-    }
-    <div class="form-group">
-        <label>Release country index after idle (minutes)
-            <input type="number" min="0" max="1440" @bind="_cfg.Processing.CountryIndexIdleMinutes" />
-        </label>
-        <span class="hint">In normal mode, releases cached country boundaries after this many minutes without a country lookup. Default: 5. Use 0 to keep them cached. The next lookup rebuilds the index; RAM is reclaimed when garbage collection runs. Low-memory mode does not retain this index.</span>
-    </div>
-    <div class="form-group">
-        <label>Batch Size <input type="number" @bind="_cfg.Processing.BatchSize" /></label>
-    </div>
-    <div class="form-group">
-        <label>Batch Delay (ms) <input type="number" @bind="_cfg.Processing.BatchDelayMs" /></label>
-    </div>
-    <div class="form-group">
-        <label>Max Parallelism <input type="number" min="1" max="32" @bind="_cfg.Processing.MaxDegreeOfParallelism" /></label>
-        <span class="hint">How many assets can be resolved in parallel within a batch. Start with 4 and increase carefully. Low-memory mode uses one worker without changing this saved value.</span>
-    </div>
+        @if (_cfg.Processing.UseBoundedCountryCache)
+        {
+            <div class="form-group">
+                <label>Country boundary cache budget (MiB)
+                    <input type="number" min="1" max="1024" @bind="_cfg.Processing.CountryCacheMiB" />
+                </label>
+                <span class="hint">Default: 256. Range: 1ï¿½1024. This estimates cached geometry size, not total RAM. Active lookups and garbage collection can use additional memory. Save to apply; changing the cache settings releases the existing country cache.</span>
+            </div>
+        }
+        <div class="form-group">
+            <label>Release country index after idle (minutes)
+                <input type="number" min="0" max="1440" @bind="_cfg.Processing.CountryIndexIdleMinutes" />
+            </label>
+            <span class="hint">In normal mode, releases cached country boundaries after this many minutes without a country lookup. Default: 5. Use 0 to keep them cached. The next lookup rebuilds the index; RAM is reclaimed when garbage collection runs. Low-memory mode does not retain this index.</span>
+        </div>
+
+        <div class="form-group">
+            <label>Batch size <input type="number" min="1" @bind="_cfg.Processing.BatchSize" @bind:event="oninput" /></label>
+        </div>
+        <div class="form-group">
+            <label>Pause between batches (ms) <input type="number" min="0" @bind="_cfg.Processing.BatchDelayMs" @bind:event="oninput" /></label>
+        </div>
+        <div class="form-group">
+            <label>Parallel workers <input type="number" min="1" max="32" @bind="_cfg.Processing.MaxDegreeOfParallelism" @bind:event="oninput" /></label>
+            <span class="hint">Start with 4 and increase carefully. More workers increase load on the host and database.</span>
+        </div>
+    </details>
+    <p class="hint">Effective limits for the next run: @_cfg.Processing.EffectiveBatchSize assets per batch, @_cfg.Processing.EffectiveParallelism worker(s). @(_cfg.Processing.LowMemoryMode ? "Low-memory mode overrides your saved limits." : "Saved limits apply after saving.")</p>
     <div class="form-group">
         <label><input type="checkbox" @bind="_cfg.Processing.UseAirportInfrastructure" /> Use airport names when photos match mapped airport boundaries</label>
         <span class="hint">Allows a 5 m tolerance around mapped boundaries. Point-only airports are excluded unless the optional fallback below is enabled. Turn this off if you prefer commune or city names on airport grounds.</span>
@@ -230,7 +239,7 @@ else
     }
     <div class="form-group">
         <label><input type="checkbox" @bind="_cfg.Processing.UseGadmAdministrativeAreas" /> Enable GADM administrative areas as an optional source</label>
-        <span class="hint">Uses on-demand GADM country caches for state and city matching when enabled.</span>
+        <span class="hint">Uses on-demand GADM country caches for state and city matching. GADM is licensed for non-commercial use; check its licence before enabling.</span>
     </div>
     @if (_cfg.Processing.UseGadmAdministrativeAreas)
     {
@@ -256,9 +265,13 @@ else
     </div>
 </section>
 
-<div class="btn-row">
+@if (ValidationError is { } validationError)
+{
+    <p class="alert alert-error" role="alert">@validationError</p>
+}
+<div class="btn-row settings-save-bar">
     <span role="status">@(_saveState.IsSaving ? "Saving..." : HasChanges ? "Unsaved changes" : "All changes saved")</span>
-    <button @onclick="Save" class="btn btn-primary" disabled="@(_saveState.IsSaving || !HasChanges)">@(_saveState.IsSaving ? "Saving..." : "Save changes")</button>
+    <button @onclick="Save" class="btn btn-primary" disabled="@(_saveState.IsSaving || !HasChanges || ValidationError is not null)">@(_saveState.IsSaving ? "Saving..." : "Save changes")</button>
 </div>
 
 }
@@ -274,6 +287,9 @@ else
     private string? _connectionError;
     private bool? _connResult;
     private ScheduleEditorState _schedule = new();
+    private DateTime? NextRun => SettingsValidation.NextRun(BuildSaveConfig().Schedule.Cron, DateTime.UtcNow);
+    private string? ValidationError => (_cfg.Schedule.Enabled ? SettingsValidation.GetScheduleEditorError(_schedule) : null)
+        ?? SettingsValidation.GetError(BuildSaveConfig(), DateTime.UtcNow);
 
     protected override Task OnInitializedAsync() => LoadSettings();
 
@@ -289,6 +305,10 @@ else
             _dbName = db.Database;
             _dbUser = db.Username;
             _schedule = ScheduleEditorState.FromCron(_cfg.Schedule.Cron);
+            if (SettingsValidation.NextRun(_cfg.Schedule.Cron, DateTime.UtcNow) is null)
+            {
+                _schedule.Mode = ScheduleEditorState.ModeCustom;
+            }
             _saveState.Load(BuildSaveConfig());
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or JsonException)
@@ -321,6 +341,10 @@ else
 
     private async Task Save()
     {
+        if (ValidationError is not null)
+        {
+            return;
+        }
         var snapshot = _saveState.BeginSave(BuildSaveConfig());
         if (snapshot is null)
         {
@@ -364,6 +388,6 @@ else
 
     private void OnScheduleTimeChanged(ChangeEventArgs e)
     {
-        _schedule.Time = e.Value?.ToString() ?? "02:00";
+        _schedule.Time = e.Value?.ToString() ?? "";
     }
 }

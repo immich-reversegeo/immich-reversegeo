@@ -223,7 +223,7 @@ body {
     color: var(--text-secondary);
 }
 
-:where(a, button, summary, input, select, textarea):focus-visible {
+:where(a, button, summary, input, select, textarea, [tabindex="0"]):focus-visible {
     outline: 2px solid var(--accent);
     outline-offset: 3px;
 }
@@ -370,7 +370,6 @@ input[type="email"] {
     background: var(--bg-elevated);
     border: 2px solid var(--border);
     border-radius: var(--radius);
-    outline: none;
     transition: border-color var(--transition);
 }
 
@@ -383,7 +382,6 @@ input[type="number"] {
     background: var(--bg-elevated);
     border: 2px solid var(--border);
     border-radius: var(--radius);
-    outline: none;
     transition: border-color var(--transition);
 }
 
@@ -395,7 +393,6 @@ select {
     background: var(--bg-elevated);
     border: 2px solid var(--border);
     border-radius: var(--radius);
-    outline: none;
     appearance: none;
     -webkit-appearance: none;
     background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' stroke='%238888aa' stroke-width='1.5' fill='none' stroke-linecap='round' stroke-linejoin='round'/%3E%3C/svg%3E");
@@ -1569,7 +1566,6 @@ input[type="text"].env-readonly {
 }
 
 .paste-input:focus {
-    outline: none;
     border-color: var(--accent);
 }
 
@@ -1633,7 +1629,6 @@ input[type="text"].env-readonly {
 }
 
 .coord-input:focus {
-    outline: none;
     border-color: var(--accent);
     box-shadow: 0 0 0 3px rgba(124, 135, 255, 0.15);
 }
@@ -2056,4 +2051,43 @@ input[type="text"].env-readonly {
 
 .preview-pause-banner .btn {
     white-space: nowrap;
+}
+
+.skip-link {
+    position: fixed;
+    top: 0.5rem;
+    left: 0.5rem;
+    z-index: 100;
+    padding: 0.6rem 1rem;
+    color: var(--text-primary);
+    background: var(--bg-elevated);
+    transform: translateY(-200%);
+}
+
+.skip-link:focus { transform: translateY(0); }
+.nav-menu .nav-toggle { display: none; }
+.nav-tools { display: flex; flex-direction: column; gap: 1.5rem; flex: 1; }
+.maintenance-fields { border: 0; padding: 0; margin: 0; min-width: 0; }
+.field-label { color: var(--text-secondary); margin-bottom: 0.65rem; }
+.settings-save-bar {
+    position: sticky;
+    bottom: 0.75rem;
+    z-index: 10;
+    padding: 0.85rem 1rem;
+    border: 1px solid var(--border);
+    border-radius: var(--radius-lg);
+    background: var(--bg-surface);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.25);
+}
+.lookup-diagnostics { grid-column: 1 / -1; }
+.lookup-diagnostics > summary { cursor: pointer; padding: 0.75rem 0; font-weight: 600; }
+.lookup-diagnostics .result-card { margin-bottom: 1rem; }
+.reset-confirmation { border-color: var(--danger); }
+html { scroll-padding-bottom: 6rem; }
+
+
+@media (max-width: 900px) {
+    .nav-menu .nav-toggle { display: block; align-self: flex-start; }
+    .nav-tools { display: none; }
+    .nav-expanded .nav-tools { display: flex; }
 }

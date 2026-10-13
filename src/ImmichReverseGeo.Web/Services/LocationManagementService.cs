@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging;
 namespace ImmichReverseGeo.Web.Services;
 
 public sealed class LocationManagementService(SavedLocationPreviewRepository scans,
-    LocationChangeRepository changes, ILocationChangeWriter writer, ILogger<LocationManagementService> logger)
+    LocationChangeRepository changes, ILocationChangeWriter writer, ILogger<LocationManagementService> logger, ProcessingBackgroundService? processor = null)
 {
     private readonly SemaphoreSlim _execution = new(1, 1);
 
@@ -42,6 +42,11 @@ public sealed class LocationManagementService(SavedLocationPreviewRepository sca
         }
         try
         {
+            using var maintenance = processor?.TryBeginMaintenance();
+            if (processor is not null && maintenance is null)
+            {
+                throw new InvalidOperationException("Processing or another maintenance action is active. Wait for it to finish, then resume this operation from Change History.");
+            }
             await changes.RecoverAsync(operationId);
             logger.LogInformation("Location change operation {OperationId}: {Action} started", operationId, undo ? "undo" : "apply");
             foreach (var item in await changes.GetItemsAsync(operationId))

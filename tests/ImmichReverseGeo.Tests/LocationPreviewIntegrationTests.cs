@@ -50,6 +50,12 @@ public class LocationPreviewIntegrationTests
 
             var repository = new ImmichDbRepository(source, NullLogger<ImmichDbRepository>.Instance);
             var all = LocationPreviewSelection.Create(LocationPreviewScope.All, null);
+            // Reset counts include named rows without GPS and full reset includes deleted rows.
+            Assert.AreEqual(206L, await repository.GetResetCountAsync());
+            Assert.AreEqual(203L, await repository.GetResetCountAsync(scope: LocationResetScope.City, value: "Old city"));
+            Assert.AreEqual(2L, await repository.GetResetCountAsync(scope: LocationResetScope.City, value: "' OR TRUE --"));
+            Assert.AreEqual(0L, await repository.GetResetCountAsync(scope: LocationResetScope.City, value: "Missing city"));
+            Assert.AreEqual(1L, await repository.GetResetCountAsync(assetIds: [Guid.Parse("00000000-0000-0000-0000-000000000206")]));
             Assert.AreEqual(203L, await repository.GetLocationPreviewCountAsync(all));
             Assert.AreEqual(203L, await repository.GetLocationPreviewCountAsync(all with { Order = LocationPreviewOrder.NearbyCoordinates }));
             Assert.AreEqual(1L, await repository.GetLocationPreviewCountAsync(
