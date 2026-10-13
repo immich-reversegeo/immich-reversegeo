@@ -55,6 +55,22 @@ The test projects use `MSTest.Sdk` on Microsoft.Testing.Platform for the .NET 10
 
 For Visual Studio and other tooling that honors repo-level run settings, [`.runsettings`](./.runsettings) excludes `Integration` and `Performance` tests from normal default runs.
 
+### Browser regression tests
+
+The frontend suite checks selection and exact-name confirmation, keyboard focus, saved-history filtering, connection recovery, and long-table layout in Chromium at desktop and 390px phone widths.
+
+```bash
+npm ci
+npx playwright install chromium
+npm run test:frontend
+```
+
+Use Node.js 24 and the .NET 10 SDK, and hydrate Git LFS data first. On Linux, use `npx playwright install --with-deps chromium` if browser dependencies are missing. Stop local app processes before building or testing on Windows.
+
+The suite creates fresh SQLite fixtures under `_out/frontend-tests/runs/`, disables scheduling, clears Immich photo connection variables, and overrides database credentials with dummy values pointing to loopback port 1. It starts its own app on `http://127.0.0.1:5265` and refuses to reuse an existing server. Tests review confirmations without performing writes; no live Immich database is needed.
+
+The HTML report is under `_out/frontend-tests/report/`; failures retain screenshots and traces under `_out/frontend-tests/results/`. CI runs the same suite before Docker validation and image publication. These checks cover the UI with saved fixtures; the separate integration suite verifies live database contracts.
+
 ### Environment
 
 For local Visual Studio or `dotnet run` usage, the app reads real process environment variables for database access:

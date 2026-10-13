@@ -4,6 +4,7 @@
   "description": "Task runner for Immich ReverseGeo",
   "scripts": {
     "build": "dotnet build",
+    "test:frontend": "playwright test --config tests/Frontend/playwright.config.mjs",
     "test": "dotnet test --filter \"TestCategory!=Integration&TestCategory!=Performance\"",
     "test:immich-db": "pwsh -NoProfile -File tests/LiveImmichDb/Run-LiveImmichDb.ps1 -Action Test",
     "test:integration": "dotnet test --settings integration.runsettings --filter \"TestCategory=Integration\"",
@@ -15,5 +16,8 @@
     "docs:build": "python -m zensical build --clean --strict",
     "export:airports": "dotnet run --project src/ImmichReverseGeo.Tools.OvertureExport -- --dataset airports",
     "export:country-divisions": "dotnet run --project src/ImmichReverseGeo.Tools.OvertureExport -- --dataset country-divisions"
+  },
+  "devDependencies": {
+    "@playwright/test": "1.64.0"
   }
 }
