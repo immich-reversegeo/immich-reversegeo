@@ -13,6 +13,8 @@
 @inject ProcessingState State
 @inject ILogger<LocationPreview> Logger
 @inject SavedLocationPreviewRepository SavedPreviews
+@inject LocationPreviewSession Session
+@inject NavigationManager Navigation
 @inject PreviewCircuitLifetime CircuitLifetime
 @implements IDisposable
 
@@ -20,6 +22,7 @@
 
 <h2>Scan &amp; Review</h2>
 <LocationManagementNav ActiveSection="scan" />
+<p class="hint">Your review and selections are kept when you visit Lookup and return in this browser session. Leaving stops an active scan. Saved scans remain available after reload or restart.</p>
 
 <section class="settings-card">
     <p>Compare the names stored in Immich with the results from your current processing settings.
@@ -179,9 +182,9 @@
                 <button class="btn btn-secondary" @onclick="_review.Clear" disabled="@(_review.Count == 0)">Clear Selection</button>
             </div>
         }
-        <div class="table-scroll">
+        <div class="table-scroll" role="region" aria-label="Location comparisons; scroll horizontally to see all columns" tabindex="0">
             <table class="data-table">
-                <thead><tr><th>Select</th><th>Photo</th><th>Asset GUID</th><th>Existing location</th><th>Proposed location</th><th>Result</th></tr></thead>
+                <thead><tr><th scope="col">Select</th><th scope="col">Photo</th><th scope="col">Asset GUID</th><th scope="col">Existing location</th><th scope="col">Proposed location</th><th scope="col">Result</th></tr></thead>
                 <tbody>
                     @foreach (var row in VisibleRows)
                     {
@@ -192,6 +195,7 @@
                             <td><PreviewPhoto AssetId="row.Asset.Id" PreviewId="_savedPreviewId" LoadPreview="@row.HasChange" /></td>
                             <td><code>@row.Asset.Id</code>
                                 <div class="hint">GPS: @(row.Asset.Latitude?.ToString("G", System.Globalization.CultureInfo.InvariantCulture) ?? "—"), @(row.Asset.Longitude?.ToString("G", System.Globalization.CultureInfo.InvariantCulture) ?? "—")</div>
+                                <a class="text-link" href="@LookupUrl(row.Asset)">Inspect in Lookup</a>
                             </td>
                             <td>
                                 <div>City: <LocationDiffValue Value="@row.Asset.Existing.City" OtherValue="@row.Proposed?.City" Highlight="@row.HasChange" /></div>
@@ -203,7 +207,7 @@
                                 <div>State: <LocationDiffValue Value="@row.Proposed?.State" OtherValue="@row.Asset.Existing.State" Highlight="@row.HasChange" /></div>
                                 <div>Country: <LocationDiffValue Value="@row.Proposed?.Country" OtherValue="@row.Asset.Existing.Country" Highlight="@row.HasChange" /></div>
                             </td>
-                            <td>@(_changeResults.TryGetValue(row.Asset.Id, out var outcome) ? outcome.Label : row.Status)
+                            <td>@(Session.ResetAll || Session.ResetAssets.Contains(row.Asset.Id) ? "Reset — run processing or start a fresh scan" : _changeResults.TryGetValue(row.Asset.Id, out var outcome) ? outcome.Label : row.Status)
                                 @if (_changeResults.TryGetValue(row.Asset.Id, out var change))
                                 {
                                     <div class="hint">@change.Message</div>
@@ -245,7 +249,8 @@
                 <textarea id="preview-changed-ids" class="form-control reset-textarea" readonly
                           value="@string.Join(Environment.NewLine, _review.SelectedIds)"></textarea>
             </div>
-            <p>Apply the selected changes below, or copy the GUIDs for the optional <a class="text-link" href="/data/reset-geo-data">reset and reprocessing workflow</a>.</p>
+            <p>Apply the reviewed values below, or use the optional reset and reprocessing workflow.</p>
+            <button class="btn btn-secondary" @onclick="ReviewReset">Review Reset for @_review.Count Selected Assets</button>
         }
         @if (_savedPreviewId is not null)
         {
@@ -267,7 +272,7 @@
     private LocationPreviewDifferencePage _differences = new();
     private string? _differenceError;
     private IEnumerable<LocationPreviewRow> VisibleRows => _differences.Rows;
-    private bool CanSelect(LocationPreviewRow row) => row.HasChange && !_changeResults.ContainsKey(row.Asset.Id);
+    private bool CanSelect(LocationPreviewRow row) => row.HasChange && !_changeResults.ContainsKey(row.Asset.Id) && !Session.ResetAll && !Session.ResetAssets.Contains(row.Asset.Id);
     private LocationPreviewOrder _order = LocationPreviewOrder.AssetId;
     private bool _hasMore => _scanner?.HasMore ?? false;
     private bool _disposed;
@@ -283,7 +288,7 @@
     private int _pauseAfterDifferences = 100;
     private int _observedBatch;
     private string ContinueLabel => _selection?.ScanMode == LocationPreviewScanMode.Continuous ? "Continue Scan" : "Scan Next 100";
-    private readonly Stopwatch _scanElapsed = new();
+    private Stopwatch _scanElapsed => Session.ScanElapsed;
     private LocationPreviewScanEstimate? _estimate;
     private LocationPreviewSelection? _selection;
     private ProcessingConfig? _settings;
@@ -294,7 +299,8 @@
     private readonly Stopwatch _pageElapsed = new();
     private readonly Stopwatch _stageElapsed = new();
     private IReadOnlyList<LocationPreviewRow> _rows => _scanner?.Rows ?? Array.Empty<LocationPreviewRow>();
-    private readonly LocationPreviewReview _review = new();
+    private LocationPreviewReview _review => Session.Review;
+    private bool _restored;
 
     private string RemainingLabel => _estimate?.EstimatedRemaining is not { } remaining
         ? "Estimating…"
@@ -386,14 +392,98 @@
 
     private string OrderLabel => _selection?.Order == LocationPreviewOrder.NearbyCoordinates ? "Nearby coordinates" : "Asset GUID";
 
-    protected override void OnAfterRender(bool firstRender)
+    private static string LookupUrl(LocationPreviewAsset asset) => FormattableString.Invariant($"/lookup?lat={asset.Latitude}&lon={asset.Longitude}");
+
+    private void ReviewReset()
     {
-        if (firstRender)
+        Session.PrepareReset();
+        SaveSession();
+        Navigation.NavigateTo("/data/reset-geo-data");
+    }
+
+    private void SaveSession()
+    {
+        if (!_restored)
         {
-            CircuitLifetime.Disconnected += Cancel;
-            _circuitReady = true;
-            StateHasChanged();
+            return;
         }
+        Session.Scope = _scope;
+        Session.Input = _input;
+        Session.Order = _order;
+        Session.Mode = _scanMode;
+        Session.PauseAfterDifferences = _pauseAfterDifferences;
+        Session.Selection = _selection;
+        Session.Settings = _settings;
+        Session.Scanner = _scanner;
+        Session.Estimate = _estimate;
+        Session.SavedPreviewId = _savedPreviewId;
+        Session.PreviewLogId = _previewId;
+        Session.Differences = _differences;
+        Session.Filter = _resultFilter;
+        Session.OnlyChanges = _onlyChanges;
+    }
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!firstRender)
+        {
+            return;
+        }
+        // Let the prior component finish cancellation and saving before taking over its scanner.
+        if (Session.RunningScan is { } previous)
+        {
+            try
+            {
+                await previous;
+            }
+            catch (Exception ex)
+            {
+                _error = $"The previous scan was interrupted: {ex.Message}. Completed results remain in Saved Scans.";
+            }
+        }
+        if (_disposed)
+        {
+            return;
+        }
+        _scope = Session.Scope;
+        _input = Session.Input;
+        _order = Session.Order;
+        _scanMode = Session.Mode;
+        _pauseAfterDifferences = Session.PauseAfterDifferences;
+        _selection = Session.Selection;
+        _settings = Session.Settings;
+        _scanner = Session.Scanner;
+        _estimate = Session.Estimate;
+        _savedPreviewId = Session.SavedPreviewId;
+        _previewId = Session.PreviewLogId;
+        _differences = Session.Differences;
+        _resultFilter = Session.Filter;
+        _onlyChanges = Session.OnlyChanges;
+        _observedBatch = _page;
+        _restored = true;
+        if (_savedPreviewId is { } id)
+        {
+            try
+            {
+                await RefreshDifferencesAsync(force: true);
+                await LoadChangeResultsAsync();
+                if (_review.Count > 0)
+                {
+                    var handled = await Changes.GetScanResultsAsync(id, _review.SelectedIds);
+                    foreach (var assetId in handled.Keys)
+                    {
+                        _review.Deselect(assetId);
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _differenceError = $"Could not restore the review: {ex.Message}. Completed results remain in Saved Scans.";
+            }
+        }
+        CircuitLifetime.Disconnected += Cancel;
+        _circuitReady = true;
+        StateHasChanged();
     }
 
     private async Task StartAsync()
@@ -428,6 +518,8 @@
         _resultFilter = LocationReviewFilter.Ready;
         _onlyChanges = true;
         _review.Clear();
+        Session.ResetAssets.Clear();
+        Session.ResetAll = false;
         _differences = new LocationPreviewDifferencePage();
         _differenceError = null;
         _changeResults.Clear();
@@ -443,7 +535,18 @@
 
     private Task NextAsync() => PreviewPageAsync(reloadSettings: false);
 
-    private async Task PreviewPageAsync(bool reloadSettings)
+    private Task PreviewPageAsync(bool reloadSettings)
+    {
+        if (_busy || _applying || !_circuitReady)
+        {
+            return Task.CompletedTask;
+        }
+        var scan = PreviewPageCoreAsync(reloadSettings);
+        Session.RunningScan = scan;
+        return scan;
+    }
+
+    private async Task PreviewPageCoreAsync(bool reloadSettings)
     {
         if (_busy || _applying || _selection is null || _disposed)
         {
@@ -594,6 +697,7 @@
             pageCts.Dispose();
             _cts = null;
             _busy = false;
+            SaveSession();
         }
     }
 
@@ -662,6 +766,7 @@
 
     public void Dispose()
     {
+        SaveSession();
         CircuitLifetime.Disconnected -= Cancel;
         _disposed = true;
         _cts?.Cancel();

@@ -132,4 +132,5 @@ public sealed class LocationPreviewReview
     }
 
     public void Clear() => _selectedIds.Clear();
+    public void Deselect(Guid id) => _selectedIds.Remove(id);
 }

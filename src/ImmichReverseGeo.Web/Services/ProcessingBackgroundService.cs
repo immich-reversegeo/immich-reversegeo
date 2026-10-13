@@ -70,12 +70,14 @@ public class ProcessingBackgroundService(
                 if (await _runLock.WaitAsync(0, stoppingToken))
                 {
                     state.MarkPending();
-                    try { await RunOnceAsync(stoppingToken); }
+                    _runCts?.Dispose();
+                    _runCts = CancellationTokenSource.CreateLinkedTokenSource(stoppingToken);
+                    try { await RunOnceAsync(_runCts.Token); }
                     finally { _runLock.Release(); }
                 }
                 else
                 {
-                    state.AppendLog("Scheduled run skipped because a processing pass is already in progress.");
+                    state.AppendLog("Scheduled run skipped because processing or maintenance is already in progress.");
                 }
             }
         }
@@ -88,6 +90,7 @@ public class ProcessingBackgroundService(
         // or recently-triggered run, bail out immediately — no silent race possible.
         if (!_runLock.Wait(0))
         {
+            state.AppendLog("Manual run was not started because processing or maintenance is already in progress.");
             return Task.CompletedTask;
         }
 
@@ -111,8 +114,30 @@ public class ProcessingBackgroundService(
 
     public void CancelRun() => _runCts?.Cancel();
 
+    /// <summary>Resets and cache changes share the run lock, preventing a run starting mid-write.</summary>
+    public IDisposable? TryBeginMaintenance()
+    {
+        if (!_runLock.Wait(0))
+        {
+            return null;
+        }
+        state.SetMaintenance(true);
+        return new MaintenanceScope(() =>
+        {
+            state.SetMaintenance(false);
+            _runLock.Release();
+        });
+    }
+
+    private sealed class MaintenanceScope(Action release) : IDisposable
+    {
+        private Action? _release = release;
+        public void Dispose() => Interlocked.Exchange(ref _release, null)?.Invoke();
+    }
+
     private async Task RunOnceAsync(CancellationToken ct)
     {
+        var outcome = ProcessingRunOutcome.Completed;
         try
         {
             var total = await db.GetUnprocessedCountAsync(ct);
@@ -163,10 +188,14 @@ public class ProcessingBackgroundService(
                     {
                         if (skippedIds.Contains(asset.Id))
                         {
+                            state.RecordChecked(previouslySkipped: true);
                             return;
                         }
 
-                        await ProcessAssetAsync(asset, cfg, token);
+                        if (await ProcessAssetAsync(asset, cfg, token))
+                        {
+                            state.RecordChecked();
+                        }
                     });
 
                 if (cfg.Processing.BatchDelayMs > 0)
@@ -174,22 +203,28 @@ public class ProcessingBackgroundService(
                     await Task.Delay(cfg.Processing.BatchDelayMs, ct);
                 }
             }
+            ct.ThrowIfCancellationRequested();
         }
-        catch (OperationCanceledException) { state.AppendLog("Run cancelled."); }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            outcome = ProcessingRunOutcome.Cancelled;
+            state.AppendLog("Run cancelled. Location names already written are kept.");
+        }
         catch (Exception ex)
         {
             logger.LogError(ex, "Fatal error during processing run");
             state.IncrementError($"Fatal: {ex.Message}");
+            outcome = ProcessingRunOutcome.Failed;
         }
         finally
         {
-            state.CompleteRun();
-            state.AppendLog($"Run complete. Processed={state.ProcessedThisRun} " +
+            state.CompleteRun(outcome);
+            state.AppendLog($"Run ended: {state.LastOutcome}. Checked={state.CheckedThisRun} Updated={state.ProcessedThisRun} " +
                             $"Skipped={state.SkippedThisRun} Errors={state.ErrorsThisRun}");
         }
     }
 
-    private async Task ProcessAssetAsync(AssetRecord asset, AppConfig cfg, CancellationToken ct)
+    private async Task<bool> ProcessAssetAsync(AssetRecord asset, AppConfig cfg, CancellationToken ct)
     {
         var step = "ResolveLocation";
         try
@@ -207,7 +242,7 @@ public class ProcessingBackgroundService(
                 state.AppendLog($"[WARN] Asset {asset.Id}: no country found at ({asset.Latitude:F4}, {asset.Longitude:F4}), skipping.");
                 await skipped.AddAsync(asset.Id);
                 state.IncrementSkipped();
-                return;
+                return true;
             }
 
             // 4. Write back (only if we have country AND city)
@@ -224,7 +259,7 @@ public class ProcessingBackgroundService(
                         "Asset {AssetId}: country={Country} state={State} resolved but no city — skipping write (lat={Lat:F4}, lon={Lon:F4})",
                         asset.Id, geoResult.Country, geoResult.State, asset.Latitude, asset.Longitude);
                     state.IncrementSkipped();
-                    return;
+                    return true;
                 }
 
                 if (cfg.Processing.VerboseLogging)
@@ -252,6 +287,7 @@ public class ProcessingBackgroundService(
                 await skipped.AddAsync(asset.Id);
                 state.IncrementSkipped();
             }
+            return true;
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -259,6 +295,7 @@ public class ProcessingBackgroundService(
                 "Processing cancelled at step={Step} for asset {AssetId}",
                 step,
                 asset.Id);
+            return false;
         }
         catch (Exception ex)
         {
@@ -266,6 +303,7 @@ public class ProcessingBackgroundService(
             logger.LogError(ex, "Error at step={Step} for asset {AssetId} [{ExType}]",
                 step, asset.Id, ex.GetType().Name);
             state.IncrementError($"Asset {asset.Id} [{step}]: {ex.Message}");
+            return true;
         }
     }
 

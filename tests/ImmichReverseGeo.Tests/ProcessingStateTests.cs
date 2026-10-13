@@ -6,6 +6,56 @@ namespace ImmichReverseGeo.Tests;
 public class ProcessingStateTests
 {
     [TestMethod]
+    public void CheckedProgress_IncludesUpdatedSkippedFailedAndPreviouslySkippedAssets()
+    {
+        var state = new ProcessingState();
+        state.StartRun(4);
+        state.IncrementProcessed();
+        state.RecordChecked();
+        state.IncrementSkipped();
+        state.RecordChecked();
+        state.IncrementError("Asset write failed");
+        state.RecordChecked();
+        state.RecordChecked(previouslySkipped: true);
+        state.CompleteRun();
+
+        Assert.AreEqual(4L, state.CheckedThisRun);
+        Assert.AreEqual(1L, state.PreviouslySkippedThisRun);
+        Assert.AreEqual(1L, state.ProcessedThisRun);
+        Assert.AreEqual(ProcessingRunOutcome.CompletedWithErrors, state.LastOutcome);
+        Assert.IsFalse(state.IsRunning);
+    }
+
+    [TestMethod]
+    public void Outcome_PreservesCancellationAndFatalFailure()
+    {
+        var state = new ProcessingState();
+        state.StartRun(100);
+        state.IncrementProcessed();
+        state.RecordChecked();
+        state.CompleteRun(ProcessingRunOutcome.Cancelled);
+        Assert.AreEqual(ProcessingRunOutcome.Cancelled, state.LastOutcome);
+        Assert.AreEqual(1L, state.ProcessedThisRun);
+
+        state.MarkPending();
+        Assert.AreEqual(0L, state.CheckedThisRun);
+        Assert.AreEqual(0L, state.ProcessedThisRun);
+        Assert.IsNull(state.LastOutcome);
+        state.IncrementError("Database unavailable before the run could start");
+        state.CompleteRun(ProcessingRunOutcome.Failed);
+        Assert.AreEqual(ProcessingRunOutcome.Failed, state.LastOutcome);
+    }
+
+    [TestMethod]
+    public void WarningsFilter_IncludesErrorsButExcludesInformation()
+    {
+        Assert.IsTrue(new ProcessingLogEntry(DateTimeOffset.UtcNow, "[WARN] skipped").MatchesFilter("[WARN]"));
+        Assert.IsTrue(new ProcessingLogEntry(DateTimeOffset.UtcNow, "[ERROR] failed").MatchesFilter("[WARN]"));
+        Assert.IsFalse(new ProcessingLogEntry(DateTimeOffset.UtcNow, "Run started").MatchesFilter("[WARN]"));
+        Assert.IsFalse(new ProcessingLogEntry(DateTimeOffset.UtcNow, "[WARN] skipped").MatchesFilter("[ERROR]"));
+    }
+
+    [TestMethod]
     public void RecentLog_KeepsUtcTimestampsAndReturnsIndependentSnapshots()
     {
         var state = new ProcessingState();

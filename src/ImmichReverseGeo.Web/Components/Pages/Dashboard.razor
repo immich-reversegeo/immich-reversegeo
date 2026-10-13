@@ -9,6 +9,10 @@
 <PageTitle>Dashboard - Immich ReverseGeo</PageTitle>
 
 <h2>Dashboard</h2>
+@if (State.IsMaintaining)
+{
+    <p class="alert alert-info" role="status">Maintenance is in progress. You can start processing when it finishes.</p>
+}
 
 <div class="settings-card">
     <h3>Which photos will be processed?</h3>
@@ -46,16 +50,16 @@ else if (_dbError is not null)
 
 <div class="stats-row">
     <div class="stat-card">
-        <div class="stat-value">@UnprocessedDisplay</div>
-        <div class="stat-label">Unprocessed Assets</div>
+        <div class="stat-value">@(!_circuitReady || _loadingStats || _dbError is not null ? "—" : UnprocessedDisplay.ToString("N0"))</div>
+        <div class="stat-label">Missing Location Names</div>
     </div>
     <div class="stat-card">
         <div class="stat-value">@State.ProcessedThisRun</div>
-        <div class="stat-label">Processed This Run</div>
+        <div class="stat-label">Updated This Run</div>
     </div>
     <div class="stat-card">
-        <div class="stat-value">@SkippedDisplay</div>
-        <div class="stat-label">Skipped (total)</div>
+        <div class="stat-value">@(!_circuitReady || _loadingStats || _dbError is not null ? "—" : SkippedDisplay.ToString("N0"))</div>
+        <div class="stat-label">On the Skip List</div>
     </div>
     <div class="stat-card @(State.ErrorsThisRun > 0 ? "has-errors" : "")">
         <div class="stat-value">@State.ErrorsThisRun</div>
@@ -65,20 +69,31 @@ else if (_dbError is not null)
 
 @{
     var pct = (State.IsRunning && State.TotalUnprocessed > 0)
-        ? (int)(State.ProcessedThisRun * 100.0 / State.TotalUnprocessed)
+        ? (int)Math.Min(100, State.CheckedThisRun * 100.0 / State.TotalUnprocessed)
         : 0;
 }
-<div class="progress-bar-wrap" style="visibility:@(State.IsRunning && State.TotalUnprocessed > 0 ? "visible" : "hidden")">
+<div class="progress-bar-wrap" role="progressbar" aria-label="Assets checked" aria-valuemin="0" aria-valuemax="100" aria-valuenow="@pct" style="visibility:@(State.IsRunning && State.TotalUnprocessed > 0 ? "visible" : "hidden")">
     <div class="progress-bar" style="width:@pct%"></div>
 </div>
 <p class="run-info" style="visibility:@(State.IsRunning && State.TotalUnprocessed > 0 ? "visible" : "hidden")">
-    @pct% — @State.ProcessedThisRun / @State.TotalUnprocessed
+    @pct% — @State.CheckedThisRun.ToString("N0") / @State.TotalUnprocessed.ToString("N0") assets checked
 </p>
-<p class="run-info activity">@(State.CurrentActivity is not null ? $"⏳ {State.CurrentActivity}" : "\u00a0")</p>
+<p class="run-info activity" role="status">@(State.CurrentActivity is not null ? $"⏳ {State.CurrentActivity}" : "\u00a0")</p>
+@if (State.IsRunning || State.LastOutcome is not null)
+{
+    <div class="alert @(State.LastOutcome is ProcessingRunOutcome.Failed ? "alert-error" : "alert-info")" role="status">
+        <strong>@OutcomeLabel</strong>
+        <span>Checked: @State.CheckedThisRun.ToString("N0") · Updated: @State.ProcessedThisRun.ToString("N0") · Skipped this pass: @State.SkippedThisRun.ToString("N0") · Already on skip list: @State.PreviouslySkippedThisRun.ToString("N0") · Errors: @State.ErrorsThisRun.ToString("N0")</span>
+        @if (State.LastError is not null)
+        {
+            <p>@State.LastError <a class="text-link" href="/logs">Inspect recent logs</a></p>
+        }
+    </div>
+}
 
 <div class="btn-row">
-    <button @onclick="RunNow" disabled="@(!_circuitReady || _loadingStats || State.IsRunning || _runPending || _dbError is not null)" class="btn btn-primary">
-        @(!_circuitReady ? "Starting UI…" : _loadingStats ? "Checking DB…" : State.IsRunning ? "Running…" : _runPending ? "Starting…" : "Run Now")
+    <button @onclick="RunNow" disabled="@(!_circuitReady || _loadingStats || State.IsRunning || State.IsMaintaining || _runPending || _dbError is not null)" class="btn btn-primary">
+        @(!_circuitReady ? "Starting UI…" : _loadingStats ? "Checking DB…" : State.IsRunning ? "Running…" : State.IsMaintaining ? "Maintenance Active…" : _runPending ? "Starting…" : "Run Now")
     </button>
     <button @onclick="() => Processor.CancelRun()" class="btn btn-secondary"
             style="visibility:@(State.IsRunning ? "visible" : "hidden")">Cancel</button>
@@ -87,7 +102,7 @@ else if (_dbError is not null)
     </button>
     @if (State.LastRunCompleted.HasValue)
     {
-        <span class="run-info">Last completed: <LocalTimestamp Timestamp="@(new DateTimeOffset(State.LastRunCompleted.Value))" /></span>
+        <span class="run-info">Last run ended: <LocalTimestamp Timestamp="@(new DateTimeOffset(State.LastRunCompleted.Value))" /></span>
     }
 </div>
 
@@ -101,6 +116,13 @@ else if (_dbError is not null)
 </div>
 
 @code {
+    private string OutcomeLabel => State.IsRunning ? "Processing…" : State.LastOutcome switch
+    {
+        ProcessingRunOutcome.Cancelled => "Cancelled — completed updates are kept.",
+        ProcessingRunOutcome.Failed => "Failed — check the error before retrying.",
+        ProcessingRunOutcome.CompletedWithErrors => "Completed with errors — some assets need attention.",
+        _ => "Completed"
+    };
     private long _unprocessedCount;
     private long _totalSkipped;
     private bool _wasRunning;
@@ -108,12 +130,12 @@ else if (_dbError is not null)
     // Live: decrease as assets are processed/skipped during a run
     private long UnprocessedDisplay =>
         State.IsRunning
-            ? Math.Max(0, _unprocessedCount - State.ProcessedThisRun - State.SkippedThisRun)
+            ? Math.Max(0, _unprocessedCount - State.ProcessedThisRun)
             : _unprocessedCount;
 
     // Persistent total from file, plus newly skipped in the current run
     private long SkippedDisplay =>
-        State.IsRunning ? _totalSkipped + State.SkippedThisRun : _totalSkipped;
+        _totalSkipped;
 
     private string? _dbError;
     private bool _runPending;

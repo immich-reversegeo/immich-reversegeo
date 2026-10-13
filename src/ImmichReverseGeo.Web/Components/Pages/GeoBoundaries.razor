@@ -2,32 +2,36 @@
 @rendermode InteractiveServer
 @inject GadmDivisionCacheService GadmCache
 @inject OvertureDivisionCacheService OvertureCache
+@inject CountryCodeService CountryCodes
+@inject ProcessingState State
+@inject ProcessingBackgroundService Processor
+@implements IDisposable
 
-<PageTitle>Administrative Areas - Immich ReverseGeo</PageTitle>
+<PageTitle>Country Caches - Immich ReverseGeo</PageTitle>
 
-<h2>Administrative Areas</h2>
+<h2>Country Caches</h2>
 
 @if (_result is not null)
 {
-    <div class="alert alert-success">@_result</div>
+    <div class="alert alert-success" role="status">@_result</div>
+}
+@if (_error is not null)
+{
+    <div class="alert alert-error" role="alert">@_error</div>
+}
+@if (_busy)
+{
+    <p role="status">@_activity The first download can take several minutes.</p>
+}
+@if (State.IsRunning)
+{
+    <p class="alert alert-info">Cache maintenance is unavailable during processing. Wait for the run to finish before changing caches.</p>
 }
 
 <div class="administrative-cache-page">
 <section class="settings-card wide-card">
     <h3>Administrative Area Caches</h3>
-    <p class="section-intro">Downloaded Overture and optional GADM administrative caches are reused for processing and lookup. Use the filters below to inspect one source or search by country code.</p>
-    <div class="btn-row">
-        <button @onclick="DeleteAllOvertureDivisions"
-                disabled="@_busy"
-                class="btn btn-danger">
-            Delete All Overture Divisions
-        </button>
-        <button @onclick="DeleteAllGadmDivisions"
-                disabled="@_busy"
-                class="btn btn-danger">
-            Delete All GADM Caches
-        </button>
-    </div>
+    <p class="section-intro">Downloaded Overture and optional GADM administrative caches are reused for processing and lookup. Inspect one source or search by country name or code.</p>
     <div class="cache-filters">
         <div class="input-group">
             <label for="cache-source-filter">Source</label>
@@ -38,11 +42,11 @@
             </select>
         </div>
         <div class="input-group">
-            <label for="cache-search-filter">Country code</label>
+            <label for="cache-search-filter">Country name or code</label>
             <input id="cache-search-filter"
                    type="text"
                    class="form-control"
-                   placeholder="CHE"
+                   placeholder="Switzerland or CHE"
                    @bind="_countrySearch"
                    @bind:event="oninput" />
         </div>
@@ -50,21 +54,21 @@
 
     @if (GetFilteredRows().Count == 0)
     {
-        <p>No cached administrative area data matches the current filters.</p>
+        <p>@(_overtureDivisionStatus.Count + _gadmDivisionStatus.Count == 0 ? "No country caches have been downloaded yet. Lookup and processing download them when needed." : "No caches match these filters. Try another country or source.")</p>
     }
     else
     {
-        <div class="table-scroll">
+        <div class="table-scroll" role="region" aria-label="Country cache files; scroll horizontally to see all columns" tabindex="0">
         <table class="data-table cache-table">
             <thead>
                 <tr>
-                    <th><button type="button" class="table-sort-btn" @onclick="() => SortBy(CacheSortColumn.Source)"><span>Source</span><span class="sort-indicator">@SortIndicator(CacheSortColumn.Source)</span></button></th>
-                    <th><button type="button" class="table-sort-btn" @onclick="() => SortBy(CacheSortColumn.Country)"><span>Country</span><span class="sort-indicator">@SortIndicator(CacheSortColumn.Country)</span></button></th>
-                    <th><button type="button" class="table-sort-btn" @onclick="() => SortBy(CacheSortColumn.AreaCount)"><span>Area Count</span><span class="sort-indicator">@SortIndicator(CacheSortColumn.AreaCount)</span></button></th>
-                    <th><button type="button" class="table-sort-btn" @onclick="() => SortBy(CacheSortColumn.Version)"><span>Version / Release</span><span class="sort-indicator">@SortIndicator(CacheSortColumn.Version)</span></button></th>
-                    <th><button type="button" class="table-sort-btn" @onclick="() => SortBy(CacheSortColumn.Size)"><span>Size</span><span class="sort-indicator">@SortIndicator(CacheSortColumn.Size)</span></button></th>
-                    <th><button type="button" class="table-sort-btn" @onclick="() => SortBy(CacheSortColumn.DownloadedAt)"><span>Downloaded At</span><span class="sort-indicator">@SortIndicator(CacheSortColumn.DownloadedAt)</span></button></th>
-                    <th></th>
+                    <th scope="col" aria-sort="@SortDirection(CacheSortColumn.Source)"><button type="button" class="table-sort-btn" @onclick="() => SortBy(CacheSortColumn.Source)"><span>Source</span><span class="sort-indicator">@SortIndicator(CacheSortColumn.Source)</span></button></th>
+                    <th scope="col" aria-sort="@SortDirection(CacheSortColumn.Country)"><button type="button" class="table-sort-btn" @onclick="() => SortBy(CacheSortColumn.Country)"><span>Country</span><span class="sort-indicator">@SortIndicator(CacheSortColumn.Country)</span></button></th>
+                    <th scope="col" aria-sort="@SortDirection(CacheSortColumn.AreaCount)"><button type="button" class="table-sort-btn" @onclick="() => SortBy(CacheSortColumn.AreaCount)"><span>Area Count</span><span class="sort-indicator">@SortIndicator(CacheSortColumn.AreaCount)</span></button></th>
+                    <th scope="col" aria-sort="@SortDirection(CacheSortColumn.Version)"><button type="button" class="table-sort-btn" @onclick="() => SortBy(CacheSortColumn.Version)"><span>Version / Release</span><span class="sort-indicator">@SortIndicator(CacheSortColumn.Version)</span></button></th>
+                    <th scope="col" aria-sort="@SortDirection(CacheSortColumn.Size)"><button type="button" class="table-sort-btn" @onclick="() => SortBy(CacheSortColumn.Size)"><span>Size</span><span class="sort-indicator">@SortIndicator(CacheSortColumn.Size)</span></button></th>
+                    <th scope="col" aria-sort="@SortDirection(CacheSortColumn.DownloadedAt)"><button type="button" class="table-sort-btn" @onclick="() => SortBy(CacheSortColumn.DownloadedAt)"><span>Downloaded At</span><span class="sort-indicator">@SortIndicator(CacheSortColumn.DownloadedAt)</span></button></th>
+                    <th scope="col">Actions</th>
                 </tr>
             </thead>
             <tbody>
@@ -72,19 +76,24 @@
                 {
                     <tr>
                         <td><span class="source-badge @row.SourceCssClass">@row.SourceLabel</span></td>
-                        <td><code>@row.Iso3</code></td>
+                        <td>@CountryName(row.Iso3) <code>@row.Iso3</code></td>
                         <td>@row.RowCount.ToString("N0")</td>
                         <td>@(row.Version ?? "—")</td>
                         <td>@FormatFileSize(row.FileSizeBytes)</td>
-                        <td>@row.DownloadedAt?.ToString("u")</td>
+                        <td>
+                            @if (row.DownloadedAt is { } downloaded)
+                            {
+                                <LocalTimestamp Timestamp="@(new DateTimeOffset(DateTime.SpecifyKind(downloaded, DateTimeKind.Utc)))" />
+                            }
+                        </td>
                         <td class="table-actions-cell">
                             <button @onclick="() => DeleteCache(row)"
-                                    disabled="@_busy"
+                                    disabled="@(_busy || State.IsRunning)" aria-label="Delete @row.SourceLabel cache for @CountryName(row.Iso3)"
                                     class="btn btn-danger">
                                 Delete
                             </button>
                             <button @onclick="() => RedownloadCache(row)"
-                                    disabled="@_busy"
+                                    disabled="@(_busy || State.IsRunning)" aria-label="Re-download @row.SourceLabel cache for @CountryName(row.Iso3)"
                                     class="btn btn-secondary">
                                 Re-download
                             </button>
@@ -95,6 +104,22 @@
         </table>
         </div>
     }
+    <details class="settings-disclosure">
+        <summary>Cache Maintenance</summary>
+        <p>Deleting a cache does not change Immich metadata. Lookup and processing download it again when needed. Re-download replaces the cached data and may change future results.</p>
+        <div class="btn-row">
+            <button class="btn btn-danger" @onclick="() => _deleteAllSource = CacheSource.Overture" disabled="@(_busy || State.IsRunning || _overtureDivisionStatus.Count == 0)">Review Deleting All Overture Caches</button>
+            <button class="btn btn-danger" @onclick="() => _deleteAllSource = CacheSource.Gadm" disabled="@(_busy || State.IsRunning || _gadmDivisionStatus.Count == 0)">Review Deleting All GADM Caches</button>
+        </div>
+        @if (_deleteAllSource is { } source)
+        {
+            <p>Delete all @source country caches? They will be downloaded again on demand.</p>
+            <div class="btn-row">
+                <button class="btn btn-danger" @onclick="DeleteAllAsync" disabled="@(_busy || State.IsRunning)">Confirm Cache Deletion</button>
+                <button class="btn btn-secondary" @onclick="() => _deleteAllSource = null" disabled="@_busy">Keep Caches</button>
+            </div>
+        }
+    </details>
 </section>
 </div>
 
@@ -103,6 +128,9 @@
     private Dictionary<string, GadmDivisionStatus> _gadmDivisionStatus = [];
     private bool _busy;
     private string? _result;
+    private string? _error;
+    private string _activity = "";
+    private CacheSource? _deleteAllSource;
     private CacheSortColumn _sortColumn = CacheSortColumn.Source;
     private bool _sortAscending = true;
     private CacheSourceFilter _selectedSourceFilter = CacheSourceFilter.All;
@@ -110,9 +138,13 @@
 
     protected override Task OnInitializedAsync()
     {
+        State.OnChanged += Refresh;
         RefreshState();
         return Task.CompletedTask;
     }
+
+    private void Refresh() => _ = InvokeAsync(StateHasChanged);
+    public void Dispose() => State.OnChanged -= Refresh;
 
     private void RefreshState()
     {
@@ -120,130 +152,87 @@
         _gadmDivisionStatus = GadmCache.GetStatus();
     }
 
-    private async Task RedownloadOvertureDivision(string iso3)
+    private string CountryName(string iso3) => CountryCodes.FindByAlpha3(iso3)?.DisplayName ?? iso3;
+
+    private Task DeleteCache(CacheRow row) => RunMaintenanceAsync(async () =>
     {
-        _busy = true;
-        try
+        DeleteFile(row.Source, row.Iso3);
+        await Task.CompletedTask;
+    }, $"Deleting {row.SourceLabel} cache for {CountryName(row.Iso3)}…", $"Deleted {row.SourceLabel} cache for {CountryName(row.Iso3)}. It will download again when needed.");
+
+    private Task RedownloadCache(CacheRow row) => RunMaintenanceAsync(async () =>
+    {
+        DeleteFile(row.Source, row.Iso3);
+        if (row.Source == CacheSource.Overture)
+        {
+            await OvertureCache.EnsureDataAsync(row.Iso3);
+        }
+        else
+        {
+            await GadmCache.EnsureDataAsync(row.Iso3);
+        }
+    }, $"Re-downloading {row.SourceLabel} cache for {CountryName(row.Iso3)}…", $"Re-downloaded {row.SourceLabel} cache for {CountryName(row.Iso3)}.");
+
+    private Task DeleteAllAsync()
+    {
+        if (_deleteAllSource is not { } source)
+        {
+            return Task.CompletedTask;
+        }
+        return RunMaintenanceAsync(async () =>
+        {
+            var codes = source == CacheSource.Overture ? _overtureDivisionStatus.Keys.ToArray() : _gadmDivisionStatus.Keys.ToArray();
+            foreach (var code in codes)
+            {
+                DeleteFile(source, code);
+            }
+            _deleteAllSource = null;
+            await Task.CompletedTask;
+        }, $"Deleting all {source} caches…", $"Deleted all {source} caches. They will download again when needed.");
+    }
+
+    private void DeleteFile(CacheSource source, string iso3)
+    {
+        if (source == CacheSource.Overture)
         {
             OvertureCache.DeleteFile(iso3);
-            await OvertureCache.EnsureDataAsync(iso3);
-            _result = $"Re-downloaded Overture divisions for {iso3}.";
-            RefreshState();
         }
-        finally
-        {
-            _busy = false;
-        }
-    }
-
-    private Task DeleteOvertureDivision(string iso3)
-    {
-        _busy = true;
-        try
-        {
-            OvertureCache.DeleteFile(iso3);
-            _result = $"Deleted Overture divisions cache for {iso3}.";
-            RefreshState();
-            return Task.CompletedTask;
-        }
-        finally
-        {
-            _busy = false;
-        }
-    }
-
-    private Task DeleteAllOvertureDivisions()
-    {
-        _busy = true;
-        try
-        {
-            var count = _overtureDivisionStatus.Count;
-            foreach (var iso3 in _overtureDivisionStatus.Keys.ToList())
-            {
-                OvertureCache.DeleteFile(iso3);
-            }
-
-            _result = $"Deleted Overture division caches for {count:N0} countr{(count == 1 ? "y" : "ies")}.";
-            RefreshState();
-            return Task.CompletedTask;
-        }
-        finally
-        {
-            _busy = false;
-        }
-    }
-
-    private async Task RedownloadGadmDivision(string iso3)
-    {
-        _busy = true;
-        try
+        else
         {
             GadmCache.DeleteFile(iso3);
-            await GadmCache.EnsureDataAsync(iso3);
-            _result = $"Re-downloaded GADM data for {iso3}.";
-            RefreshState();
-        }
-        finally
-        {
-            _busy = false;
         }
     }
 
-    private Task DeleteGadmDivision(string iso3)
+    private async Task RunMaintenanceAsync(Func<Task> action, string activity, string success)
     {
+        if (_busy || State.IsRunning)
+        {
+            return;
+        }
+        using var maintenance = Processor.TryBeginMaintenance();
+        if (maintenance is null)
+        {
+            _error = "Processing or another maintenance action is active. Wait for it to finish and retry.";
+            return;
+        }
         _busy = true;
+        _activity = activity;
+        _result = null;
+        _error = null;
         try
         {
-            GadmCache.DeleteFile(iso3);
-            _result = $"Deleted GADM cache for {iso3}.";
-            RefreshState();
-            return Task.CompletedTask;
+            await action();
+            _result = success;
+        }
+        catch (Exception)
+        {
+            _error = "Cache maintenance failed. Some files may already have been deleted; a failed re-download can leave its cache unavailable. Check disk space, permissions, and network access, then retry. Immich metadata is unchanged.";
         }
         finally
         {
-            _busy = false;
-        }
-    }
-
-    private Task DeleteAllGadmDivisions()
-    {
-        _busy = true;
-        try
-        {
-            var count = _gadmDivisionStatus.Count;
-            foreach (var iso3 in _gadmDivisionStatus.Keys.ToList())
-            {
-                GadmCache.DeleteFile(iso3);
-            }
-
-            _result = $"Deleted GADM caches for {count:N0} countr{(count == 1 ? "y" : "ies")}.";
             RefreshState();
-            return Task.CompletedTask;
-        }
-        finally
-        {
             _busy = false;
         }
-    }
-
-    private Task DeleteCache(CacheRow row)
-    {
-        return row.Source switch
-        {
-            CacheSource.Overture => DeleteOvertureDivision(row.Iso3),
-            CacheSource.Gadm => DeleteGadmDivision(row.Iso3),
-            _ => Task.CompletedTask
-        };
-    }
-
-    private Task RedownloadCache(CacheRow row)
-    {
-        return row.Source switch
-        {
-            CacheSource.Overture => RedownloadOvertureDivision(row.Iso3),
-            CacheSource.Gadm => RedownloadGadmDivision(row.Iso3),
-            _ => Task.CompletedTask
-        };
     }
 
     private IReadOnlyList<CacheRow> GetFilteredRows()
@@ -263,12 +252,12 @@
 
         if (!string.IsNullOrWhiteSpace(_countrySearch))
         {
-            rows = rows.Where(row => row.Iso3.Contains(_countrySearch.Trim(), StringComparison.OrdinalIgnoreCase));
+            rows = rows.Where(row => (row.Iso3.Contains(_countrySearch.Trim(), StringComparison.OrdinalIgnoreCase) || CountryName(row.Iso3).Contains(_countrySearch.Trim(), StringComparison.OrdinalIgnoreCase)));
         }
 
         IOrderedEnumerable<CacheRow> ordered = _sortColumn switch
         {
-            CacheSortColumn.Country => rows.OrderBy(row => row.Iso3, StringComparer.OrdinalIgnoreCase),
+            CacheSortColumn.Country => rows.OrderBy(row => CountryName(row.Iso3), StringComparer.OrdinalIgnoreCase),
             CacheSortColumn.AreaCount => rows.OrderBy(row => row.RowCount),
             CacheSortColumn.Version => rows.OrderBy(row => row.Version ?? string.Empty, StringComparer.OrdinalIgnoreCase),
             CacheSortColumn.Size => rows.OrderBy(row => row.FileSizeBytes ?? -1),
@@ -290,6 +279,8 @@
         _sortColumn = column;
         _sortAscending = true;
     }
+
+    private string SortDirection(CacheSortColumn column) => _sortColumn != column ? "none" : _sortAscending ? "ascending" : "descending";
 
     private string SortIndicator(CacheSortColumn column)
     {

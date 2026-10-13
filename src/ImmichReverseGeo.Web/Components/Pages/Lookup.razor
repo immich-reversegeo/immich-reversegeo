@@ -11,9 +11,9 @@
 <PageTitle>Coordinate Lookup - Immich ReverseGeo</PageTitle>
 
 <h2>Coordinate Lookup</h2>
-<p class="page-desc">Enter coordinates to inspect how the Overture-backed resolver behaves.</p>
+<p class="page-desc">Test a coordinate to see the proposed location names and inspect why they were chosen. Lookup does not change Immich.</p>
 
-<div class="lookup-form">
+<fieldset class="lookup-form maintenance-fields" disabled="@_running">
     <div class="lookup-paste-row">
         <label for="paste">Paste coordinates</label>
         <input id="paste" type="text" class="paste-input"
@@ -27,12 +27,12 @@
     <div class="lookup-coord-row">
         <div class="input-group">
             <label for="lat">Latitude</label>
-            <input id="lat" type="number" step="any" placeholder="47.4647"
+            <input id="lat" type="number" step="any" min="-90" max="90" placeholder="47.4647"
                    @bind="_lat" @bind:event="oninput" class="coord-input" />
         </div>
         <div class="input-group">
             <label for="lon">Longitude</label>
-            <input id="lon" type="number" step="any" placeholder="8.5492"
+            <input id="lon" type="number" step="any" min="-180" max="180" placeholder="8.5492"
                    @bind="_lon" @bind:event="oninput" class="coord-input" />
         </div>
         <button class="btn btn-primary" @onclick="RunLookup" disabled="@_running">
@@ -53,11 +53,12 @@
             <span>Prefer cached GADM administrative areas (experimental, non-commercial)</span>
         </label>
     </div>
-</div>
+</fieldset>
+<p class="hint">These options affect only this lookup and may differ from saved processing settings. Nearby places are for investigation only.</p>
 
 @if (_error is not null)
 {
-    <div class="alert alert-error">@_error</div>
+    <div class="alert alert-error" role="alert">@_error</div>
 }
 
 @if (_running || _lookupStatus is not null)
@@ -67,13 +68,30 @@
         <p class="section-intro">
             @(_running ? "The lookup is running. Current step:" : "Last lookup activity:")
         </p>
-        <p class="run-info activity">@(_lookupStatus ?? "Preparing lookup...")</p>
+        <p class="run-info activity" role="status">@(_lookupStatus ?? "Preparing lookup...")</p>
     </div>
 }
 
 @if (_result is not null)
 {
     <div class="lookup-results">
+        <div class="result-card final-card @(_result.FinalCity is not null ? "found" : "not-found")">
+            <div class="result-header">
+                <span class="result-source">Final output (what would be written to Immich)</span>
+                <span class="result-badge @(_result.FinalCity is not null ? "badge-found" : "badge-miss")">
+                    @(_result.FinalCity is not null ? "complete" : "incomplete — would not write")
+                </span>
+            </div>
+            <div class="result-row"><span class="result-key">City</span><span class="result-val">@(_result.FinalCity ?? "—")</span></div>
+            <div class="result-row"><span class="result-key">City Source</span><span class="result-val">@(_result.FinalCitySource ?? "—")</span></div>
+            <div class="result-row"><span class="result-key">State</span><span class="result-val">@(_result.FinalState ?? "—")</span></div>
+            <div class="result-row"><span class="result-key">State Source</span><span class="result-val">@(_result.FinalStateSource ?? "—")</span></div>
+            <div class="result-row"><span class="result-key">Country</span><span class="result-val">@(_result.CountryName ?? "—")</span></div>
+            <div class="result-row"><span class="result-key">Country Source</span><span class="result-val">@(_result.FinalCountrySource ?? "—")</span></div>
+        </div>
+
+        <details class="lookup-diagnostics">
+            <summary>Source details and nearby places</summary>
         <div class="result-card @(_result.Iso3 is not null ? "found" : "not-found")">
             <div class="result-header">
                 <span class="result-source">Country — Overture Bundled Cache</span>
@@ -254,20 +272,7 @@
             }
         </div>
 
-        <div class="result-card final-card @(_result.FinalCity is not null ? "found" : "not-found")">
-            <div class="result-header">
-                <span class="result-source">Final output (what would be written to Immich)</span>
-                <span class="result-badge @(_result.FinalCity is not null ? "badge-found" : "badge-miss")">
-                    @(_result.FinalCity is not null ? "complete" : "incomplete — would not write")
-                </span>
-            </div>
-            <div class="result-row"><span class="result-key">City</span><span class="result-val">@(_result.FinalCity ?? "—")</span></div>
-            <div class="result-row"><span class="result-key">City Source</span><span class="result-val">@(_result.FinalCitySource ?? "—")</span></div>
-            <div class="result-row"><span class="result-key">State</span><span class="result-val">@(_result.FinalState ?? "—")</span></div>
-            <div class="result-row"><span class="result-key">State Source</span><span class="result-val">@(_result.FinalStateSource ?? "—")</span></div>
-            <div class="result-row"><span class="result-key">Country</span><span class="result-val">@(_result.CountryName ?? "—")</span></div>
-            <div class="result-row"><span class="result-key">Country Source</span><span class="result-val">@(_result.FinalCountrySource ?? "—")</span></div>
-        </div>
+        </details>
 
         <div class="result-card trace-card">
             <div class="result-header">
@@ -436,11 +441,13 @@
 }
 
 @code {
-    private double _lat;
-    private double _lon;
+    [SupplyParameterFromQuery(Name = "lat")] public double? Latitude { get; set; }
+    [SupplyParameterFromQuery(Name = "lon")] public double? Longitude { get; set; }
+    private double? _lat;
+    private double? _lon;
     private string? _parseError;
     private bool _running;
-    private bool _expandTrace = true;
+    private bool _expandTrace = false;
     private bool _includeAirportInfrastructure = true;
     private bool _includeLivePlaces;
     private bool _preferGadmAdministrativeAreas;
@@ -453,6 +460,15 @@
     {
         var cfg = await Config.GetConfigAsync();
         _includeAirportInfrastructure = cfg.Processing.UseAirportInfrastructure;
+    }
+
+    protected override void OnParametersSet()
+    {
+        if (Latitude is not null && Longitude is not null)
+        {
+            _lat = Latitude;
+            _lon = Longitude;
+        }
     }
 
     private void OnPasteInput(ChangeEventArgs e)
@@ -550,6 +566,16 @@
 
     private async Task RunLookup()
     {
+        if (_running)
+        {
+            return;
+        }
+        if (_lat is null || _lon is null || !double.IsFinite(_lat.Value) || !double.IsFinite(_lon.Value)
+            || _lat < -90 || _lat > 90 || _lon < -180 || _lon > 180 || _parseError is not null)
+        {
+            _error = "Enter valid coordinates: latitude −90 to 90 and longitude −180 to 180. Correct or clear an invalid pasted coordinate first.";
+            return;
+        }
         _error = null;
         _result = null;
         _running = true;
@@ -574,6 +600,8 @@
 
     private async Task RunLookupCore()
     {
+        var lat = _lat!.Value;
+        var lon = _lon!.Value;
         var r = new LookupResult
         {
             AirportInfrastructureEnabled = _includeAirportInfrastructure,
@@ -582,7 +610,7 @@
         };
 
         await UpdateLookupStatusAsync("Checking bundled Overture country coverage...");
-        var countryLookup = await OvertureDivisions.FindBundledCountryAsync(_lat, _lon);
+        var countryLookup = await OvertureDivisions.FindBundledCountryAsync(lat, lon);
         r.CountryLookup = countryLookup;
         if (!countryLookup.IsMatched)
         {
@@ -616,17 +644,17 @@
         Task<OvertureInfrastructureLookupDiagnostics>? infrastructureTask = null;
         if (_includeAirportInfrastructure)
         {
-            infrastructureTask = Overture.FindNearestInfrastructureWithDiagnosticsAsync(_lat, _lon, r.Iso3);
+            infrastructureTask = Overture.FindNearestInfrastructureWithDiagnosticsAsync(lat, lon, r.Iso3);
         }
         Task<OvertureLookupDiagnostics>? livePlacesTask = null;
         if (_includeLivePlaces)
         {
-            livePlacesTask = Overture.FindNearestPlaceWithDiagnosticsAsync(_lat, _lon, r.Alpha2);
+            livePlacesTask = Overture.FindNearestPlaceWithDiagnosticsAsync(lat, lon, r.Alpha2);
         }
 
         await ensureDivisionTask;
         await UpdateLookupStatusAsync("Querying cached Overture administrative areas...");
-        r.OvertureDivisionDiagnostics = await OvertureDivisions.FindContainingDivisionAreasAsync(_lat, _lon, r.Alpha2, r.Iso3);
+        r.OvertureDivisionDiagnostics = await OvertureDivisions.FindContainingDivisionAreasAsync(lat, lon, r.Alpha2, r.Iso3);
         r.OvertureDivision = r.OvertureDivisionDiagnostics.BestMatch;
         var overtureAdmin = OvertureDivisionsLogic.SelectAdministrativeAreas(r.OvertureDivisionDiagnostics.Candidates, cityResolverProfile);
         r.OvertureDivisionState = overtureAdmin.State;
@@ -640,7 +668,7 @@
         {
             await UpdateLookupStatusAsync($"Querying cached GADM administrative areas across {string.Join(", ", _gadmCandidateCodes)}...");
             r.GadmDivisionDiagnostics = await GadmDivisions.FindContainingDivisionAreasAsync(
-                _lat, _lon, _gadmCandidateCodes,
+                lat, lon, _gadmCandidateCodes,
                 requireAdministrativeMatch: GadmCountryFallbackCatalog.UsesSharedCountryDataset(r.Iso3!));
             r.GadmDivision = r.GadmDivisionDiagnostics.BestMatch;
             r.GadmDivisionState = GadmDivisionsLogic.SelectStateName(r.GadmDivisionDiagnostics.Candidates);

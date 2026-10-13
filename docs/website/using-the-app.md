@@ -10,7 +10,7 @@ This page covers the day-to-day UI for Immich ReverseGeo after setup is complete
 For install-time settings such as database values, schedules, and processing limits, see [Configuration](./configuration.md).
 For a source-by-source explanation of the geographic data behind the app, see [Data Sources](./data-sources.md).
 
-The sidebar keeps the main tools available and includes **Help & setup** for the public guides. Browser tab titles identify the current tool.
+Navigation groups library corrections, country caches, and advanced settings. On smaller screens, use **Open Navigation** to show the tools. Keyboard users can use **Skip to content**. **Help & setup** opens the public guides, and browser tab titles identify the current tool.
 
 ## Dashboard
 
@@ -22,19 +22,22 @@ To correct existing names, open [Location Management](#location-management), sca
 
 - it works even if automatic scheduling is turned off
 - it uses your current Settings values for batch size, delay, parallelism, and airport matching
-- the Dashboard shows live progress, recent activity, and the last completed run
+- the Dashboard shows assets checked, updated, skipped, and failed, plus recent activity
+- the last run remains labelled Completed, Completed with errors, Cancelled, or Failed
 - `Cancel` stops the current run
 
 Processing selects GPS-tagged assets only when both city and country are missing (stored as `NULL`). To correct existing location names, back up the database and use a targeted reset from [Data tools](#data-tools) before reprocessing.
 
-Run completion and activity timestamps use your browser's local timezone, shown beside each time. This does not change the processing schedule.
+Progress counts examined assets, including those already on the skip list. Missing Location Names includes assets on the skip list; On the Skip List shows the stored count loaded before the run and refreshed afterwards. Cancelling keeps location names already written. A completed pass does not mean every asset received a location.
+
+Run-end and activity timestamps use your browser's local timezone, shown beside each time. This does not change the UTC processing schedule.
 
 ## Lookup
 
 Use the Lookup page when you want to test a coordinate before running a full processing pass.
 
 - paste or type coordinates to see how the resolver behaves for that point
-- it shows the country match, cached administrative area match, optional airport match, and final values that would be written
+- it shows the final proposed values first; expand **Source details and nearby places** or **Lookup Trace** to investigate how they were chosen
 - `Include bundled airport infrastructure lookup` lets you test with or without airport matching for that lookup
 - `Include nearby places` adds a slower live Overture search for investigation. It shows nearby suggestions and a small sample of excluded places; it does not change the location written to Immich
 - `Prefer cached GADM administrative areas` switches the administrative area part of the lookup to an experimental on-demand GADM cache for that country; country detection still starts with the bundled Overture country data
@@ -55,11 +58,11 @@ Lookup distinguishes a point outside the bundled country coverage from a matched
 
 Use the tabs in **Location Management** to switch between Overview, Scan & Review, Saved Scans, and Change History. The highlighted tab shows your current section.
 
-Open **Data → Location Management → Scan & Review** to compare existing city, state, and country names with proposed values from your current processing settings. Scanning is read-only; applying selected changes is a separate confirmed action. Existing preview URLs and saved reports remain available.
+Open **Library & Data → Location Management → Scan & Review** to compare existing city, state, and country names with proposed values from your current processing settings. Scanning is read-only; applying selected changes is a separate confirmed action. Existing preview URLs and saved reports remain available.
 
 1. Choose pasted asset GUIDs, an exact existing city/state/country name, or the whole library.
 2. Start the scan. It checks up to 100 assets per page and may download country caches. Every scope includes only assets with both GPS coordinates. It does not write to Immich or change the skip list.
-3. Review the existing and proposed values. The **Ready to apply** view shows differences that have not yet been attempted. Different does not necessarily mean better: test unfamiliar results in Lookup using the coordinates shown in the table.
+3. Review the existing and proposed values. The **Ready to apply** view shows differences that have not yet been attempted. Different does not necessarily mean better: use **Inspect in Lookup** on a row to investigate unfamiliar results, then return to your review.
 4. Select only the assets you want to correct. Selections are kept across review pages. Open **Review Selected Changes**, inspect the exact existing and proposed names, and take an [Immich database backup](https://docs.immich.app/administration/backup-and-restore/).
 5. Acknowledge the confirmation and choose **Confirm Apply**. The app writes the saved proposed names directly; no reset or processing run is needed. Each operation supports up to 1,000 selected differences. Its results appear beside the assets and in **Change History**.
 
@@ -68,6 +71,8 @@ In live and saved scans, changed characters are highlighted in both the existing
 **Show only different values** is checked by default in live and saved scans. It combines with the status filter below. Uncheck it to include unchanged, unresolved, and failed results; choose **All results** or **Needs attention** to inspect them.
 
 The **Show results** filter offers **Ready to apply**, **Applied**, **Needs attention**, and **All results**. Applied changes leave Ready to apply immediately, and the page fills with the next available differences. They remain visible in Applied, All results, and Change History. Needs attention includes skipped, pending, interrupted, unresolved, and failed lookup results. Undone changes remain in All results and Change History. Resume pending writes from Change History; inspect uncertain outcomes in Immich. Run a new scan before applying skipped or undone assets again.
+
+Live scan inputs, results, filters, and selections survive navigation within the current browser session. Leaving an active scan cancels it; return to Scan & Review to continue after cancellation finishes. Reloading or losing the session clears the live review state; completed results remain in Saved Scans. New scans reset the live selection and filters.
 
 Browse saved results from every checked batch with **Previous 100 Results** and **Next 100 Results**. **Scan Next 100** adds results without bringing already handled differences back into the ready list. **Start Scan** clears the selection and begins a new snapshot. After cancellation, you can review completed results and continue after the last checked asset. If cancellation happens before any results are available, start a new scan.
 
@@ -95,6 +100,8 @@ Saved values may be out of date if Immich metadata, coordinates, settings, or so
 
 Deleted assets, GUIDs without an Immich metadata row, and assets missing either latitude or longitude are excluded from every scan query, including pasted GUIDs. Unresolved locations and lookup failures are shown separately and cannot be selected for correction. Scanning can help find inconsistent names; it cannot recover missing GPS coordinates or guarantee that a proposed name is correct.
 
+For the optional reset workflow, choose **Review Reset for Selected Assets** in the live review. The reset page carries your selected GUIDs into a separate count-and-confirm step. Take a database backup, review the fields being cleared, then confirm. Reset does not apply saved proposals; use **Go to Dashboard to Reprocess** afterwards. Reset assets cannot be selected again in that live review until you start a new scan.
+
 #### Applying saved proposals
 
 You can apply selected differences from a live scan or a saved scan. The app uses the exact saved proposed names, without running another lookup. It compares the current city, state, country, and GPS coordinates with the reviewed snapshot before each write. Assets with changed values, deleted assets, and missing metadata rows are skipped. Unresolved and failed lookup results cannot be applied. Punctuation-only changes are still differences; review them before selecting.
@@ -119,23 +126,29 @@ The Data area contains maintenance tools that change downloaded caches or Immich
 |---|---|
 | `Location Management` | Scan and review names, apply selected differences, and inspect or undo changes. |
 | `Clear Skip List` | Removes permanently skipped assets so they can be retried on the next run. |
-| `Reset All Data` | Clears Immich reverse geo `city`, `state`, and `country` values for all matching assets and clears the skip list. |
-| `Reset Single Item(s)` | Clears reverse geo values only for the pasted asset GUIDs and removes those assets from the skip list. |
-| `Reset Specific Locations` | Finds assets by an existing city, state, or country value and clears all three reverse geo fields for those matching assets. |
+| `Reset All Location Names` | Under Advanced, confirms clearing names from every metadata row with stored names, including deleted assets, and clears the skip list. |
+| `Reset Selected Assets` | Reviews a scan selection or pasted GUIDs, then confirms clearing their names and removing them from the skip list. |
+| `Reset by Existing Location` | Reviews an explicitly selected city, state, or country and confirms clearing all three fields for matching active assets. |
 | `Delete Overture cache` | Removes one downloaded Overture country cache file. |
 | `Re-download Overture cache` | Replaces one downloaded Overture country cache with a fresh copy. |
-| `Delete All Overture Divisions` | Removes every downloaded country cache so they will be fetched again on demand later. |
+| `Review Deleting All Overture Caches` | Removes every downloaded country cache so they will be fetched again on demand later. |
 | `Delete GADM cache` | Removes one downloaded GADM country cache file. |
 | `Re-download GADM cache` | Replaces one downloaded GADM country cache with a fresh copy. |
-| `Delete All GADM Caches` | Removes every downloaded GADM cache so they will be fetched again on demand later. |
+| `Review Deleting All GADM Caches` | Removes every downloaded GADM cache so they will be fetched again on demand later. |
 
 The Reset Immich Geo Data page only clears reverse geo values in `asset_exif`. It does not touch any other Immich metadata.
+
+Reset review rechecks the affected count before writing. If it changes, review the updated count and confirm again. Processing, apply/undo, resets, and cache writes cannot overlap; wait for active work to finish before starting another operation. Reset reports partial completion if names were cleared but skip-list cleanup failed.
+
+Country Caches supports country names and codes. Deleting a cache does not change Immich metadata; it downloads again when needed. Bulk deletion is under **Cache Maintenance** and requires confirmation. A failed re-download can leave a cache unavailable; check network access, disk space, and permissions before retrying.
 
 ## Logs
 
 Use the Logs page when you want to inspect recent activity outside the Dashboard summary.
 
-- filter the in-app log view to all messages, warnings, or errors
+- filter the in-app log view to all messages, warnings and errors, or errors only
 - download the current filtered view as `immich-reversegeo.log`
 
 On-screen timestamps use your browser's timezone. Downloaded logs use full UTC timestamps with dates so you can compare activity across systems. While the interactive page is connecting, timestamps are shown in UTC.
+
+Only the latest 100 activity entries are retained, and they are cleared when the app restarts. **Download Filtered Recent Logs** exports the current filtered entries, not a complete run history. Use container or host logs for older or more detailed diagnostics.

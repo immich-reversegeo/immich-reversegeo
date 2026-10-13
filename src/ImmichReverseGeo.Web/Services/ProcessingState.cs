@@ -5,6 +5,14 @@ using System.Threading;
 
 namespace ImmichReverseGeo.Web.Services;
 
+public enum ProcessingRunOutcome
+{
+    Completed,
+    CompletedWithErrors,
+    Cancelled,
+    Failed
+}
+
 /// <summary>
 /// Singleton shared between ProcessingBackgroundService and Blazor UI pages.
 /// All mutations are thread-safe via Interlocked or lock.
@@ -13,19 +21,36 @@ namespace ImmichReverseGeo.Web.Services;
 public class ProcessingState
 {
     private volatile bool _isRunning;
+    private volatile bool _isMaintaining;
     private long _totalUnprocessed;
     private readonly object _stateLock = new();
     private readonly object _activityLock = new();
     private DateTime? _lastRunStarted;
     private DateTime? _lastRunCompleted;
     private string? _lastError;
+    private ProcessingRunOutcome? _lastOutcome;
+    private long _checkedThisRun;
+    private long _previouslySkippedThisRun;
     private readonly Dictionary<string, int> _activityCounts = new(StringComparer.Ordinal);
 
     public bool IsRunning => _isRunning;
+    public bool IsMaintaining => _isMaintaining;
+
+    public void SetMaintenance(bool active)
+    {
+        _isMaintaining = active;
+        Notify();
+    }
     public long TotalUnprocessed => Volatile.Read(ref _totalUnprocessed);
     public long ProcessedThisRun => Volatile.Read(ref _processedThisRun);
     public long ErrorsThisRun => Volatile.Read(ref _errorsThisRun);
     public long SkippedThisRun => Volatile.Read(ref _skippedThisRun);
+    public long CheckedThisRun => Volatile.Read(ref _checkedThisRun);
+    public long PreviouslySkippedThisRun => Volatile.Read(ref _previouslySkippedThisRun);
+    public ProcessingRunOutcome? LastOutcome
+    {
+        get { lock (_stateLock) { return _lastOutcome; } }
+    }
     public DateTime? LastRunStarted
     {
         get { lock (_stateLock) { return _lastRunStarted; } }
@@ -83,21 +108,27 @@ public class ProcessingState
     /// </summary>
     public void MarkPending()
     {
+        ResetRunCounters();
         _isRunning = true;
+        lock (_stateLock)
+        {
+            _lastRunStarted = DateTime.UtcNow;
+            _lastError = null;
+            _lastOutcome = null;
+        }
         Notify();
     }
 
     public void StartRun(long totalUnprocessed)
     {
         _isRunning = true;
-        Interlocked.Exchange(ref _processedThisRun, 0);
-        Interlocked.Exchange(ref _errorsThisRun, 0);
-        Interlocked.Exchange(ref _skippedThisRun, 0);
+        ResetRunCounters();
         Volatile.Write(ref _totalUnprocessed, totalUnprocessed);
         lock (_stateLock)
         {
             _lastRunStarted = DateTime.UtcNow;
             _lastError = null;
+            _lastOutcome = null;
         }
         Notify();
     }
@@ -125,7 +156,27 @@ public class ProcessingState
         Notify();
     }
 
-    public void CompleteRun()
+    public void RecordChecked(bool previouslySkipped = false)
+    {
+        if (previouslySkipped)
+        {
+            Interlocked.Increment(ref _previouslySkippedThisRun);
+        }
+        Interlocked.Increment(ref _checkedThisRun);
+        Notify();
+    }
+
+    private void ResetRunCounters()
+    {
+        Interlocked.Exchange(ref _processedThisRun, 0);
+        Interlocked.Exchange(ref _errorsThisRun, 0);
+        Interlocked.Exchange(ref _skippedThisRun, 0);
+        Interlocked.Exchange(ref _checkedThisRun, 0);
+        Interlocked.Exchange(ref _previouslySkippedThisRun, 0);
+        Volatile.Write(ref _totalUnprocessed, 0);
+    }
+
+    public void CompleteRun(ProcessingRunOutcome outcome = ProcessingRunOutcome.Completed)
     {
         _isRunning = false;
         lock (_activityLock)
@@ -136,6 +187,8 @@ public class ProcessingState
         lock (_stateLock)
         {
             _lastRunCompleted = DateTime.UtcNow;
+            _lastOutcome = outcome == ProcessingRunOutcome.Completed && ErrorsThisRun > 0
+                ? ProcessingRunOutcome.CompletedWithErrors : outcome;
         }
         Notify();
     }
@@ -211,4 +264,11 @@ public class ProcessingState
 public sealed record ProcessingLogEntry(DateTimeOffset Timestamp, string Message)
 {
     public string ToUtcString() => $"[{Timestamp.UtcDateTime:O}] {Message}";
+
+    public bool MatchesFilter(string filter) => filter switch
+    {
+        "[WARN]" => Message.Contains("[WARN]") || Message.Contains("[ERROR]"),
+        "[ERROR]" => Message.Contains("[ERROR]"),
+        _ => true
+    };
 }

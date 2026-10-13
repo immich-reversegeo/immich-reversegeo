@@ -220,6 +220,28 @@ public class ImmichDbRepository(NpgsqlDataSource dataSource, ILogger<ImmichDbRep
         return clearedIds;
     }
 
+    /// <summary>Count using the same scope as reset writes, including deleted rows for a full reset.</summary>
+    public async Task<long> GetResetCountAsync(
+        IReadOnlyCollection<Guid>? assetIds = null, LocationResetScope? scope = null,
+        string? value = null, CancellationToken ct = default)
+    {
+        var predicate = assetIds is not null ? "e.\"assetId\" = ANY(@assetIds)"
+            : scope is not null ? $"e.{GetLocationColumn(scope.Value)} = @value AND EXISTS (SELECT 1 FROM asset a WHERE a.id = e.\"assetId\" AND a.\"deletedAt\" IS NULL)"
+            : "TRUE";
+        var sql = $"SELECT count(*) FROM asset_exif e WHERE ({predicate}) AND (e.city IS NOT NULL OR e.state IS NOT NULL OR e.country IS NOT NULL)";
+        await using var conn = await dataSource.OpenConnectionAsync(ct);
+        await using var cmd = new NpgsqlCommand(sql, conn);
+        if (assetIds is not null)
+        {
+            cmd.Parameters.AddWithValue("assetIds", NpgsqlDbType.Array | NpgsqlDbType.Uuid, assetIds.Distinct().ToArray());
+        }
+        else if (scope is not null)
+        {
+            cmd.Parameters.AddWithValue("value", NpgsqlDbType.Text, (object?)value ?? DBNull.Value);
+        }
+        return (long)(await cmd.ExecuteScalarAsync(ct))!;
+    }
+
     public async Task<IReadOnlyList<Guid>> ClearLocationDataByValueAsync(
         LocationResetScope scope,
         string value,
