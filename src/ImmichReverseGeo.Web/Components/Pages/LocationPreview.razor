@@ -40,7 +40,7 @@
             <div class="scan-setup-grid">
                 <div class="form-group">
                     <label for="preview-scope">Check assets by</label>
-                    <select id="preview-scope" class="form-control" @bind="_scope" disabled="@(_busy || _applying || !_circuitReady || ResumeScanId is not null)">
+                    <select id="preview-scope" class="form-control" @bind="_scope" disabled="@(_busy || _applying || _reviewing || !_circuitReady || ResumeScanId is not null)">
                         <option value="@LocationPreviewScope.AssetIds">Asset GUIDs</option>
                         <option value="@LocationPreviewScope.City">Existing city</option>
                         <option value="@LocationPreviewScope.State">Existing state</option>
@@ -52,7 +52,7 @@
                 {
                     <div class="form-group scan-input">
                         <label for="preview-input">@(_scope == LocationPreviewScope.AssetIds ? "Asset GUIDs" : "Existing location name")</label>
-                        <textarea id="preview-input" class="form-control reset-textarea" rows="3" @bind="_input" @bind:event="oninput" disabled="@(_busy || _applying || !_circuitReady || ResumeScanId is not null)"></textarea>
+                        <textarea id="preview-input" class="form-control reset-textarea" rows="3" @bind="_input" @bind:event="oninput" disabled="@(_busy || _applying || _reviewing || !_circuitReady || ResumeScanId is not null)"></textarea>
                         <span class="hint">@(_scope == LocationPreviewScope.AssetIds
                             ? "Paste up to 1,000 GUIDs, separated by commas, spaces, or new lines."
                             : "Enter the exact city, state, or country name stored in Immich. Assets with that value and both GPS coordinates are included.")</span>
@@ -60,7 +60,7 @@
                 }
                 <div class="form-group">
                     <label for="preview-order">Order by</label>
-                    <select id="preview-order" class="form-control" @bind="_order" disabled="@(_busy || _applying || !_circuitReady || ResumeScanId is not null)">
+                    <select id="preview-order" class="form-control" @bind="_order" disabled="@(_busy || _applying || _reviewing || !_circuitReady || ResumeScanId is not null)">
                         <option value="@LocationPreviewOrder.AssetId">Asset GUID</option>
                         <option value="@LocationPreviewOrder.NearbyCoordinates">Nearby coordinates</option>
                     </select>
@@ -68,7 +68,7 @@
                 </div>
                 <div class="form-group">
                     <label for="preview-mode">Scan mode</label>
-                    <select id="preview-mode" class="form-control" @bind="_scanMode" disabled="@(_busy || _applying || !_circuitReady || ResumeScanId is not null)">
+                    <select id="preview-mode" class="form-control" @bind="_scanMode" disabled="@(_busy || _applying || _reviewing || !_circuitReady || ResumeScanId is not null)">
                         <option value="@LocationPreviewScanMode.ManualPages">Manual pages</option>
                         <option value="@LocationPreviewScanMode.Continuous">Continuous scan</option>
                     </select>
@@ -78,7 +78,7 @@
                 {
                     <div class="form-group">
                         <label for="preview-limit">Pause after this many new differences</label>
-                        <input id="preview-limit" class="form-control" type="number" min="0" @bind="_pauseAfterDifferences" @bind:event="oninput" disabled="@(_busy || _applying || !_circuitReady || ResumeScanId is not null)" />
+                        <input id="preview-limit" class="form-control" type="number" min="0" @bind="_pauseAfterDifferences" @bind:event="oninput" disabled="@(_busy || _applying || _reviewing || !_circuitReady || ResumeScanId is not null)" />
                         <span class="hint">Use 0 to scan to the end. Continue Scan checks until the next group of differences is found.</span>
                     </div>
                 }
@@ -105,7 +105,7 @@
     @if (ResumeScanId is null && _scanner is not null)
     {
         <div class="btn-row">
-            <button class="btn btn-secondary" @onclick="StartAsync" disabled="@(_busy || _applying || !_circuitReady)">Start New Scan</button>
+            <button class="btn btn-secondary" @onclick="StartAsync" disabled="@(_busy || _applying || _reviewing || !_circuitReady)">Start New Scan</button>
             <span class="hint">Starts a new snapshot and clears your selection.</span>
         </div>
     }
@@ -127,7 +127,7 @@
         <div><dt>Checked</dt><dd>@((_estimate?.Checked ?? _scanner?.CheckedCount ?? 0).ToString("N0")) / @(_estimate?.Total.ToString("N0") ?? "—")</dd></div>
         <div><dt>Progress</dt><dd>@(_estimate is null ? "—" : $"{_estimate.Percentage:F1}%")</dd></div>
         <div><dt>Time remaining</dt><dd>@(_estimate is null ? "—" : RemainingLabel)</dd></div>
-        <div><dt>Different</dt><dd>@((_scanner?.DifferentCount ?? 0).ToString("N0"))</dd></div>
+        <div><dt>Differences found</dt><dd>@((_scanner?.DifferentCount ?? 0).ToString("N0"))</dd></div>
     </dl>
     @if (_estimate is not null)
     {
@@ -165,15 +165,15 @@
         }
         else if (ResumeScanId is not null)
         {
-            <button class="btn btn-primary" @onclick="StartAsync" disabled="@(_applying || !_circuitReady || !_resumeLoaded || !_hasMore)">@(!_circuitReady ? "Loading saved scan…" : "Continue Saved Scan")</button>
+            <button class="btn btn-primary" @onclick="StartAsync" disabled="@(_applying || _reviewing || !_circuitReady || !_resumeLoaded || !_hasMore)">@(!_circuitReady ? "Loading saved scan…" : "Continue Saved Scan")</button>
         }
         else if (_scanner is null)
         {
-            <button class="btn btn-primary" @onclick="StartAsync" disabled="@(_applying || !_circuitReady)">@(_circuitReady ? "Start Scan" : "Starting UI…")</button>
+            <button class="btn btn-primary" @onclick="StartAsync" disabled="@(_applying || _reviewing || !_circuitReady)">@(_circuitReady ? "Start Scan" : "Starting UI…")</button>
         }
         else if (_hasMore)
         {
-            <button class="btn btn-primary" @onclick="NextAsync" disabled="@(_applying || !_circuitReady)">@ContinueLabel</button>
+            <button class="btn btn-primary" @onclick="NextAsync" disabled="@(_applying || _reviewing || !_circuitReady)">@ContinueLabel</button>
         }
         @if (_savedPreviewId is not null)
         {
@@ -205,110 +205,115 @@
 @if (_rows.Count > 0 || _review.Count > 0 || _hasMore || (_scanner?.CheckedCount ?? 0) > 0)
 {
     <section class="settings-card wide-card">
-        <div class="location-section-header"><h3>Review results</h3><span class="hint">Page @_differences.Page · @_review.Count selected</span></div>
-        <div class="review-filter-bar">
-            <label><input type="checkbox" @bind="_onlyChanges" @bind:after="FilterDifferencesAsync" disabled="@(_busy || _applying)" /> Show only different values</label>
+        <div class="location-section-header"><h3 class="review-focus-target" tabindex="-1" @ref="_resultsHeading">Review results</h3><span class="hint">Page @_differences.Page · @_review.Count selected</span></div>
+        <div hidden="@_reviewing">
+            <p class="hint">Select changes across result pages, then review the entire selection. Handled changes leave Ready to apply; Differences found remains the original scan total.</p>
+            <div class="review-filter-bar">
+                <label><input type="checkbox" @bind="_onlyChanges" @bind:after="FilterDifferencesAsync" disabled="@(_busy || _applying)" /> Show only different values</label>
 
-            <label for="live-result-filter">Show results</label>
-            <select id="live-result-filter" class="form-control" @bind="_resultFilter" @bind:after="FilterDifferencesAsync" disabled="@(_busy || _applying)">
-                <option value="@LocationReviewFilter.Ready">Ready to apply</option>
-                <option value="@LocationReviewFilter.Applied">Applied</option>
-                <option value="@LocationReviewFilter.Attention">Needs attention</option>
-                <option value="@LocationReviewFilter.All">All results</option>
-            </select>
+                <label for="live-result-filter">Show results</label>
+                <select id="live-result-filter" class="form-control" @bind="_resultFilter" @bind:after="FilterDifferencesAsync" disabled="@(_busy || _applying)">
+                    <option value="@LocationReviewFilter.Ready">Ready to apply</option>
+                    <option value="@LocationReviewFilter.Applied">Applied</option>
+                    <option value="@LocationReviewFilter.Attention">Needs attention</option>
+                    <option value="@LocationReviewFilter.All">All results</option>
+                </select>
 
-        </div>
-        @if (!VisibleRows.Any())
-        {
-            <p class="hint">No @(_resultFilter == LocationReviewFilter.Ready ? "differences ready to apply" : "results matching this filter") @(_busy ? "yet" : "among checked assets"). @(_hasMore ? $"Use {ContinueLabel} to check more assets." : "Choose All results to inspect saved snapshots.")</p>
-        }
-        @if (!_busy && !_applying && (VisibleRows.Any(CanSelect) || _review.Count > 0))
-        {
-            <div class="btn-row">
-                <button class="btn btn-secondary" @onclick="SelectPageChanges" disabled="@(!VisibleRows.Any(CanSelect))">Select Different Values on This Page</button>
-                <button class="btn btn-secondary" @onclick="_review.Clear" disabled="@(_review.Count == 0)">Clear Selection</button>
             </div>
-        }
+            @if (!VisibleRows.Any())
+            {
+                <p class="hint">No @(_resultFilter == LocationReviewFilter.Ready ? "differences ready to apply" : "results matching this filter") @(_busy ? "yet" : "among checked assets"). @(_hasMore ? $"Use {ContinueLabel} to check more assets." : "Choose All results to inspect saved snapshots.")</p>
+            }
+            @if (!_busy && !_applying && (VisibleRows.Any(CanSelect) || _review.Count > 0))
+            {
+                <div class="btn-row">
+                    <button class="btn btn-secondary" @onclick="SelectPageChanges" disabled="@(!VisibleRows.Any(CanSelect))">Select Different Values on This Page</button>
+                    <button class="btn btn-secondary" @onclick="_review.Clear" disabled="@(_review.Count == 0)">Clear Selection</button>
+                </div>
+            }
+                <LocationReviewPagination Page="_differences.Page" HasNext="_differences.HasNext" Disabled="@(_busy || _applying)"
+                    Label="Results" Previous="() => MoveDifferencesAsync(-1)" Next="() => MoveDifferencesAsync(1)" />
+        </div>
         <div class="review-actions">
             @if (_savedPreviewId is not null)
             {
-                <ApplyLocationChanges @ref="_applyReview" ReviewChanged="reviewing => _reviewing = reviewing" SelectionFocusRequested="RequestSelectionFocus" ScanId="_savedPreviewId" SelectedIds="_review.SelectedIds" Disabled="_busy"
+                <ApplyLocationChanges @ref="_applyReview" ReviewChanged="reviewing => _reviewing = reviewing" SelectionFocusRequested="RequestSelectionFocus" ScanId="_savedPreviewId" ReviewVersion="_reviewVersion" SelectedIds="_review.SelectedIds" Disabled="_busy"
                     BusyChanged="busy => _applying = busy" ResultsChanged="OnChangeResults" />
             }
         </div>
-        <div class="table-scroll" role="region" aria-label="Location comparisons; scroll horizontally to see all columns" tabindex="0">
-            <table class="data-table">
-                <thead><tr><th scope="col">Select</th><th scope="col">Photo</th><th scope="col">Asset GUID</th><th scope="col">Existing location</th><th scope="col">Proposed location</th><th scope="col">Result</th></tr></thead>
-                <tbody>
-                    @foreach (var row in VisibleRows)
-                    {
-                        <tr @key="row.Asset.Id">
-                            <td><input type="checkbox" aria-label="Select asset @row.Asset.Id"
-                                       checked="@_review.IsSelected(row.Asset.Id)" disabled="@(_busy || _applying || !CanSelect(row))"
-                                       @onchange="args => _review.Select(row, args.Value is true)" /></td>
-                            <td><PreviewPhoto AssetId="row.Asset.Id" PreviewId="_savedPreviewId" LoadPreview="@row.HasChange" /></td>
-                            <td><code>@row.Asset.Id</code>
-                                <div class="hint">GPS: @(row.Asset.Latitude?.ToString("G", System.Globalization.CultureInfo.InvariantCulture) ?? "—"), @(row.Asset.Longitude?.ToString("G", System.Globalization.CultureInfo.InvariantCulture) ?? "—")</div>
-                                <a class="text-link" href="@LookupUrl(row.Asset)">Inspect in Lookup</a>
-                            </td>
-                            <td>
-                                <div>City: <LocationDiffValue Value="@row.Asset.Existing.City" OtherValue="@row.Proposed?.City" Highlight="@row.HasChange" /></div>
-                                <div>State: <LocationDiffValue Value="@row.Asset.Existing.State" OtherValue="@row.Proposed?.State" Highlight="@row.HasChange" /></div>
-                                <div>Country: <LocationDiffValue Value="@row.Asset.Existing.Country" OtherValue="@row.Proposed?.Country" Highlight="@row.HasChange" /></div>
-                            </td>
-                            <td>
-                                <div>City: <LocationDiffValue Value="@row.Proposed?.City" OtherValue="@row.Asset.Existing.City" Highlight="@row.HasChange" /></div>
-                                <div>State: <LocationDiffValue Value="@row.Proposed?.State" OtherValue="@row.Asset.Existing.State" Highlight="@row.HasChange" /></div>
-                                <div>Country: <LocationDiffValue Value="@row.Proposed?.Country" OtherValue="@row.Asset.Existing.Country" Highlight="@row.HasChange" /></div>
-                            </td>
-                            <td>@(Session.ResetAll || Session.ResetAssets.Contains(row.Asset.Id) ? "Reset — run processing or start a fresh scan" : _changeResults.TryGetValue(row.Asset.Id, out var outcome) ? outcome.Label : row.Status)
-                                @if (_changeResults.TryGetValue(row.Asset.Id, out var change))
-                                {
-                                    <div class="hint">@change.Message</div>
-                                    <a class="text-link" href="@($"/data/location-management/history/{change.OperationId}")">View change</a>
-                                }
-                                @if (row.Error is not null)
-                                {
-                                    <div>@row.Error</div>
-                                }
-                            </td>
-                        </tr>
-                    }
-                </tbody>
-            </table>
-        </div>
-        @if (_savedPreviewId is not null)
-        {
-            <p class="hint">Showing saved results from all checked batches. Applying changes refreshes this page and removes handled rows from Ready to apply.</p>
-            <div class="btn-row">
-                <button class="btn btn-secondary" disabled="@(_busy || _applying || _differences.Page == 1)" @onclick="() => MoveDifferencesAsync(-1)">Previous 100 Results</button>
-                <button class="btn btn-secondary" disabled="@(_busy || _applying || !_differences.HasNext)" @onclick="() => MoveDifferencesAsync(1)">Next 100 Results</button>
+        <div hidden="@_reviewing">
+            <div class="table-scroll" role="region" aria-label="Location comparisons; scroll horizontally to see all columns" tabindex="0">
+                <table class="data-table location-comparison-table">
+                    <thead><tr><th scope="col">Select</th><th scope="col">Photo</th><th scope="col">Asset GUID</th><th scope="col">Existing location</th><th scope="col">Proposed location</th><th scope="col">Result</th></tr></thead>
+                    <tbody>
+                        @foreach (var row in VisibleRows)
+                        {
+                            <tr @key="row.Asset.Id">
+                                <td><input type="checkbox" aria-label="Select asset @row.Asset.Id"
+                                           checked="@_review.IsSelected(row.Asset.Id)" disabled="@(_busy || _applying || !CanSelect(row))"
+                                           @onchange="args => _review.Select(row, args.Value is true)" /></td>
+                                <td><PreviewPhoto AssetId="row.Asset.Id" PreviewId="_savedPreviewId" LoadPreview="@row.HasChange" /></td>
+                                <td><code>@row.Asset.Id</code>
+                                    <div class="hint">GPS: @(row.Asset.Latitude?.ToString("G", System.Globalization.CultureInfo.InvariantCulture) ?? "—"), @(row.Asset.Longitude?.ToString("G", System.Globalization.CultureInfo.InvariantCulture) ?? "—")</div>
+                                    <a class="text-link" href="@LookupUrl(row.Asset)">Inspect in Lookup</a>
+                                </td>
+                                <td>
+                                    <div>City: <LocationDiffValue Value="@row.Asset.Existing.City" OtherValue="@row.Proposed?.City" Highlight="@row.HasChange" /></div>
+                                    <div>State: <LocationDiffValue Value="@row.Asset.Existing.State" OtherValue="@row.Proposed?.State" Highlight="@row.HasChange" /></div>
+                                    <div>Country: <LocationDiffValue Value="@row.Asset.Existing.Country" OtherValue="@row.Proposed?.Country" Highlight="@row.HasChange" /></div>
+                                </td>
+                                <td>
+                                    <div>City: <LocationDiffValue Value="@row.Proposed?.City" OtherValue="@row.Asset.Existing.City" Highlight="@row.HasChange" /></div>
+                                    <div>State: <LocationDiffValue Value="@row.Proposed?.State" OtherValue="@row.Asset.Existing.State" Highlight="@row.HasChange" /></div>
+                                    <div>Country: <LocationDiffValue Value="@row.Proposed?.Country" OtherValue="@row.Asset.Existing.Country" Highlight="@row.HasChange" /></div>
+                                </td>
+                                <td>@(Session.ResetAll || Session.ResetAssets.Contains(row.Asset.Id) ? "Reset — run processing or start a fresh scan" : _changeResults.TryGetValue(row.Asset.Id, out var outcome) ? outcome.Label : row.Status)
+                                    @if (_changeResults.TryGetValue(row.Asset.Id, out var change))
+                                    {
+                                        <div class="hint">@change.Message</div>
+                                        <a class="text-link" href="@($"/data/location-management/history/{change.OperationId}")">View change</a>
+                                    }
+                                    @if (row.Error is not null)
+                                    {
+                                        <div>@row.Error</div>
+                                    }
+                                </td>
+                            </tr>
+                        }
+                    </tbody>
+                </table>
             </div>
-        }
-        @if (_differenceError is not null)
-        {
-            <p class="alert alert-error" role="alert">@_differenceError</p>
-        }
-        @if (!_busy && !_applying && _review.Count > 0)
-        {
-            <details class="location-help">
-                <summary>Selected GUIDs and optional reset workflow (@_review.Count)</summary>
-                <div class="form-group">
-                    <label for="preview-changed-ids">Selected GUIDs from reviewed pages (@_review.Count)</label>
-                    <textarea id="preview-changed-ids" class="form-control reset-textarea" readonly
-                              value="@string.Join(Environment.NewLine, _review.SelectedIds)"></textarea>
-                </div>
-                <p>Apply the reviewed values above, or use the optional reset and reprocessing workflow.</p>
-                <button class="btn btn-secondary" @onclick="ReviewReset">Review Reset for @_review.Count Selected Assets</button>
-            </details>
-        }
+            @if (_savedPreviewId is not null)
+            {
+                <p class="hint">Showing saved results from all checked batches. Applying changes refreshes this page and removes handled rows from Ready to apply.</p>
+                <LocationReviewPagination Page="_differences.Page" HasNext="_differences.HasNext" Disabled="@(_busy || _applying)"
+                    Label="Results" Previous="() => MoveDifferencesAsync(-1)" Next="() => MoveDifferencesAsync(1)" />
+            }
+            @if (_differenceError is not null)
+            {
+                <p class="alert alert-error" role="alert">@_differenceError</p>
+            }
+            @if (!_busy && !_applying && _review.Count > 0)
+            {
+                <details class="location-help">
+                    <summary>Selected GUIDs and optional reset workflow (@_review.Count)</summary>
+                    <div class="form-group">
+                        <label for="preview-changed-ids">Selected GUIDs from reviewed pages (@_review.Count)</label>
+                        <textarea id="preview-changed-ids" class="form-control reset-textarea" readonly
+                                  value="@string.Join(Environment.NewLine, _review.SelectedIds)"></textarea>
+                    </div>
+                    <p>Apply the reviewed values above, or use the optional reset and reprocessing workflow.</p>
+                    <button class="btn btn-secondary" @onclick="ReviewReset">Review Reset for @_review.Count Selected Assets</button>
+                </details>
+            }
 
-        <LocationReviewHelp />
-        @if (_review.Count > 0 && !_reviewing)
-        {
-            <LocationSelectionBar @ref="_selectionBar" Count="_review.Count" Disabled="@(_busy || _applying)"
-                Clear="ClearFromSelectionBar" Review="ReviewFromSelectionBarAsync" />
-        }
+            <LocationReviewHelp />
+            @if (_review.Count > 0 && !_reviewing)
+            {
+                <LocationSelectionBar @ref="_selectionBar" Count="_review.Count" Disabled="@(_busy || _applying)"
+                    Clear="ClearFromSelectionBar" Review="ReviewFromSelectionBarAsync" />
+            }
+        </div>
     </section>
 }
 
@@ -316,6 +321,9 @@
     private ApplyLocationChanges? _applyReview;
     private LocationSelectionBar? _selectionBar;
     private bool _reviewing;
+    private long _reviewVersion;
+    private bool _focusResults;
+    private ElementReference _resultsHeading;
     private bool _focusSelectionBar;
 
     private Task ReviewFromSelectionBarAsync() => _applyReview?.ReviewFromSelectionAsync() ?? Task.CompletedTask;
@@ -327,6 +335,11 @@
     }
     private async Task FocusSelectionBarAsync()
     {
+        if (_focusResults && !_busy && !_applying)
+        {
+            _focusResults = false;
+            await _resultsHeading.FocusAsync();
+        }
         if (!_focusSelectionBar || _busy || _applying)
         {
             return;
@@ -398,6 +411,7 @@
 
     private async Task FilterDifferencesAsync()
     {
+        _reviewVersion++;
         _differences = new LocationPreviewDifferencePage();
         await RefreshDifferencesAsync(force: true);
         await LoadChangeResultsAsync();
@@ -431,9 +445,11 @@
 
         try
         {
+            _reviewVersion++;
             await _differences.MoveAsync(direction, _scanner?.CheckedCount ?? 0,
                 page => Results.GetRowsAsync(id, page, _resultFilter, _onlyChanges));
             await LoadChangeResultsAsync();
+            _focusResults = true;
             _differenceError = null;
         }
         catch (Exception ex)
@@ -445,6 +461,10 @@
     private async Task OnChangeResults(IReadOnlyList<LocationChangeItem> items)
     {
         _review.Clear();
+        _reviewVersion++;
+        _differences = new LocationPreviewDifferencePage();
+        _resultFilter = LocationReviewFilter.Ready;
+        _onlyChanges = true;
         await RefreshDifferencesAsync(force: true);
         await LoadChangeResultsAsync();
     }
@@ -701,7 +721,7 @@
 
     private Task PreviewPageAsync(bool reloadSettings)
     {
-        if (_busy || _applying || !_circuitReady)
+        if (_busy || _applying || _reviewing || !_circuitReady)
         {
             return Task.CompletedTask;
         }

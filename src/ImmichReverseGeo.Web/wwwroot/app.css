@@ -425,6 +425,7 @@ input[type="checkbox"] {
 /* ── Buttons ──────────────────────────────────────────── */
 .btn, button {
     display: inline-flex;
+    max-width: 100%;
     align-items: center;
     gap: 0.35rem;
     padding: 0.5rem 1.15rem;
@@ -436,7 +437,8 @@ input[type="checkbox"] {
     cursor: pointer;
     transition: background var(--transition), color var(--transition), border-color var(--transition);
     text-decoration: none;
-    white-space: nowrap;
+    white-space: normal;
+    overflow-wrap: anywhere;
     line-height: 1.4;
 }
 
@@ -570,7 +572,7 @@ button:disabled, .btn:disabled {
 
 .schedule-builder {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
     gap: 1rem 1.25rem;
     align-items: end;
 }
@@ -1252,7 +1254,7 @@ input[type="text"].env-readonly {
 
 .reset-select-grid {
     display: grid;
-    grid-template-columns: repeat(auto-fit, minmax(220px, 1fr));
+    grid-template-columns: repeat(auto-fit, minmax(min(100%, 220px), 1fr));
     gap: 0.9rem 1rem;
 }
 
@@ -2176,7 +2178,37 @@ html { scroll-padding-bottom: 6rem; }
     box-shadow: 0 3px 12px rgba(0, 0, 0, .3);
 }
 .selection-action-bar strong { flex: 1; min-width: 5rem; font-size: .85rem; }
-.selection-action-bar .btn { white-space: nowrap; }
+.selection-action-bar .btn { white-space: normal; }
 .review-actions h3[tabindex="-1"], .location-confirmation h3[tabindex="-1"] { scroll-margin-top: 1rem; }
 
 .review-focus-target:focus-visible { outline: 2px solid var(--accent); outline-offset: 4px; }
+
+/* Keep long actions within narrow cards and comparison names readable. */
+.schedule-builder .form-group { min-width: 0; }
+.schedule-builder .form-group > label {
+    display: flex;
+    flex-direction: column;
+    align-items: stretch;
+    gap: .5rem;
+}
+.location-comparison-table { min-width: 64rem; }
+.location-history-table { min-width: 56rem; }
+.location-confirmation-table { min-width: 42rem; }
+.location-comparison-table th:nth-child(4),
+.location-comparison-table th:nth-child(5),
+.location-history-table th:nth-child(3),
+.location-history-table th:nth-child(4),
+.location-confirmation-table th:nth-child(2),
+.location-confirmation-table th:nth-child(3) { min-width: 14rem; }
+.review-pagination {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: .5rem;
+    margin: 1rem 0;
+}
+.review-pagination .hint { flex: 1 1 10rem; }
+[hidden] { display: none !important; }
+@media (max-width: 640px) {
+    .review-actions .location-apply-panel { padding: 1rem; }
+}

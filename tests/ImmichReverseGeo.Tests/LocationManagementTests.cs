@@ -48,6 +48,28 @@ public class LocationManagementTests
     }
 
     [TestMethod]
+    public async Task Apply_ThreeReviewBatchesHandleEveryDifferenceExactlyOnce()
+    {
+        var (scan, rows) = await ScanAsync(250);
+        var results = new LocationReviewResults(_scans, _journal);
+        foreach (var count in new[] { 100, 100, 50 })
+        {
+            var ready = await results.GetRowsAsync(scan, 1, LocationReviewFilter.Ready, onlyChanges: true);
+            var ids = ready.Take(100).Select(row => row.Asset.Id).ToArray();
+            Assert.HasCount(count, ids);
+            var reviewed = await _service.ReviewAsync(scan, ids);
+            Assert.HasCount(count, reviewed);
+            var operation = await _service.CreateApplyAsync(scan, ids);
+            await _service.RunAsync(operation, false);
+            Assert.AreEqual(count, (await _journal.GetOperationsAsync(id: operation)).Single().Applied);
+        }
+        Assert.HasCount(0, await results.GetRowsAsync(scan, 1, LocationReviewFilter.Ready, onlyChanges: true));
+        Assert.AreEqual(250, _writer.Calls);
+        Assert.IsTrue(rows.All(row => _writer.Current[row.Asset.Id].Asset.Existing == row.Proposed));
+        Assert.AreEqual(250, (await _scans.GetReportsAsync(id: scan)).Single().DifferentCount);
+    }
+
+    [TestMethod]
     public async Task Apply_UsesExactSelectedSnapshotsAndPersistsResultsAcrossRestart()
     {
         var (scan, rows) = await ScanAsync();
