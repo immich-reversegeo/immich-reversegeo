@@ -1,0 +1,97 @@
+@using System.Globalization
+@using System.Linq
+@using System.Threading
+@inject OvertureDivisionCacheService OvertureCache
+@inject GadmDivisionCacheService GadmCache
+@implements IAsyncDisposable
+
+@if (_downloads.Length > 0)
+{
+    <div class="settings-card" aria-label="Active country cache downloads">
+        <h3>Preparing country caches</h3>
+        <p class="hint">Assets waiting for these caches will continue when they are ready. Downloads may also be in use by other lookups or processing.</p>
+        @foreach (var download in _downloads)
+        {
+            <div @key="(download.Source, download.Iso3)">
+                <p role="status"><strong>@download.Source @download.Iso3</strong>: @download.Stage
+                    · @ElapsedLabel(download) elapsed
+                    @if (download.BytesReceived > 0 || download.TotalBytes is not null)
+                    {
+                        <span> · @Size(download.BytesReceived) downloaded@(download.TotalBytes is > 0 ? $" of {Size(download.TotalBytes.Value)}" : " (total size unavailable)")</span>
+                    }
+                    @if (download.RowsWritten > 0)
+                    {
+                        <span> · @download.RowsWritten.ToString("N0") areas saved</span>
+                    }
+                </p>
+                @if (download.TransferPercentage is { } percentage)
+                {
+                    <progress max="100" value="@percentage.ToString("F1", CultureInfo.InvariantCulture)" aria-label="@($"{download.Source} {download.Iso3} file download")"></progress>
+                    <span> @percentage.ToString("F1")% of file downloaded</span>
+                }
+                else if (download.QueryPercentage is { } queryPercentage)
+                {
+                    <progress max="100" value="@queryPercentage.ToString("F1", CultureInfo.InvariantCulture)" aria-label="@($"{download.Source} {download.Iso3} query progress")"></progress>
+                    <span> @queryPercentage.ToString("F1")% of query (estimated)</span>
+                }
+                else
+                {
+                    <progress aria-label="@($"{download.Source} {download.Iso3} cache preparation; percentage unavailable")"></progress>
+                }
+            </div>
+        }
+        <p class="hint">Overture shows an estimated query percentage when available; cache building and validation follow. This is not a percentage of downloaded bytes. Elapsed time alone does not confirm that data is still arriving.</p>
+    </div>
+}
+
+@code {
+    private readonly CancellationTokenSource _cts = new();
+    private Task? _refreshTask;
+    private CacheDownloadProgress[] _downloads = [];
+
+    protected override void OnInitialized() => Refresh();
+
+    protected override void OnAfterRender(bool firstRender)
+    {
+        if (firstRender)
+        {
+            _refreshTask = RefreshAsync();
+        }
+    }
+
+    private void Refresh() => _downloads = OvertureCache.GetActiveDownloads()
+        .Concat(GadmCache.GetActiveDownloads()).OrderBy(item => item.StartedAt).ToArray();
+
+    private async Task RefreshAsync()
+    {
+        using var timer = new PeriodicTimer(TimeSpan.FromSeconds(1));
+        try
+        {
+            while (await timer.WaitForNextTickAsync(_cts.Token))
+            {
+                await InvokeAsync(() =>
+                {
+                    Refresh();
+                    StateHasChanged();
+                });
+            }
+        }
+        catch (OperationCanceledException) when (_cts.IsCancellationRequested)
+        {
+        }
+    }
+
+    private static string Size(long bytes) => $"{bytes / (1024d * 1024):N1} MiB";
+    private static string ElapsedLabel(CacheDownloadProgress download) =>
+        $"{Math.Max(0, (DateTimeOffset.UtcNow - download.StartedAt).TotalSeconds):N0}s";
+
+    public async ValueTask DisposeAsync()
+    {
+        _cts.Cancel();
+        if (_refreshTask is not null)
+        {
+            await _refreshTask;
+        }
+        _cts.Dispose();
+    }
+}
