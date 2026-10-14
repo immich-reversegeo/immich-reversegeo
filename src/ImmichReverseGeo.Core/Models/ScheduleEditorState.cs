@@ -122,10 +122,12 @@ public sealed class ScheduleEditorState
 
     private static bool TryParseDailyCron(string? cron, out string time)
     {
-        var match = Regex.Match(cron ?? string.Empty, @"^(?<min>\d{1,2})\s+(?<hour>\d{1,2})\s+\*\s+\*\s+\*$");
-        if (match.Success)
+        var match = Regex.Match(cron ?? string.Empty, @"^(?<min>[0-9]{1,2})\s+(?<hour>[0-9]{1,2})\s+\*\s+\*\s+\*$");
+        if (match.Success
+            && int.TryParse(match.Groups["hour"].Value, out var hour) && hour <= 23
+            && int.TryParse(match.Groups["min"].Value, out var minute) && minute <= 59)
         {
-            time = $"{int.Parse(match.Groups["hour"].Value):00}:{int.Parse(match.Groups["min"].Value):00}";
+            time = $"{hour:00}:{minute:00}";
             return true;
         }
 
@@ -137,11 +139,13 @@ public sealed class ScheduleEditorState
     {
         var match = Regex.Match(
             cron ?? string.Empty,
-            @"^(?<min>\d{1,2})\s+(?<hour>\d{1,2})\s+\*\s+\*\s+(?<day>MON|TUE|WED|THU|FRI|SAT|SUN)$",
+            @"^(?<min>[0-9]{1,2})\s+(?<hour>[0-9]{1,2})\s+\*\s+\*\s+(?<day>MON|TUE|WED|THU|FRI|SAT|SUN)$",
             RegexOptions.IgnoreCase);
-        if (match.Success)
+        if (match.Success
+            && int.TryParse(match.Groups["hour"].Value, out var hour) && hour <= 23
+            && int.TryParse(match.Groups["min"].Value, out var minute) && minute <= 59)
         {
-            time = $"{int.Parse(match.Groups["hour"].Value):00}:{int.Parse(match.Groups["min"].Value):00}";
+            time = $"{hour:00}:{minute:00}";
             day = match.Groups["day"].Value.ToUpperInvariant();
             return true;
         }
@@ -153,10 +157,10 @@ public sealed class ScheduleEditorState
 
     private static bool TryParseHourlyCron(string? cron, out int minute)
     {
-        var match = Regex.Match(cron ?? string.Empty, @"^(?<min>\d{1,2})\s+\*\s+\*\s+\*\s+\*$");
-        if (match.Success)
+        var match = Regex.Match(cron ?? string.Empty, @"^(?<min>[0-9]{1,2})\s+\*\s+\*\s+\*\s+\*$");
+        if (match.Success
+            && int.TryParse(match.Groups["min"].Value, out minute) && minute <= 59)
         {
-            minute = Math.Clamp(int.Parse(match.Groups["min"].Value), 0, 59);
             return true;
         }
 
@@ -166,10 +170,10 @@ public sealed class ScheduleEditorState
 
     private static bool TryParseEveryMinutesCron(string? cron, out int interval)
     {
-        var match = Regex.Match(cron ?? string.Empty, @"^\*/(?<interval>\d{1,2})\s+\*\s+\*\s+\*\s+\*$");
-        if (match.Success)
+        var match = Regex.Match(cron ?? string.Empty, @"^\*/(?<interval>[0-9]{1,2})\s+\*\s+\*\s+\*\s+\*$");
+        if (match.Success
+            && int.TryParse(match.Groups["interval"].Value, out interval) && interval is >= 1 and <= 59)
         {
-            interval = Math.Clamp(int.Parse(match.Groups["interval"].Value), 1, 59);
             return true;
         }
 
@@ -179,11 +183,11 @@ public sealed class ScheduleEditorState
 
     private static bool TryParseEveryHoursCron(string? cron, out int interval, out int minute)
     {
-        var match = Regex.Match(cron ?? string.Empty, @"^(?<min>\d{1,2})\s+\*/(?<interval>\d{1,2})\s+\*\s+\*\s+\*$");
-        if (match.Success)
+        var match = Regex.Match(cron ?? string.Empty, @"^(?<min>[0-9]{1,2})\s+\*/(?<interval>[0-9]{1,2})\s+\*\s+\*\s+\*$");
+        if (match.Success
+            && int.TryParse(match.Groups["min"].Value, out minute) && minute <= 59
+            && int.TryParse(match.Groups["interval"].Value, out interval) && interval is >= 1 and <= 23)
         {
-            minute = Math.Clamp(int.Parse(match.Groups["min"].Value), 0, 59);
-            interval = Math.Clamp(int.Parse(match.Groups["interval"].Value), 1, 23);
             return true;
         }
 

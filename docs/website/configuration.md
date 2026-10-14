@@ -23,7 +23,7 @@ The app reads:
 - `DB_PASSWORD`
 - `DB_DATABASE_NAME`
 
-These values are required because the app reads and updates immich data directly.
+These values are required because the app reads and updates Immich data directly. Passwords containing semicolons, quotes, or spaces are supported; pass the exact password through `DB_PASSWORD`, following your container or host environment's quoting rules.
 
 For the database host, a nonblank `DB_HOST` takes precedence over `DB_HOSTNAME`. If neither has a nonblank value, the host defaults to `database`. You can reuse Immich's `DB_HOSTNAME` value for an external database without renaming it.
 
@@ -42,7 +42,7 @@ For the database host, a nonblank `DB_HOST` takes precedence over `DB_HOSTNAME`.
 
 Settings and City Resolver show whether changes are saved. **Save changes** saves the values present when you click it. If you keep editing during a save, those later edits stay pending for another save. Leaving an editor with unsaved changes asks for confirmation.
 
-The save bar stays available as you scroll. Settings validates enabled schedules and processing limits before saving; correct the displayed error before trying again.
+The save bar stays available as you scroll. Settings validates enabled schedules and processing limits before saving; correct the displayed error before trying again. Saved expressions that do not fit a preset remain in **Advanced custom schedule**, including invalid values. Invalid enabled schedules must be corrected before saving; they are not automatically clamped to a different schedule.
 
 The two editors save their own sections, so saving City Resolver does not overwrite processing or schedule changes made elsewhere. **Test Connection** checks the environment-backed database connection without saving settings.
 
