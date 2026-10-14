@@ -83,6 +83,11 @@ public static class OvertureDivisionsLogic
         OvertureDivisionResult candidate,
         OvertureDivisionResult currentBest)
     {
+        if (candidate.IsExactGeometryMatch != currentBest.IsExactGeometryMatch)
+        {
+            return candidate.IsExactGeometryMatch;
+        }
+
         if (candidate.GeometryContainsPoint && !currentBest.GeometryContainsPoint)
         {
             return true;
@@ -232,7 +237,7 @@ public static class OvertureDivisionsLogic
         var selectedRank = selected is not { GeometryContainsPoint: true }
             ? int.MaxValue
             : GetPreferredSubtypeOrder(selected.SubType, profile.PreferredSubtypes);
-        if (selectedRank == 0)
+        if (selectedRank == 0 && selected!.IsExactGeometryMatch)
         {
             return selected;
         }
@@ -240,11 +245,18 @@ public static class OvertureDivisionsLogic
         var promoted = new List<OvertureDivisionCandidateDiagnostic>();
         foreach (var candidate in candidates.Where(c => c.GeometryContainsPoint && c.BoundingBoxContainsPoint))
         {
+            if (selected is { IsExactGeometryMatch: true } && !candidate.IsExactGeometryMatch)
+            {
+                continue;
+            }
+
             var hierarchy = ParseHierarchy(candidate);
             for (var i = 0; i < hierarchy.Count - 1; i++)
             {
                 var ancestor = hierarchy[i];
-                if (GetPreferredSubtypeOrder(ancestor.SubType, profile.PreferredSubtypes) >= selectedRank)
+                var ancestorRank = GetPreferredSubtypeOrder(ancestor.SubType, profile.PreferredSubtypes);
+                if (ancestorRank == int.MaxValue || (ancestorRank >= selectedRank
+                    && !(candidate.IsExactGeometryMatch && selected is { IsExactGeometryMatch: false })))
                 {
                     continue;
                 }
@@ -265,7 +277,12 @@ public static class OvertureDivisionsLogic
             }
         }
 
-        return SelectPreferredCandidate(promoted, profile.PreferredSubtypes, profile.TieBreakMode) ?? selected;
+        if (selected is not null)
+        {
+            promoted.Add(selected);
+        }
+
+        return SelectPreferredCandidate(promoted, profile.PreferredSubtypes, profile.TieBreakMode);
     }
 
     private static OvertureDivisionCandidateDiagnostic? SelectPreferredCandidate(
@@ -283,7 +300,8 @@ public static class OvertureDivisionsLogic
         }
 
         var geometries = applicable.Where(c => c.GeometryContainsPoint).ToList();
-        var pool = geometries.Count > 0 ? geometries : applicable;
+        var exactGeometries = geometries.Where(c => c.IsExactGeometryMatch).ToList();
+        var pool = exactGeometries.Count > 0 ? exactGeometries : geometries.Count > 0 ? geometries : applicable;
 
         var ordered = pool
             .OrderBy(c => GetPreferredSubtypeOrder(c.SubType, preferredSubtypes))

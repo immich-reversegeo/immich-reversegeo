@@ -1,0 +1,294 @@
+{
+  "release": "2026-09-23.1",
+  "cases": [
+    {
+      "lat": 47.3773,
+      "lon": 8.0298,
+      "expected": "Aarau",
+      "state": "Aargau",
+      "areas": [
+        {
+          "id": "508f8d1f-2491-437c-b857-f44ccc0446ad",
+          "name": "Switzerland",
+          "subtype": "country",
+          "bbox": [
+            5.955901145935059,
+            45.81795120239258,
+            10.492172241210938,
+            47.8084602355957
+          ],
+          "wkb": "AQMAAAABAAAABQAAAFioNc07DiBAKhiV1AmwR0BYqDXNOw4gQLivA\u002BeMsEdAjgbwFkgQIEC4rwPnjLBHQI4G8BZIECBAKhiV1AmwR0BYqDXNOw4gQCoYldQJsEdA",
+          "className": "land",
+          "adminLevel": 0,
+          "country": "CH",
+          "isLand": 1,
+          "isTerritorial": 1,
+          "divisionId": "b9aa06a1-b832-451f-bcf2-051719e749dd",
+          "hierarchyJson": "[{\u0022division_id\u0022:\u0022b9aa06a1-b832-451f-bcf2-051719e749dd\u0022,\u0022subtype\u0022:\u0022country\u0022,\u0022name\u0022:\u0022Schweiz/Suisse/Svizzera/Svizra\u0022}]",
+          "exact": true,
+          "tolerant": true
+        },
+        {
+          "id": "65462787-b876-449b-baae-e7d0e388dc53",
+          "name": "Solothurn",
+          "subtype": "region",
+          "bbox": [
+            7.340415954589844,
+            47.074337005615234,
+            8.031376838684082,
+            47.50270080566406
+          ],
+          "wkb": "AQMAAAABAAAACAAAAMC5uJUhDyBAuK8D54ywR0BG5GDbRw8gQPAyw0ZZsEdAe97ovvcOIEAUVs/uNbBHQBE/WvfqDiBAAjLPpROwR0D6UGiUwg4gQCoYldQJsEdAWKg1zTsOIEAqGJXUCbBHQFioNc07DiBAuK8D54ywR0DAubiVIQ8gQLivA\u002BeMsEdA",
+          "className": "land",
+          "adminLevel": 1,
+          "country": "CH",
+          "isLand": 1,
+          "isTerritorial": 1,
+          "divisionId": "7d07ae5e-3865-4499-a53a-fb0e1d2167df",
+          "hierarchyJson": "[{\u0022division_id\u0022:\u0022b9aa06a1-b832-451f-bcf2-051719e749dd\u0022,\u0022subtype\u0022:\u0022country\u0022,\u0022name\u0022:\u0022Schweiz/Suisse/Svizzera/Svizra\u0022},{\u0022division_id\u0022:\u00227d07ae5e-3865-4499-a53a-fb0e1d2167df\u0022,\u0022subtype\u0022:\u0022region\u0022,\u0022name\u0022:\u0022Solothurn\u0022}]",
+          "exact": false,
+          "tolerant": true
+        },
+        {
+          "id": "2d37c4cd-c104-40b5-9ad0-9ae8d6ab51dd",
+          "name": "Aargau",
+          "subtype": "region",
+          "bbox": [
+            7.713527679443359,
+            47.13747787475586,
+            8.455111503601074,
+            47.6210823059082
+          ],
+          "wkb": "AQMAAAABAAAACAAAAPpQaJTCDiBAKhiV1AmwR0ARP1r36g4gQAIyz6UTsEdAe97ovvcOIEAUVs/uNbBHQEbkYNtHDyBA8DLDRlmwR0DAubiVIQ8gQLivA\u002BeMsEdAjgbwFkgQIEC4rwPnjLBHQI4G8BZIECBAKhiV1AmwR0D6UGiUwg4gQCoYldQJsEdA",
+          "className": "land",
+          "adminLevel": 1,
+          "country": "CH",
+          "isLand": 1,
+          "isTerritorial": 1,
+          "divisionId": "a69af5a4-b482-41db-b1a8-e7c20c9ae5e3",
+          "hierarchyJson": "[{\u0022division_id\u0022:\u0022b9aa06a1-b832-451f-bcf2-051719e749dd\u0022,\u0022subtype\u0022:\u0022country\u0022,\u0022name\u0022:\u0022Schweiz/Suisse/Svizzera/Svizra\u0022},{\u0022division_id\u0022:\u0022a69af5a4-b482-41db-b1a8-e7c20c9ae5e3\u0022,\u0022subtype\u0022:\u0022region\u0022,\u0022name\u0022:\u0022Aargau\u0022}]",
+          "exact": true,
+          "tolerant": true
+        },
+        {
+          "id": "84e56934-2f3f-4458-b3ea-2ad4752775dd",
+          "name": "Olten",
+          "subtype": "county",
+          "bbox": [
+            7.79375696182251,
+            47.270511627197266,
+            8.033218383789062,
+            47.397396087646484
+          ],
+          "wkb": "AQMAAAABAAAACAAAAI4G8BZIECBAmr6yeYGwR0Cgwf0/RxAgQPA6AAB/sEdAQAP/f\u002BAPIEBwm/\u002BfJ7BHQFGB9NymDyBAKhiV1AmwR0BYqDXNOw4gQCoYldQJsEdAWKg1zTsOIEC4rwPnjLBHQI4G8BZIECBAuK8D54ywR0COBvAWSBAgQJq\u002BsnmBsEdA",
+          "className": "land",
+          "adminLevel": 2,
+          "country": "CH",
+          "isLand": 1,
+          "isTerritorial": 1,
+          "divisionId": "2c6e6dad-c259-4f75-8592-a8aac648c467",
+          "hierarchyJson": "[{\u0022division_id\u0022:\u0022b9aa06a1-b832-451f-bcf2-051719e749dd\u0022,\u0022subtype\u0022:\u0022country\u0022,\u0022name\u0022:\u0022Schweiz/Suisse/Svizzera/Svizra\u0022},{\u0022division_id\u0022:\u00227d07ae5e-3865-4499-a53a-fb0e1d2167df\u0022,\u0022subtype\u0022:\u0022region\u0022,\u0022name\u0022:\u0022Solothurn\u0022},{\u0022division_id\u0022:\u00222c6e6dad-c259-4f75-8592-a8aac648c467\u0022,\u0022subtype\u0022:\u0022county\u0022,\u0022name\u0022:\u0022Olten\u0022}]",
+          "exact": true,
+          "tolerant": true
+        },
+        {
+          "id": "a2d34e2e-d7e1-4edf-93c8-82a4c0f2096e",
+          "name": "Aarau",
+          "subtype": "county",
+          "bbox": [
+            7.967435836791992,
+            47.31288528442383,
+            8.144956588745117,
+            47.47229766845703
+          ],
+          "wkb": "AQMAAAABAAAABgAAAFGB9NymDyBAKhiV1AmwR0BAA/9/4A8gQHCb/58nsEdAoMH9P0cQIEDwOgAAf7BHQI4G8BZIECBAmr6yeYGwR0COBvAWSBAgQCoYldQJsEdAUYH03KYPIEAqGJXUCbBHQA==",
+          "className": "land",
+          "adminLevel": 2,
+          "country": "CH",
+          "isLand": 1,
+          "isTerritorial": 1,
+          "divisionId": "7b5d779d-d89d-4ae8-aa2c-6efbe0380b63",
+          "hierarchyJson": "[{\u0022division_id\u0022:\u0022b9aa06a1-b832-451f-bcf2-051719e749dd\u0022,\u0022subtype\u0022:\u0022country\u0022,\u0022name\u0022:\u0022Schweiz/Suisse/Svizzera/Svizra\u0022},{\u0022division_id\u0022:\u0022a69af5a4-b482-41db-b1a8-e7c20c9ae5e3\u0022,\u0022subtype\u0022:\u0022region\u0022,\u0022name\u0022:\u0022Aargau\u0022},{\u0022division_id\u0022:\u00227b5d779d-d89d-4ae8-aa2c-6efbe0380b63\u0022,\u0022subtype\u0022:\u0022county\u0022,\u0022name\u0022:\u0022Aarau\u0022}]",
+          "exact": false,
+          "tolerant": false
+        },
+        {
+          "id": "6e6a355e-e95f-4a0a-8cdd-b3d1ae49eda8",
+          "name": "Unterentfelden",
+          "subtype": "localadmin",
+          "bbox": [
+            8.022950172424316,
+            47.359745025634766,
+            8.05927848815918,
+            47.37742614746094
+          ],
+          "wkb": "AQMAAAAAAAAA",
+          "className": "land",
+          "adminLevel": null,
+          "country": "CH",
+          "isLand": 1,
+          "isTerritorial": 1,
+          "divisionId": "099fe1ab-84e2-4751-a765-3b7e41f6b889",
+          "hierarchyJson": "[{\u0022division_id\u0022:\u0022b9aa06a1-b832-451f-bcf2-051719e749dd\u0022,\u0022subtype\u0022:\u0022country\u0022,\u0022name\u0022:\u0022Schweiz/Suisse/Svizzera/Svizra\u0022},{\u0022division_id\u0022:\u0022a69af5a4-b482-41db-b1a8-e7c20c9ae5e3\u0022,\u0022subtype\u0022:\u0022region\u0022,\u0022name\u0022:\u0022Aargau\u0022},{\u0022division_id\u0022:\u00227b5d779d-d89d-4ae8-aa2c-6efbe0380b63\u0022,\u0022subtype\u0022:\u0022county\u0022,\u0022name\u0022:\u0022Aarau\u0022},{\u0022division_id\u0022:\u0022099fe1ab-84e2-4751-a765-3b7e41f6b889\u0022,\u0022subtype\u0022:\u0022localadmin\u0022,\u0022name\u0022:\u0022Unterentfelden\u0022}]",
+          "exact": false,
+          "tolerant": false
+        },
+        {
+          "id": "7c22dc5b-f308-4854-9b3c-da50f55b5fa7",
+          "name": "Eppenberg-W\u00F6schnau",
+          "subtype": "localadmin",
+          "bbox": [
+            8.016641616821289,
+            47.36742401123047,
+            8.031376838684082,
+            47.393218994140625
+          ],
+          "wkb": "AQMAAAABAAAACAAAAMC5uJUhDyBAuK8D54ywR0BG5GDbRw8gQPAyw0ZZsEdAe97ovvcOIEAUVs/uNbBHQBE/WvfqDiBAAjLPpROwR0D6UGiUwg4gQCoYldQJsEdAWKg1zTsOIEAqGJXUCbBHQFioNc07DiBAuK8D54ywR0DAubiVIQ8gQLivA\u002BeMsEdA",
+          "className": "land",
+          "adminLevel": null,
+          "country": "CH",
+          "isLand": 1,
+          "isTerritorial": 1,
+          "divisionId": "790f2cf5-4f2a-49c1-8ba3-ca06b2d75281",
+          "hierarchyJson": "[{\u0022division_id\u0022:\u0022b9aa06a1-b832-451f-bcf2-051719e749dd\u0022,\u0022subtype\u0022:\u0022country\u0022,\u0022name\u0022:\u0022Schweiz/Suisse/Svizzera/Svizra\u0022},{\u0022division_id\u0022:\u00227d07ae5e-3865-4499-a53a-fb0e1d2167df\u0022,\u0022subtype\u0022:\u0022region\u0022,\u0022name\u0022:\u0022Solothurn\u0022},{\u0022division_id\u0022:\u00222c6e6dad-c259-4f75-8592-a8aac648c467\u0022,\u0022subtype\u0022:\u0022county\u0022,\u0022name\u0022:\u0022Olten\u0022},{\u0022division_id\u0022:\u0022790f2cf5-4f2a-49c1-8ba3-ca06b2d75281\u0022,\u0022subtype\u0022:\u0022localadmin\u0022,\u0022name\u0022:\u0022Eppenberg-W\u00F6schnau\u0022}]",
+          "exact": false,
+          "tolerant": true
+        },
+        {
+          "id": "5e310818-a501-4d56-8e89-bc4402df71bd",
+          "name": "Aarau",
+          "subtype": "localadmin",
+          "bbox": [
+            8.026461601257324,
+            47.36964797973633,
+            8.113471984863281,
+            47.41227722167969
+          ],
+          "wkb": "AQMAAAABAAAACAAAAPpQaJTCDiBAKhiV1AmwR0ARP1r36g4gQAIyz6UTsEdAe97ovvcOIEAUVs/uNbBHQEbkYNtHDyBA8DLDRlmwR0DAubiVIQ8gQLivA\u002BeMsEdAjgbwFkgQIEC4rwPnjLBHQI4G8BZIECBAKhiV1AmwR0D6UGiUwg4gQCoYldQJsEdA",
+          "className": "land",
+          "adminLevel": null,
+          "country": "CH",
+          "isLand": 1,
+          "isTerritorial": 1,
+          "divisionId": "5dff2d46-9463-4aa3-869e-4cf525486859",
+          "hierarchyJson": "[{\u0022division_id\u0022:\u0022b9aa06a1-b832-451f-bcf2-051719e749dd\u0022,\u0022subtype\u0022:\u0022country\u0022,\u0022name\u0022:\u0022Schweiz/Suisse/Svizzera/Svizra\u0022},{\u0022division_id\u0022:\u0022a69af5a4-b482-41db-b1a8-e7c20c9ae5e3\u0022,\u0022subtype\u0022:\u0022region\u0022,\u0022name\u0022:\u0022Aargau\u0022},{\u0022division_id\u0022:\u00227b5d779d-d89d-4ae8-aa2c-6efbe0380b63\u0022,\u0022subtype\u0022:\u0022county\u0022,\u0022name\u0022:\u0022Aarau\u0022},{\u0022division_id\u0022:\u00225dff2d46-9463-4aa3-869e-4cf525486859\u0022,\u0022subtype\u0022:\u0022localadmin\u0022,\u0022name\u0022:\u0022Aarau\u0022}]",
+          "exact": true,
+          "tolerant": true
+        }
+      ]
+    },
+    {
+      "lat": 47.446267,
+      "lon": 8.289111,
+      "expected": "Baden",
+      "state": "Aargau",
+      "areas": [
+        {
+          "id": "508f8d1f-2491-437c-b857-f44ccc0446ad",
+          "name": "Switzerland",
+          "subtype": "country",
+          "bbox": [
+            5.955901145935059,
+            45.81795120239258,
+            10.492172241210938,
+            47.8084602355957
+          ],
+          "wkb": "AQMAAAABAAAABQAAAMqkhjYAkyBAlNi1vd24R0DKpIY2AJMgQCJwJNBguUdAAANBgAyVIEAicCTQYLlHQAADQYAMlSBAlNi1vd24R0DKpIY2AJMgQJTYtb3duEdA",
+          "className": "land",
+          "adminLevel": 0,
+          "country": "CH",
+          "isLand": 1,
+          "isTerritorial": 1,
+          "divisionId": "b9aa06a1-b832-451f-bcf2-051719e749dd",
+          "hierarchyJson": "[{\u0022division_id\u0022:\u0022b9aa06a1-b832-451f-bcf2-051719e749dd\u0022,\u0022subtype\u0022:\u0022country\u0022,\u0022name\u0022:\u0022Schweiz/Suisse/Svizzera/Svizra\u0022}]",
+          "exact": true,
+          "tolerant": true
+        },
+        {
+          "id": "2d37c4cd-c104-40b5-9ad0-9ae8d6ab51dd",
+          "name": "Aargau",
+          "subtype": "region",
+          "bbox": [
+            7.713527679443359,
+            47.13747787475586,
+            8.455111503601074,
+            47.6210823059082
+          ],
+          "wkb": "AQMAAAABAAAABQAAAMqkhjYAkyBAlNi1vd24R0DKpIY2AJMgQCJwJNBguUdAAANBgAyVIEAicCTQYLlHQAADQYAMlSBAlNi1vd24R0DKpIY2AJMgQJTYtb3duEdA",
+          "className": "land",
+          "adminLevel": 1,
+          "country": "CH",
+          "isLand": 1,
+          "isTerritorial": 1,
+          "divisionId": "a69af5a4-b482-41db-b1a8-e7c20c9ae5e3",
+          "hierarchyJson": "[{\u0022division_id\u0022:\u0022b9aa06a1-b832-451f-bcf2-051719e749dd\u0022,\u0022subtype\u0022:\u0022country\u0022,\u0022name\u0022:\u0022Schweiz/Suisse/Svizzera/Svizra\u0022},{\u0022division_id\u0022:\u0022a69af5a4-b482-41db-b1a8-e7c20c9ae5e3\u0022,\u0022subtype\u0022:\u0022region\u0022,\u0022name\u0022:\u0022Aargau\u0022}]",
+          "exact": true,
+          "tolerant": true
+        },
+        {
+          "id": "78283df9-0596-45ce-bae5-3bb8a4f408af",
+          "name": "Baden",
+          "subtype": "county",
+          "bbox": [
+            8.215814590454102,
+            47.37590026855469,
+            8.400489807128906,
+            47.552093505859375
+          ],
+          "wkb": "AQMAAAABAAAABQAAAMqkhjYAkyBAlNi1vd24R0DKpIY2AJMgQCJwJNBguUdAAANBgAyVIEAicCTQYLlHQAADQYAMlSBAlNi1vd24R0DKpIY2AJMgQJTYtb3duEdA",
+          "className": "land",
+          "adminLevel": 2,
+          "country": "CH",
+          "isLand": 1,
+          "isTerritorial": 1,
+          "divisionId": "9df4428c-1d04-428b-9e3a-d88aaf721cc1",
+          "hierarchyJson": "[{\u0022division_id\u0022:\u0022b9aa06a1-b832-451f-bcf2-051719e749dd\u0022,\u0022subtype\u0022:\u0022country\u0022,\u0022name\u0022:\u0022Schweiz/Suisse/Svizzera/Svizra\u0022},{\u0022division_id\u0022:\u0022a69af5a4-b482-41db-b1a8-e7c20c9ae5e3\u0022,\u0022subtype\u0022:\u0022region\u0022,\u0022name\u0022:\u0022Aargau\u0022},{\u0022division_id\u0022:\u00229df4428c-1d04-428b-9e3a-d88aaf721cc1\u0022,\u0022subtype\u0022:\u0022county\u0022,\u0022name\u0022:\u0022Baden\u0022}]",
+          "exact": true,
+          "tolerant": true
+        },
+        {
+          "id": "5e16f713-4434-4b35-9c72-ba6295f569cb",
+          "name": "Fislisbach",
+          "subtype": "localadmin",
+          "bbox": [
+            8.268680572509766,
+            47.42484664916992,
+            8.314240455627441,
+            47.44782638549805
+          ],
+          "wkb": "AQMAAAABAAAACwAAAMqkhjYAkyBAT4IrQiS5R0AdzexO0pMgQMBzlCgguUdAEkmZeReUIEASNSyhFrlHQKAZxAd2lCBAonxBCwm5R0APPc7Zp5QgQAVBNn8CuUdAuh\u002BmM\u002BaUIED3lzhN\u002BrhHQEcQnVTqlCBAaB/QPvu4R0AAA0GADJUgQFQivkT3uEdAAANBgAyVIECU2LW93bhHQMqkhjYAkyBAlNi1vd24R0DKpIY2AJMgQE\u002BCK0IkuUdA",
+          "className": "land",
+          "adminLevel": null,
+          "country": "CH",
+          "isLand": 1,
+          "isTerritorial": 1,
+          "divisionId": "46661d03-74f6-4ad3-ac49-2d0d7cffc4ca",
+          "hierarchyJson": "[{\u0022division_id\u0022:\u0022b9aa06a1-b832-451f-bcf2-051719e749dd\u0022,\u0022subtype\u0022:\u0022country\u0022,\u0022name\u0022:\u0022Schweiz/Suisse/Svizzera/Svizra\u0022},{\u0022division_id\u0022:\u0022a69af5a4-b482-41db-b1a8-e7c20c9ae5e3\u0022,\u0022subtype\u0022:\u0022region\u0022,\u0022name\u0022:\u0022Aargau\u0022},{\u0022division_id\u0022:\u00229df4428c-1d04-428b-9e3a-d88aaf721cc1\u0022,\u0022subtype\u0022:\u0022county\u0022,\u0022name\u0022:\u0022Baden\u0022},{\u0022division_id\u0022:\u002246661d03-74f6-4ad3-ac49-2d0d7cffc4ca\u0022,\u0022subtype\u0022:\u0022localadmin\u0022,\u0022name\u0022:\u0022Fislisbach\u0022}]",
+          "exact": false,
+          "tolerant": true
+        },
+        {
+          "id": "f93b2c21-f5a2-4a4e-bdb0-0e267696d86d",
+          "name": "Baden",
+          "subtype": "localadmin",
+          "bbox": [
+            8.247151374816895,
+            47.43291473388672,
+            8.319365501403809,
+            47.49698257446289
+          ],
+          "wkb": "AQMAAAABAAAACwAAAAADQYAMlSBAVCK\u002BRPe4R0BHEJ1U6pQgQGgf0D77uEdAuh\u002BmM\u002BaUIED3lzhN\u002BrhHQA89ztmnlCBABUE2fwK5R0CgGcQHdpQgQKJ8QQsJuUdAEkmZeReUIEASNSyhFrlHQB3N7E7SkyBAwHOUKCC5R0DKpIY2AJMgQE\u002BCK0IkuUdAyqSGNgCTIEAicCTQYLlHQAADQYAMlSBAInAk0GC5R0AAA0GADJUgQFQivkT3uEdA",
+          "className": "land",
+          "adminLevel": null,
+          "country": "CH",
+          "isLand": 1,
+          "isTerritorial": 1,
+          "divisionId": "66f50b35-096f-4343-a77d-3b2adea77e80",
+          "hierarchyJson": "[{\u0022division_id\u0022:\u0022b9aa06a1-b832-451f-bcf2-051719e749dd\u0022,\u0022subtype\u0022:\u0022country\u0022,\u0022name\u0022:\u0022Schweiz/Suisse/Svizzera/Svizra\u0022},{\u0022division_id\u0022:\u0022a69af5a4-b482-41db-b1a8-e7c20c9ae5e3\u0022,\u0022subtype\u0022:\u0022region\u0022,\u0022name\u0022:\u0022Aargau\u0022},{\u0022division_id\u0022:\u00229df4428c-1d04-428b-9e3a-d88aaf721cc1\u0022,\u0022subtype\u0022:\u0022county\u0022,\u0022name\u0022:\u0022Baden\u0022},{\u0022division_id\u0022:\u002266f50b35-096f-4343-a77d-3b2adea77e80\u0022,\u0022subtype\u0022:\u0022localadmin\u0022,\u0022name\u0022:\u0022Baden\u0022}]",
+          "exact": true,
+          "tolerant": true
+        }
+      ]
+    }
+  ]
+}

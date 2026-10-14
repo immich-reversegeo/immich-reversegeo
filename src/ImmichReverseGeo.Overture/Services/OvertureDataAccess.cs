@@ -143,13 +143,17 @@ public static class OvertureDataAccess
         }
     }
 
-    public static bool TryGeometryContains(byte[] wkb, Point point)
+    public static bool TryGeometryContains(byte[] wkb, Point point) => TryGeometryContains(wkb, point, out _);
+
+    public static bool TryGeometryContains(byte[] wkb, Point point, out bool exact)
     {
+        exact = false;
         try
         {
             var geometry = WkbReader.Read(wkb);
             if (geometry.Covers(point))
             {
+                exact = true;
                 return true;
             }
 
