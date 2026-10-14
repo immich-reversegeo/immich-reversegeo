@@ -1421,6 +1421,37 @@ input[type="text"].env-readonly {
 }
 
 /* ── Log page ─────────────────────────────────────────── */
+.page:has(.logs-page) {
+    height: 100dvh;
+    min-height: 40rem;
+}
+.main-shell:has(.logs-page),
+.content-shell:has(.logs-page) {
+    min-height: 0;
+}
+.content-shell:has(.logs-page),
+.content:has(.logs-page),
+.logs-page {
+    display: flex;
+    flex-direction: column;
+    flex: 1;
+    min-height: 0;
+}
+.logs-page > :not(.log-full) {
+    flex-shrink: 0;
+}
+.logs-page .log-full {
+    flex: 1;
+    min-height: 8rem;
+    max-height: none;
+}
+@media (max-width: 900px) {
+    .page:has(.logs-page) {
+        grid-template-rows: auto minmax(0, 1fr);
+        min-height: 56rem;
+    }
+}
+
 .log-controls {
     display: flex;
     align-items: center;

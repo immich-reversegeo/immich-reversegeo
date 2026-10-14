@@ -6,6 +6,14 @@ For a shorter user-facing summary, see [docs/website/changelog.md](./docs/websit
 
 ## Unreleased
 
+- Refresh public screenshots from the current UI and document the scan/review/apply quick-start, cache progress, low-memory troubleshooting, result filters, and recovery workflow. Keep the user-facing release summary aligned.
+- Improve responsive navigation and location-review layouts with sticky selection actions, keyboard focus on confirmation and return, saved-scan/history filters before pagination, and guarded settings saves. Settings displays UTC schedules, a local next-run preview, and effective processing limits.
+- Show whole-scan checked totals, active-time estimates, and exact character-level differences in live and saved reviews; distinguish whitespace, missing values, and empty strings.
+- Prefer exact Overture administrative geometry matches over tolerance-only candidates, preserving tolerance as a fallback. Prefer English hierarchy-parent names when available; existing administrative caches can be re-downloaded to use updated names.
+- Expose source/country cache-preparation stages and elapsed time, GADM byte-transfer progress, estimated DuckDB Overture query progress, and cache-building row counts. Query percentages do not represent byte transfer or whole-cache completion.
+- Add unauthenticated `POST /api/processing/run` with immediate `202 accepted` or `409 busy` responses, shared run/maintenance exclusion, and no queued duplicate pass. Keep deployment access private, as with the web UI.
+- Add a default-on Follow logs control and let the log panel fill available page height. Preserve filtered recent-log downloads and structured UTC export timestamps; clarify browser connection recovery and small browser favicons.
+
 - Persist scan checkpoints and resumable status with atomic row saves, restore original selection/settings and progress from Saved Scans, protect concurrent continuation with run ownership tokens, and skip already-recorded asset IDs when resuming. Migrate older reports without losing snapshots; recover interrupted owners on startup.
 - Surface automatic difference-limit pauses with an amber status notice and a sticky review banner containing the pause count and Continue Scan action; clear the pause indication when scanning resumes.
 - Default live and saved reviews to differences-only within the selected status filter, filter before pagination, and render photo-preview components only for rows with proposed differences.
