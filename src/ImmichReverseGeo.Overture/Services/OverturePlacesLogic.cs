@@ -110,6 +110,45 @@ public static class OverturePlacesLogic
         "bus_stop"
     ];
 
+    // Preserve useful-place filtering across documented category renames, not broad ancestor labels.
+    // https://docs.overturemaps.org/taxonomy/2026-09-23.0/taxonomy_to_legacy_categories.csv
+    private static readonly IReadOnlyDictionary<string, string> CategoryFilterAliases =
+        new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase)
+        {
+            ["anglican_or_episcopal_place_of_worship"] = "anglican_church",
+            ["baptist_place_of_worship"] = "baptist_church",
+            ["roman_catholic_place_of_worship"] = "catholic_church",
+            ["christian_place_of_worship"] = "church_cathedral",
+            ["protestant_place_of_worship"] = "evangelical_church",
+            ["pentecostal_place_of_worship"] = "pentecostal_church",
+            ["buddhist_place_of_worship"] = "buddhist_temple",
+            ["hindu_place_of_worship"] = "hindu_temple",
+            ["muslim_place_of_worship"] = "mosque",
+            ["sikh_place_of_worship"] = "sikh_temple",
+            ["jewish_place_of_worship"] = "synagogue",
+            ["place_of_worship"] = "temple",
+            ["performing_arts_venue"] = "theater",
+            ["government_office"] = "government_services",
+            ["school_district_office"] = "school_district_offices",
+            ["shopping"] = "retail",
+            ["non_alcoholic_beverage_venue"] = "beverage_store",
+            ["reproductive_perinatal_and_womens_care"] = "womens_health_clinic",
+            ["b2b_storage"] = "warehouse",
+            ["b2b_storage_and_warehouses"] = "warehouse",
+        };
+
+    private static string NormalizeFilterCategory(string? category)
+    {
+        var normalized = category?.Trim().ToLowerInvariant() ?? string.Empty;
+        return CategoryFilterAliases.TryGetValue(normalized, out var alias) ? alias : normalized;
+    }
+
+    private static string BuildFilterCategorySql(string column)
+    {
+        var cases = string.Join(" ", CategoryFilterAliases.Select(pair => $"WHEN '{pair.Key}' THEN '{pair.Value}'"));
+        return $"CASE lower(trim(COALESCE({column}, ''))) {cases} ELSE lower(trim(COALESCE({column}, ''))) END";
+    }
+
     public static string BuildQuery(
         double lat,
         double lon,
@@ -152,7 +191,7 @@ public static class OverturePlacesLogic
                         pow(sin(radians(latitude - {latSql}) / 2), 2)
                         + cos(radians({latSql})) * cos(radians(latitude))
                         * pow(sin(radians(longitude - {lonSql}) / 2), 2))))) AS distance_metres,
-                    '_' || lower(COALESCE(primary_category, '')) || '_ _' || lower(COALESCE(basic_category, '')) || '_' AS category_text
+                    '_' || ({BuildFilterCategorySql("primary_category")}) || '_ _' || ({BuildFilterCategorySql("basic_category")}) || '_' AS category_text
                 FROM nearby
             ), classified AS (
                 SELECT *, CASE
@@ -203,7 +242,7 @@ public static class OverturePlacesLogic
                     AND bbox.ymax >= {lat.ToString(CultureInfo.InvariantCulture)}
                     AND bbox.ymin <= {lat.ToString(CultureInfo.InvariantCulture)} AS bbox_contains_point,
                 ST_AsWKB(geometry) AS geom_wkb,
-                CAST(sources AS VARCHAR) AS sources_json
+                to_json(sources) AS sources_json
             FROM read_parquet('{releaseUrl}', filename = true, hive_partitioning = 1)
             WHERE bbox.xmax >= {minLon.ToString(CultureInfo.InvariantCulture)}
               AND bbox.xmin <= {maxLon.ToString(CultureInfo.InvariantCulture)}
@@ -262,7 +301,7 @@ public static class OverturePlacesLogic
         }
 
         // Overture category identifiers use snake_case; pad each identifier to match complete terms.
-        var categoryText = $"_{candidate.Category}_ _{candidate.BasicCategory}_".ToLowerInvariant();
+        var categoryText = $"_{NormalizeFilterCategory(candidate.Category)}_ _{NormalizeFilterCategory(candidate.BasicCategory)}_";
         if (!IncludedCategoryTerms.Any(term => categoryText.Contains($"_{term}_", StringComparison.Ordinal)))
         {
             return "Excluded: category is outside the useful-place filter.";

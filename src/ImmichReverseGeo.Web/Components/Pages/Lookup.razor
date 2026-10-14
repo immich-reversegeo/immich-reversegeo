@@ -481,7 +481,7 @@
             return;
         }
 
-        if (TryParseCoordinates(text, out var lat, out var lon))
+        if (CoordinateLookupInputParser.TryParse(text, out var lat, out var lon))
         {
             _lat = lat;
             _lon = lon;
@@ -490,78 +490,6 @@
         {
             _parseError = "Could not parse coordinates";
         }
-    }
-
-    private static bool TryParseCoordinates(string text, out double lat, out double lon)
-    {
-        lat = lon = 0;
-        text = text.Trim();
-        text = System.Text.RegularExpressions.Regex.Replace(text, @"[,;|]+", " ");
-        text = System.Text.RegularExpressions.Regex.Replace(text, @"\s+", " ").Trim();
-
-        var dms = System.Text.RegularExpressions.Regex.Match(text,
-            @"(\d+)[°d\s]\s*(\d+)['']\s*(\d+(?:\.\d+)?)['""s]?\s*([NSns])\s+" +
-            @"(\d+)[°d\s]\s*(\d+)['']\s*(\d+(?:\.\d+)?)['""s]?\s*([EWew])");
-        if (dms.Success)
-        {
-            lat = DmsToDecimal(dms.Groups[1], dms.Groups[2], dms.Groups[3], dms.Groups[4].Value);
-            lon = DmsToDecimal(dms.Groups[5], dms.Groups[6], dms.Groups[7], dms.Groups[8].Value);
-            return true;
-        }
-
-        var dir = System.Text.RegularExpressions.Regex.Match(text,
-            @"([NSns])\s*(\d+(?:\.\d+)?)\s+([EWew])\s*(\d+(?:\.\d+)?)");
-        if (!dir.Success)
-        {
-            dir = System.Text.RegularExpressions.Regex.Match(text,
-                @"(\d+(?:\.\d+)?)\s*([NSns])\s+(\d+(?:\.\d+)?)\s*([EWew])");
-            if (dir.Success)
-            {
-                lat = ApplyDirection(double.Parse(dir.Groups[1].Value, System.Globalization.CultureInfo.InvariantCulture), dir.Groups[2].Value);
-                lon = ApplyDirection(double.Parse(dir.Groups[3].Value, System.Globalization.CultureInfo.InvariantCulture), dir.Groups[4].Value);
-                return true;
-            }
-        }
-        else
-        {
-            lat = ApplyDirection(double.Parse(dir.Groups[2].Value, System.Globalization.CultureInfo.InvariantCulture), dir.Groups[1].Value);
-            lon = ApplyDirection(double.Parse(dir.Groups[4].Value, System.Globalization.CultureInfo.InvariantCulture), dir.Groups[3].Value);
-            return true;
-        }
-
-        var kv = System.Text.RegularExpressions.Regex.Match(text,
-            @"lat\s*=\s*(-?\d+(?:\.\d+)?)\s+lon\s*=\s*(-?\d+(?:\.\d+)?)",
-            System.Text.RegularExpressions.RegexOptions.IgnoreCase);
-        if (kv.Success
-            && double.TryParse(kv.Groups[1].Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out lat)
-            && double.TryParse(kv.Groups[2].Value, System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out lon))
-        {
-            return true;
-        }
-
-        var parts = text.Split(' ', StringSplitOptions.RemoveEmptyEntries);
-        if (parts.Length >= 2
-            && double.TryParse(parts[0], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var a)
-            && double.TryParse(parts[1], System.Globalization.NumberStyles.Float, System.Globalization.CultureInfo.InvariantCulture, out var b))
-        {
-            lat = a;
-            lon = b;
-            return true;
-        }
-
-        return false;
-    }
-
-    private static double DmsToDecimal(System.Text.RegularExpressions.Group deg, System.Text.RegularExpressions.Group min, System.Text.RegularExpressions.Group sec, string direction)
-    {
-        var v = double.Parse(deg.Value) + double.Parse(min.Value) / 60.0
-              + double.Parse(sec.Value, System.Globalization.CultureInfo.InvariantCulture) / 3600.0;
-        return ApplyDirection(v, direction);
-    }
-
-    private static double ApplyDirection(double value, string direction)
-    {
-        return direction.ToUpperInvariant() is "S" or "W" ? -value : value;
     }
 
     private async Task RunLookup()

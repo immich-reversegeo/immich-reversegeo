@@ -53,7 +53,7 @@ The response returns immediately; `202` does not mean processing succeeded or th
 
 ## Lookup
 
-Use the Lookup page when you want to test a coordinate before running a full processing pass.
+Use the Lookup page when you want to test a coordinate before running a full processing pass. Pasted coordinates support decimal pairs, compass directions, named latitude/longitude pairs, and degrees/minutes/seconds. Use digits `0`–`9` and a decimal point. Latitude must be between −90 and 90 and longitude between −180 and 180; DMS minutes and seconds must be below 60. Invalid pasted values show a parse error and do not start a lookup.
 
 - paste or type coordinates to see how the resolver behaves for that point
 - it shows the final proposed values first; expand **Source details and nearby places** or **Lookup Trace** to investigate how they were chosen
@@ -64,6 +64,8 @@ Use the Lookup page when you want to test a coordinate before running a full pro
 ![Coordinate Lookup showing proposed location names and expandable source details](assets/screenshots/lookup.png){ .doc-screenshot .on-glb }
 
 Click the screenshot to enlarge it. Lookup previews do not update Immich assets.
+
+Nearby-place suggestions recognise Overture's current labels for religious sites, performance venues, and public offices. Routine shops, storage businesses, and clinics remain excluded. The filters preserve the original category labels and source attribution shown in Lookup. Use these suggestions to investigate a location; they do not replace the proposed city or state.
 
 ### Country lookup failures
 
