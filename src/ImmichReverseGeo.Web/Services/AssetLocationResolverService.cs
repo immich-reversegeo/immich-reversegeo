@@ -13,6 +13,8 @@ public class AssetLocationResolverService(
     AdministrativeAreaResolverService administrativeResolver,
     OverturePlacesService overturePlaces)
 {
+    public IDisposable BeginOvertureReleaseScope() => administrativeResolver.BeginOvertureReleaseScope();
+
     public async Task<GeoResult?> ResolveAsync(
         double latitude,
         double longitude,
