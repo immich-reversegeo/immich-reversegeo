@@ -6,6 +6,7 @@
 
 <PageTitle>Logs - Immich ReverseGeo</PageTitle>
 
+<div class="logs-page">
 <h2>Logs</h2>
 <p class="run-info">Times are shown in your browser's timezone. Downloads use UTC.</p>
 <p class="hint">Only the latest 100 activity entries are kept, and they are cleared when the app restarts. The download contains the current filtered view.</p>
@@ -34,6 +35,8 @@
     {
         <div class="log-line @(entry.Message.Contains("[ERROR]") ? "error" : entry.Message.Contains("[WARN]") ? "warn" : "")">[<LocalTimestamp Timestamp="entry.Timestamp" />] @entry.Message</div>
     }
+</div>
+
 </div>
 
 @code {
