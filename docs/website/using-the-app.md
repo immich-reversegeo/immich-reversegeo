@@ -1,5 +1,5 @@
 ---
-description: "Use the Dashboard, Lookup, data maintenance tools, and logs in Immich ReverseGeo."
+description: "Process missing names, look up coordinates, scan and apply corrections, and manage saved scans, history, caches, and logs."
 icon: material/application-outline
 ---
 
@@ -61,7 +61,7 @@ Use the Lookup page when you want to test a coordinate before running a full pro
 - `Include nearby places` adds a slower live Overture search for investigation. It shows nearby suggestions and a small sample of excluded places; it does not change the location written to Immich
 - `Prefer cached GADM administrative areas` switches the administrative area part of the lookup to an experimental on-demand GADM cache for that country; country detection still starts with the bundled Overture country data
 
-![Coordinate Lookup input](assets/screenshots/lookup.png){ .doc-screenshot .on-glb }
+![Coordinate Lookup showing proposed location names and expandable source details](assets/screenshots/lookup.png){ .doc-screenshot .on-glb }
 
 Click the screenshot to enlarge it. Lookup previews do not update Immich assets.
 
@@ -85,6 +85,13 @@ Open **Library & Data → Location Management → Scan & Review** to compare exi
 4. Select only the assets you want to correct. Selections are kept across review pages. Open **Review Selected Changes**, inspect the exact existing and proposed names, and take an [Immich database backup](https://docs.immich.app/administration/backup-and-restore/).
 5. Acknowledge the confirmation and choose **Confirm Apply**. The app writes the saved proposed names directly; no reset or processing run is needed. Each operation supports up to 1,000 selected differences. Its results appear beside the assets and in **Change History**.
 
+??? example "See a paused scan and selected differences"
+    ![Continued scan with progress, highlighted name differences, and selected sample assets](assets/screenshots/scan-review.png){ .doc-screenshot .on-glb }
+
+The scan and change-history screenshots use sample asset IDs and names. A highlighted spelling difference is an example of an exact text comparison, not a recommendation to replace a local name.
+
+#### Compare names and filter results
+
 In live and saved scans, changed characters are highlighted in both the existing and proposed names. The comparison is exact, so punctuation, capitalization, and spaces can mark a name as different even when it refers to the same place. Changed spaces appear as `␠`; other invisible characters use symbols or Unicode codes. Hover over a highlight to see its character codes. An empty value appears as `(empty)` and a missing value as `—`.
 
 **Show only different values** is checked by default in live and saved scans. It combines with the status filter below. Uncheck it to include unchanged, unresolved, and failed results; choose **All results** or **Needs attention** to inspect them.
@@ -92,6 +99,8 @@ In live and saved scans, changed characters are highlighted in both the existing
 The **Show results** filter offers **Ready to apply**, **Applied**, **Needs attention**, and **All results**. Applied changes leave Ready to apply immediately, and the page fills with the next available differences. They remain visible in Applied, All results, and Change History. Needs attention includes skipped, pending, interrupted, unresolved, and failed lookup results. Undone changes remain in All results and Change History. Resume pending writes from Change History; inspect uncertain outcomes in Immich. Run a new scan before applying skipped or undone assets again.
 
 Live scan inputs, results, filters, and selections survive navigation within the current browser session. Leaving an active scan cancels it; return to Scan & Review to continue after cancellation finishes. Reloading or losing the session clears the live review state; completed results remain in Saved Scans. New scans reset the live selection and filters.
+
+#### Scan progress and country caches
 
 Browse saved results from every checked batch with **Previous 100 Results** and **Next 100 Results**. **Scan Next 100** adds results without bringing already handled differences back into the ready list. **Start Scan** clears the selection and begins a new snapshot. After cancellation, you can review completed results and continue after the last checked asset. If no results have been saved yet, continuation starts at the beginning.
 
@@ -145,6 +154,9 @@ Applying changes updates only city, state, and country. GPS coordinates and othe
 
 Selection and confirmation are separate steps. Use **Next results** to select differences across pages, then review the whole selection. **Next selected page** pages through that confirmation; applying writes all selected changes, not only the visible page. Use **Back to Selection** to change your selection. Refreshing the report requires a fresh confirmation.
 
+??? example "See the apply confirmation"
+    ![Apply review showing the exact saved names and an unchecked confirmation](assets/screenshots/apply-review.png){ .doc-screenshot .on-glb }
+
 After applying, the app returns to the first page of **Ready to apply** and keeps the operation summary and history link visible. The scan's **Differences found** count includes handled changes. When no checked differences remain ready, continue an unfinished scan or inspect **Applied**, **Needs attention**, or **All results**. On small screens, scroll comparison tables horizontally to read the existing and proposed names.
 
 #### Change history, undo, and interruption
@@ -152,6 +164,9 @@ After applying, the app returns to the first page of **Ready to apply** and keep
 Use **Show operations → Pending work** to find operations with apply or undo work waiting or underway. **Needs review** finds uncertain write outcomes that need checking in Immich. These filters cover all operations before pagination, and an operation can match both. Open it to check current outcomes before resuming work.
 
 **Location Management → Change History** records each selected operation and its per-asset outcomes. Open an operation to see its saved previous names, exact proposals, timestamps, and applied, skipped, pending, or **Needs review** results. Select applied rows, review the previous names to restore, and confirm **Undo**. Undo requires the current applied names, GPS coordinates, and metadata version to match; any later metadata edit is skipped, even if its location names are identical.
+
+??? example "See recorded changes and undo controls"
+    ![Change History showing recorded sample changes and undo selection](assets/screenshots/change-history.png){ .doc-screenshot .on-glb }
 
 The history overview shows pending apply and undo work separately. If any selected change is no longer eligible for undo, the app queues none of that selection; refresh the results and review your selection again.
 
@@ -191,7 +206,9 @@ Reset review rechecks the affected count before writing. If it changes, review t
 
 Country Caches supports country names and codes. Country names and download times wrap within their columns; on narrow screens, scroll the table horizontally to reach the action buttons. Deleting a cache does not change Immich metadata; it downloads again when needed. Bulk deletion is under **Cache Maintenance** and requires confirmation. A failed re-download can leave a cache unavailable; check network access, disk space, and permissions before retrying.
 
-Overture administrative names prefer English when available, including names taken from parent areas. Local names remain the fallback when English is unavailable. If an older cache still shows a local name despite an English name being available, use **Re-download Overture cache** for that country, then check the coordinates in **Lookup**. Re-downloading does not update existing Immich metadata; use **Preview Location Corrections** to review and apply any desired changes.
+![Country Caches showing a downloaded country and its maintenance actions](assets/screenshots/country-caches.png){ .doc-screenshot .on-glb }
+
+Overture administrative names prefer English when available, including names taken from parent areas. Local names remain the fallback when English is unavailable. If an older cache still shows a local name despite an English name being available, use **Re-download Overture cache** for that country, then check the coordinates in **Lookup**. Re-downloading does not update existing Immich metadata; use **Location Management → Scan & Review** to review and apply any desired changes.
 
 ## Logs
 

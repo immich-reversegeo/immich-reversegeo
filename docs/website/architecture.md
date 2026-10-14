@@ -16,7 +16,7 @@ For a plain-language explanation of the active geographic data sources, see [Dat
 <div class="feature-grid">
   <div class="card">
     <h3>Web app</h3>
-    <p>The web UI handles settings, manual processing, download management, lookups, and logs.</p>
+    <p>The web UI handles settings, processing, coordinate lookups, country caches, location reviews, saved scans, change history, and logs.</p>
   </div>
   <div class="card">
     <h3>Built-in data</h3>
@@ -37,6 +37,14 @@ The background processor:
 3. resolves administrative areas from cached Overture divisions and optionally cached GADM country packages
 4. optionally queries bundled airport infrastructure
 5. writes city/state/country back to immich when a complete result is available
+
+### Reviewing existing names
+
+Location Management uses the same location matching to scan assets with GPS coordinates, including those with existing names. Scanning saves the existing and proposed names without changing Immich. You can reopen saved results or continue unfinished scans later.
+
+Applying selected differences writes the exact reviewed names directly, after checking that the existing names and coordinates still match the snapshot. Change History records previous names and outcomes, with undo available when the applied metadata has not changed. These records live under `/data`, so preserve that volume across container replacements. They do not replace an Immich database backup.
+
+See [Location Management](./using-the-app.md#location-management) for the review, confirmation, and recovery steps.
 
 ### Active data sources
 

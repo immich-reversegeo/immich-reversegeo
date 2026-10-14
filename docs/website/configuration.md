@@ -91,6 +91,9 @@ Most users should stay on the preset schedule options. Custom cron expressions c
 
 All schedule times use **UTC**. Settings previews the next occurrence in your browser's timezone; local clock changes do not change the UTC schedule. The preview reflects your current edits and applies only after saving. Memory tuning, batch size, pause between batches, and parallel workers are under **Advanced Processing Limits**. The page shows effective batch and worker limits, including low-memory overrides.
 
+??? example "See the schedule and processing settings"
+    ![Settings showing a UTC schedule, local next-run time, processing limits, and the save bar](assets/screenshots/settings.png){ .doc-screenshot .on-glb }
+
 <div class="feature-grid">
   <div class="card">
     <h3>Schedule</h3>
@@ -118,7 +121,7 @@ All schedule times use **UTC**. Settings previews the next occurrence in your br
 
 When enabled, airport matching uses an airport name only if the coordinate falls inside its mapped polygon boundary or within 5 m of its edge. This small tolerance accommodates minor GPS and mapping differences. Point-only airports are excluded by default. Airports with missing or invalid boundaries are excluded. A nearby airport or overlapping bounding box is not enough, even when the city is missing; the app keeps the administrative result and its usual state/country fallback.
 
-Use Lookup to check a known airport photo and a nearby photo first. The airport trace distinguishes a boundary match with the 5 m tolerance, outside boundary, and boundary unavailable. Missing or inaccurate polygons can prevent airport matching. Turn airport matching off if you prefer city or commune names. Existing Immich names are not rewritten automatically; use Preview Location Corrections before a targeted reset and rerun.
+Use Lookup to check a known airport photo and a nearby photo first. The airport trace distinguishes a boundary match with the 5 m tolerance, outside boundary, and boundary unavailable. Missing or inaccurate polygons can prevent airport matching. Turn airport matching off if you prefer city or commune names. Existing Immich names are not rewritten automatically; use [Location Management](./using-the-app.md#location-management) to scan, review, and apply selected corrections.
 
 #### Optional point-only airport fallback
 
@@ -126,7 +129,7 @@ Enable **Allow point-only airports within 100 m when no city or county is found*
 
 The fallback uses the nearest airport represented by a valid point within 100 m. It never replaces a resolved administrative city or county, and mapped boundary matches remain preferred. A point record cannot bypass an available boundary for a same-named airport.
 
-Proximity does not confirm the photo was taken on airport grounds. A point may be far from the terminal, so some airport photos still will not match. Missing, invalid, and line geometries do not qualify. Test airport and nearby non-airport photos in Lookup first; it labels this result as an unconfirmed point-only proximity fallback. Use Preview Location Corrections before resetting existing locations.
+Proximity does not confirm the photo was taken on airport grounds. A point may be far from the terminal, so some airport photos still will not match. Missing, invalid, and line geometries do not qualify. Test airport and nearby non-airport photos in Lookup first; it labels this result as an unconfirmed point-only proximity fallback. Review proposed corrections in [Location Management](./using-the-app.md#location-management) before applying them.
 
 ### Low-memory mode
 
@@ -280,7 +283,7 @@ So the controls on the City Resolver page stay simple:
 
 The bundled US profile tries county names after all its city-like place types. For example, a coordinate without a city match can resolve to `Monroe County, Florida` rather than `Florida, Florida`. A matching airport boundary can still override that name when airport matching is enabled. This does not add missing towns, parks, or islands to the source data.
 
-Your explicit global or US override can replace that order. To keep county as a fallback, add `county` last in your preferred place types. Check representative coordinates in Lookup before saving a custom order. Existing Immich names are not changed automatically; use Preview Location Corrections before a targeted reset and rerun.
+Your explicit global or US override can replace that order. To keep county as a fallback, add `county` last in your preferred place types. Check representative coordinates in Lookup before saving a custom order. Existing Immich names are not changed automatically; start a new scan in [Location Management](./using-the-app.md#location-management) to review proposals using the saved settings.
 
 The app ships with built-in default rules. Your own settings sit on top of them:
 

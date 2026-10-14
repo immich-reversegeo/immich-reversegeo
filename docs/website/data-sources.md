@@ -53,7 +53,7 @@ What it does not do by itself:
 
 Older custom country databases remain usable for country codes the catalog recognizes; the app does not rewrite those files. They retain their original geographic coverage. A missing or conflicting country identity in a newer-format database is reported as a mapping error rather than being assigned to a nearby country.
 
-Country coverage does not guarantee city or state coverage. Optional GADM data can be unavailable for an identity; the app then keeps available Overture results. Updating the app does not automatically replace existing Immich location names. Use Preview Location Corrections before resetting photos you want to process again.
+Country coverage does not guarantee city or state coverage. Optional GADM data can be unavailable for an identity; the app then keeps available Overture results. Updating the app does not automatically replace existing Immich location names. Use [Location Management](./using-the-app.md#location-management) to scan and review proposed corrections before applying them.
 
 If a coordinate still looks wrong, use [Lookup](./using-the-app.md#lookup) first. Confirm the country identity, then inspect the downloaded Overture and optional GADM administrative results before changing settings.
 
@@ -112,7 +112,7 @@ Official references:
 
 Immich ReverseGeo also ships with a bundled airport-focused extract built from Overture data.
 
-The extract uses Overture release `2026-09-23.1`. Airports may be represented by a boundary or only a point, so the data cannot always establish whether a photo was taken on airport grounds. Updating the app supplies the new bundled extract; it does not replace existing Immich location names. Use Lookup or Preview Location Corrections before resetting photos for reprocessing.
+The extract uses Overture release `2026-09-23.1`. Airports may be represented by a boundary or only a point, so the data cannot always establish whether a photo was taken on airport grounds. Updating the app supplies the new bundled extract; it does not replace existing Immich location names. Use Lookup to check known coordinates, then [Location Management](./using-the-app.md#location-management) to review and apply selected corrections.
 
 The app uses it for:
 

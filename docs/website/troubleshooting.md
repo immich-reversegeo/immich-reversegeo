@@ -11,7 +11,7 @@ Most issues come down to one of three things: the app cannot see the right datab
 
 ## The app shows default DB values instead of my real ones
 
-The app reads real process environment variables. If you changed Windows user or system environment variables after Visual Studio or your shell was already open, restart that process.
+Open **Settings → Database Connection Details** and check the read-only values. Change database variables in Docker Compose or your host environment, then recreate or restart Immich ReverseGeo. Editing `settings.json` does not change database credentials. Use **Test Connection** after restarting.
 
 ## Country lookup says no match
 
@@ -26,6 +26,12 @@ Check:
 The first lookup for a new country can take longer because the per-country Overture division cache must be created locally.
 
 Large countries can also produce much larger cache files than small ones.
+
+Open **Country Caches** or check **Preparing country caches** on the scan page. The display shows the source, country code, stage, and elapsed time. GADM can show file bytes and a transfer percentage; Overture shows an estimated query percentage when available. Building and validating the cache happen afterward, so 100% of a transfer or query does not mean the cache is ready.
+
+![Country Caches showing an Overture query in progress](assets/screenshots/cache-progress.png){ .doc-screenshot .on-glb }
+
+If the stage stays unchanged, inspect **Logs** and check internet access, free space, and write permissions for `/data`. An increasing elapsed time does not prove the download is advancing. Avoid repeatedly re-downloading a country while investigating. See [cache preparation](./using-the-app.md#scan-progress-and-country-caches) for the progress limits.
 
 <div class="feature-grid">
   <div class="card">
@@ -43,7 +49,8 @@ Large countries can also produce much larger cache files than small ones.
 Things that affect throughput:
 
 - batch size
-- max parallelism
+- parallel workers
+- low-memory mode and country-boundary cache settings
 - database latency to the immich PostgreSQL instance
 - first-time per-country cache creation
 
@@ -54,7 +61,7 @@ Things that affect throughput:
   </div>
   <div class="step-card">
     <h3>Then tune settings</h3>
-    <p>Batch size and max parallelism usually make the biggest difference once the needed country data is already present.</p>
+    <p>Check effective batch and worker limits under Settings → Processing. Low-memory mode uses one worker even if your saved parallel-worker value is higher.</p>
   </div>
 </div>
 
@@ -68,17 +75,21 @@ Check whether the restarts line up with processing runs:
 docker inspect --format '{{.RestartCount}} {{.State.OOMKilled}}' immich-reversegeo
 ```
 
-If `OOMKilled` is `true`, or the logs end with `System.OutOfMemoryException`, raise the memory
-ceiling. The compose snippet in [Installation](./installation.md#docker) sets `mem_limit: 2g`,
-as a starting memory budget. If your Compose file has no `mem_limit`, add one to set a total
-container memory budget that the .NET runtime can take into account. Large country caches or
-higher parallelism may require a higher limit.
+If `OOMKilled` is `true`, or the logs end with `System.OutOfMemoryException`:
 
-Lowering the limit is not a fix. The bundled country boundary data alone needs several hundred
-megabytes once loaded, so a limit below that makes the container fail straight away.
+1. Enable **Settings → Processing → Low-memory mode**, save, and start a new run. It uses one worker, batches of at most 25, and country boundaries read from disk. Work already in progress keeps its current limits.
+2. Compare the first pass that prepares country caches with later passes that reuse them. Downloads and geometry checks can still need additional RAM.
+3. Check the container memory limit. The [installation snippet](./installation.md#docker) uses `mem_limit: 2g` as a starting budget; large caches may require more. Lowering the limit does not reduce the app's memory needs.
 
-Reducing **max parallelism** in processing settings also lowers peak memory, at the cost of
-throughput.
+If you want to retain normal parallelism, try **Limit country boundary cache** under **Advanced Processing Limits**, or reduce **Parallel workers**. Normal mode also releases idle country boundaries after five minutes by default. Released memory may remain available to the runtime before the host's RAM figure falls.
+
+These settings trade speed and disk reads for lower memory use; none caps total app memory. Test known coordinates in Lookup before comparing runs. See [memory settings](./configuration.md#low-memory-mode) for the options and limits.
+
+## A scan shows differences but nothing is ready to apply
+
+**Differences found** counts the original scan differences, including ones already handled. **Ready to apply** shows only differences that have not been attempted. Switch to **Applied**, **Needs attention**, or **All results** to inspect outcomes. Uncheck **Show only different values** to include unchanged, unresolved, and failed results.
+
+Open **Change History** to review pending apply or undo work. For **Needs review**, check the asset in Immich before another change. Run a new scan for skipped or undone assets, updated settings, or fresh proposals. See [Applying saved proposals](./using-the-app.md#applying-saved-proposals).
 
 ## I want to rerun everything from scratch
 
