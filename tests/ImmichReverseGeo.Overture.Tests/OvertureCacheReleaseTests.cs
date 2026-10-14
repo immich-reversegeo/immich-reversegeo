@@ -12,6 +12,28 @@ public class OvertureCacheReleaseTests
     private const string NewRelease = "2026-09-23.1";
 
     [TestMethod]
+    public async Task ExternalReplacement_UpdatesRememberedRelease()
+    {
+        using var service = new TestService();
+        service.Seed("CHE", NewRelease);
+        await service.EnsureDataAsync("CHE");
+        var path = service.CachePath("CHE");
+        using (var connection = new SqliteConnection($"Data Source={path};Pooling=false"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "UPDATE _meta SET value=$release WHERE key='release'";
+            command.Parameters.AddWithValue("$release", OldRelease);
+            command.ExecuteNonQuery();
+        }
+        File.SetLastWriteTimeUtc(path, DateTime.UtcNow.AddSeconds(2));
+        await service.EnsureDataAsync("CHE");
+        Assert.AreEqual(1, service.Checks, "The known latest release can be reused.");
+        Assert.AreEqual(1, service.Exported.Count, "A replaced older cache must not reuse the previous readiness release.");
+        Assert.AreEqual(NewRelease, service.StoredRelease("CHE"));
+    }
+
+    [TestMethod]
     public async Task NewRelease_RefreshesUsedCountriesAndSharesOneCatalogCheck()
     {
         using var service = new TestService();

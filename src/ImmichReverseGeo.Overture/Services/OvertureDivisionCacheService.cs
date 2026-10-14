@@ -31,7 +31,8 @@ public class OvertureDivisionCacheService
     private readonly Func<string, string?> _iso3ToAlpha2;
     private readonly MemoryResourcePolicy _memoryPolicy;
     private readonly ConcurrentDictionary<string, Lazy<Task>> _inflightDownloads = new();
-    private readonly ConcurrentDictionary<string, string> _readyCaches = new();
+    private sealed record ReadyCache(string Release, CacheFileStamp Stamp);
+    private readonly ConcurrentDictionary<string, ReadyCache> _readyCaches = new();
     private readonly ConcurrentDictionary<string, CacheDownloadProgress> _downloadProgress = new();
 
     public CacheDownloadProgress[] GetActiveDownloads() => [.. _downloadProgress.Values];
@@ -89,14 +90,6 @@ public class OvertureDivisionCacheService
                 var release = ReadMetaValue(conn, "release");
                 var fileSizeBytes = new FileInfo(file).Length;
                 result[iso3] = new OvertureDivisionStatus(count, downloadedAt, release, fileSizeBytes);
-                if (count > 0 && HasCurrentCacheMetadata(conn, iso3))
-                {
-                    _readyCaches[iso3] = release;
-                }
-                else
-                {
-                    _readyCaches.TryRemove(iso3, out _);
-                }
             }
             catch (Exception ex)
             {
@@ -115,18 +108,33 @@ public class OvertureDivisionCacheService
             return false;
         }
 
-        if (_readyCaches.ContainsKey(iso3))
+        var path = GetDbPath(iso3);
+        if (!CacheFileStamp.TryRead(path, out var stamp))
         {
-            return true;
+            _readyCaches.TryRemove(iso3, out _);
+            _refreshRetries.TryRemove(iso3, out _);
+            return false;
         }
 
-        var hasRows = HasCurrentRows(GetDbPath(iso3), iso3, out var release);
-        if (hasRows)
+        if (_readyCaches.TryGetValue(iso3, out var cached))
         {
-            _readyCaches[iso3] = release;
+            if (cached.Stamp == stamp)
+            {
+                return true;
+            }
+            _readyCaches.TryRemove(iso3, out _);
+            _refreshRetries.TryRemove(iso3, out _);
         }
 
-        return hasRows;
+        // Do not remember a validation result if the file changed while it was read.
+        if (!HasCurrentRows(path, iso3, out var release)
+            || !CacheFileStamp.TryRead(path, out var after) || after != stamp)
+        {
+            return false;
+        }
+
+        _readyCaches[iso3] = new ReadyCache(release, stamp);
+        return true;
     }
 
     public void DeleteFile(string iso3)
@@ -223,11 +231,11 @@ public class OvertureDivisionCacheService
         {
             return false;
         }
-        if (cached == release)
+        if (cached.Release == release)
         {
             return true;
         }
-        return TryParseRelease(cached, out var cachedDate, out var cachedPatch)
+        return TryParseRelease(cached.Release, out var cachedDate, out var cachedPatch)
             && TryParseRelease(release, out var latestDate, out var latestPatch)
             && (cachedDate > latestDate || (cachedDate == latestDate && cachedPatch >= latestPatch));
     }
@@ -367,7 +375,7 @@ public class OvertureDivisionCacheService
                 }
             }
             File.Move(tmpPath, dbPath, overwrite: true);
-            _readyCaches[iso3] = release;
+            _readyCaches.TryRemove(iso3, out _);
             _logger.LogInformation("Overture division download complete for {ISO3}: {Rows} areas", iso3, rowCount);
         }
         catch (Exception ex)
