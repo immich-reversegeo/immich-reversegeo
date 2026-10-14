@@ -200,7 +200,7 @@ Use the Logs page when you want to inspect recent activity outside the Dashboard
 - filter the in-app log view to all messages, warnings and errors, or errors only
 - download the current filtered view as `immich-reversegeo.log`
 
-**Follow logs** is enabled by default and keeps the log panel scrolled to the latest entry. Uncheck it to read older entries without automatic scrolling. Check it again to jump to the latest entry and resume following new activity.
+The log panel fills the available page height and scrolls within the panel. **Follow logs** is enabled by default and keeps the log panel scrolled to the latest entry. Uncheck it to read older entries without automatic scrolling. Check it again to jump to the latest entry and resume following new activity.
 
 On-screen timestamps use your browser's timezone. Downloaded logs use full UTC timestamps with dates so you can compare activity across systems. While the interactive page is connecting, timestamps are shown in UTC.
 
