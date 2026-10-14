@@ -29,7 +29,7 @@ Immich ReverseGeo is a self-hosted companion for <a href="https://immich.app">im
 
 Open **Lookup**, paste coordinates from a photo you know, and inspect the country, state, city, and matching sources before running against your library. Lookup previews location names without updating Immich assets; it may download country data when needed.
 
-![Coordinate Lookup with an example coordinate](assets/screenshots/lookup.png){ .doc-screenshot .on-glb }
+![Coordinate Lookup showing the proposed city, state, and country for Zurich](assets/screenshots/lookup.png){ .doc-screenshot .on-glb }
 
 ## What it can help with
 
@@ -39,7 +39,7 @@ Open **Lookup**, paste coordinates from a photo you know, and inspect the countr
 
 Results depend on the available source data. It cannot add missing GPS coordinates or guarantee a better name for every point. Compare known locations in Lookup first, then choose the settings that fit your library.
 
-To replace existing location names, back up the database and clear the affected assets' location fields before reprocessing. See [Start manual processing](./getting-started.md#5-start-manual-processing) for the workflow.
+To correct existing names, use **Location Management** to scan your photos, review proposed differences, and apply only the changes you select. Back up the database before applying. Saved scans let you continue unfinished work; Change History records applied names and supports undo when the metadata has not changed. See [Correct existing location names](./getting-started.md#correct-existing-location-names).
 
 See [Using the App](./using-the-app.md) for the workflow and [Data Sources](./data-sources.md) for coverage and licence limits.
 
