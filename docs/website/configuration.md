@@ -72,6 +72,19 @@ Put `REVERSEGEO_IMMICH_API_KEY` in your compose environment or secrets-backed de
 
 You can configure only `IMMICH_WEB_URL` if you want original-photo links without thumbnails. Thumbnails are fetched on demand for assets in saved preview reports and are not saved as image files. Missing thumbnails, denied access, or an unavailable Immich server show **Preview unavailable** while the saved location results remain usable. Original-photo links open Immich in a new tab and use your normal Immich sign-in.
 
+## Run API key
+
+To [start processing from a script](using-the-app.md#start-a-run-from-a-script), set `RUN_API_KEY` on the Immich ReverseGeo container to a long random secret:
+
+```yaml
+environment:
+  RUN_API_KEY: ${REVERSEGEO_RUN_API_KEY}
+```
+
+Put `REVERSEGEO_RUN_API_KEY` in your compose environment or secrets-backed deployment configuration, then recreate the container. The trigger is disabled when the key is unset or blank. This key belongs to Immich ReverseGeo and is separate from `IMMICH_API_KEY`. It stays in the environment and is not stored in `settings.json`.
+
+Scripts send the key as `Authorization: Bearer <key>` when calling `POST /api/processing/run`. Keep the service on your private network; use HTTPS if requests cross an untrusted network. The key protects this trigger only; it does not add authentication to the web UI.
+
 ## Processing settings
 
 The Settings page lets you control:

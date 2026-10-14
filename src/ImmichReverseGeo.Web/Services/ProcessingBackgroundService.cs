@@ -83,15 +83,15 @@ public class ProcessingBackgroundService(
         }
     }
 
-    /// <summary>Triggered by "Run Now" button in the Blazor UI.</summary>
-    public Task TriggerRunAsync()
+    /// <summary>Starts a background pass if processing and maintenance are idle.</summary>
+    public bool TryTriggerRun()
     {
         // Acquire the lock synchronously (non-blocking). If it's already held by a running
         // or recently-triggered run, bail out immediately — no silent race possible.
         if (!_runLock.Wait(0))
         {
             state.AppendLog("Manual run was not started because processing or maintenance is already in progress.");
-            return Task.CompletedTask;
+            return false;
         }
 
         // Mark as pending right now so the UI disables the button on this render cycle,
@@ -106,10 +106,10 @@ public class ProcessingBackgroundService(
         {
             try { await RunOnceAsync(token); }
             finally { _runLock.Release(); }
-        }).ContinueWith(t => logger.LogError(t.Exception, "TriggerRunAsync faulted"),
+        }).ContinueWith(t => logger.LogError(t.Exception, "Manual processing run faulted"),
                         TaskContinuationOptions.OnlyOnFaulted);
 
-        return Task.CompletedTask;
+        return true;
     }
 
     public void CancelRun() => _runCts?.Cancel();
