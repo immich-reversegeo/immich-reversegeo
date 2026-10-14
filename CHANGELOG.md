@@ -6,6 +6,12 @@ For a shorter user-facing summary, see [docs/website/changelog.md](./docs/websit
 
 ## Unreleased
 
+## 0.2.0 — 2026-10-14
+
+- Automatically refresh outdated Overture administrative caches to the latest discovered release on use. Preserve a compatible previous cache if refresh fails, retry after one hour, and share release discovery across a processing pass or location scan.
+- Stage Overture cache preparation through filtered division areas and referenced hierarchy parents before the final SQLite export; expose query phases and exported row counts without treating query estimates as whole-cache completion.
+- Repair Docker latest-release promotion and add digest-checked recovery for an already-published stable image without rebuilding.
+
 - Refresh public screenshots from the current UI and document the scan/review/apply quick-start, cache progress, low-memory troubleshooting, result filters, and recovery workflow. Keep the user-facing release summary aligned.
 - Improve responsive navigation and location-review layouts with sticky selection actions, keyboard focus on confirmation and return, saved-scan/history filters before pagination, and guarded settings saves. Settings displays UTC schedules, a local next-run preview, and effective processing limits.
 - Show whole-scan checked totals, active-time estimates, and exact character-level differences in live and saved reviews; distinguish whitespace, missing values, and empty strings.

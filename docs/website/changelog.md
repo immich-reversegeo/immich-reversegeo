@@ -11,6 +11,14 @@ Technical implementation notes live in [CHANGELOG.md](https://github.com/immich-
 
 ## Unreleased
 
+## 0.2.0 — 2026-10-14
+
+This release adds selected location corrections and guarded undo, resumable scans, clearer reviews, and improved administrative matching.
+
+- Outdated Overture country caches refresh automatically when used. If an update fails, the app keeps a compatible previous cache and retries later. Check known coordinates in [Lookup](./using-the-app.md#lookup) before applying changed names.
+- Overture cache preparation now shows separate query and cache-building stages. A query percentage describes that stage, not the entire download.
+- Fixed stable Docker image promotion and added recovery for an already-built release image.
+
 - Updated the [app guide](./using-the-app.md) with current screenshots and the [quick-start correction workflow](./getting-started.md#correct-existing-location-names). Added help for slow cache preparation, memory limits, and handled scan differences.
 - Location reviews keep selection actions within reach and move keyboard focus into and back from confirmation. Saved Scans and Change History can filter unfinished or pending work across all pages. Navigation and comparison tables work on smaller screens.
 - Settings shows schedules in UTC, previews the next run in your browser's timezone, validates changes before saving, and displays effective processing limits. The save bar stays available while scrolling.
