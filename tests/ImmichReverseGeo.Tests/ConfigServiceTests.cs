@@ -285,6 +285,21 @@ public class ConfigServiceTests
     }
 
     [TestMethod]
+    public async Task DuckDbThreads_RoundTripsAndUpdatesRuntimePolicy()
+    {
+        var policy = new MemoryResourcePolicy();
+        var svc = new ConfigService(NullLogger<ConfigService>.Instance, _tempDir, policy);
+        Assert.AreEqual(0, (await svc.GetConfigAsync()).Processing.DuckDbThreads);
+        await svc.UpdateConfigAsync(cfg => cfg.Processing.DuckDbThreads = 8);
+        Assert.AreEqual(8, (await svc.GetConfigAsync()).Processing.DuckDbThreads);
+        Assert.AreEqual(8, policy.DuckDbThreads);
+        await svc.UpdateConfigAsync(cfg => cfg.Schedule.Enabled = false);
+        Assert.AreEqual(8, policy.DuckDbThreads);
+        await svc.UpdateConfigAsync(cfg => cfg.Processing.DuckDbThreads = 0);
+        Assert.AreEqual(0, policy.DuckDbThreads);
+    }
+
+    [TestMethod]
     public void GetDbSettings_ReadsEnvVars()
     {
         Environment.SetEnvironmentVariable("DB_HOST", "testhost");

@@ -10,6 +10,13 @@ public sealed class MemoryResourcePolicy
     private readonly SemaphoreSlim _heavyWork = new(1, 1);
     private volatile bool _lowMemoryMode;
     private int _countryIndexIdleMinutes = 5;
+    private int _duckDbThreads;
+
+    public int DuckDbThreads
+    {
+        get => Volatile.Read(ref _duckDbThreads);
+        set => Volatile.Write(ref _duckDbThreads, Math.Clamp(value, 0, 32));
+    }
 
     private volatile bool _useBoundedCountryCache;
     private int _countryCacheMiB = 256;

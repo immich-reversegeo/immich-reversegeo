@@ -36,11 +36,14 @@ public class OvertureDivisionCacheService
 
     public CacheDownloadProgress[] GetActiveDownloads() => [.. _downloadProgress.Values];
 
-    private void ReportProgress(string iso3, string stage, long bytes = 0, long? total = null, long rows = 0, double? queryPercentage = null)
+    private void ReportProgress(string iso3, string stage, long rows = 0, int phase = 0,
+        DuckDbQueryProgressSnapshot? query = null, long? totalRows = null)
     {
         _downloadProgress.AddOrUpdate(iso3,
-            _ => new CacheDownloadProgress("Overture", iso3, DateTimeOffset.UtcNow, stage, bytes, total, rows, queryPercentage),
-            (_, previous) => previous with { Stage = stage, BytesReceived = bytes, TotalBytes = total, RowsWritten = rows, QueryPercentage = queryPercentage });
+            _ => new CacheDownloadProgress("Overture", iso3, DateTimeOffset.UtcNow, stage)
+                .Observe(stage, phase, query?.Percentage, query?.RowsProcessed ?? 0, query?.TotalRows ?? 0, rows, totalRows),
+            (_, previous) => previous.Observe(stage, phase, query?.Percentage,
+                query?.RowsProcessed ?? 0, query?.TotalRows ?? 0, rows, totalRows));
     }
 
     public OvertureDivisionCacheService(
@@ -342,7 +345,7 @@ public class OvertureDivisionCacheService
         {
             ReportProgress(iso3, "Finding the latest Overture release");
             var rowCount = await Task.Run(() => ExportOvertureDivisions(tmpPath, alpha2, iso3, release, ct), ct);
-            ReportProgress(iso3, "Validating and saving cache", rows: rowCount);
+            ReportProgress(iso3, "Validating and saving cache", rows: rowCount, phase: 5, totalRows: rowCount);
             if (rowCount == 0)
             {
                 throw new InvalidOperationException($"No Overture division rows were downloaded for {iso3}.");
@@ -392,30 +395,14 @@ public class OvertureDivisionCacheService
         ReportProgress(iso3, "Preparing download connection");
         OvertureDataAccess.LoadAzureAndSpatial(duck);
 
+        using var query = new OvertureCacheQuery(duck, _dataDir, _logger,
+            (phase, stage, snapshot) => ReportProgress(iso3, stage, phase: phase, query: snapshot));
+        var areaCount = query.Prepare(releaseUrl, alpha2, ct);
         using var selectCmd = duck.CreateCommand();
-        selectCmd.CommandText = $@"
-            SELECT
-                id,
-                COALESCE(names.common['en'], names.primary, id) AS name,
-                subtype,
-                class,
-                admin_level,
-                country,
-                COALESCE(is_land, true) AS is_land,
-                COALESCE(is_territorial, false) AS is_territorial,
-                ST_AsWKB(geometry) AS geom_wkb,
-                bbox.xmin AS bbox_xmin,
-                bbox.ymin AS bbox_ymin,
-                bbox.xmax AS bbox_xmax,
-                bbox.ymax AS bbox_ymax,
-                division_id,
-                hierarchy_json
-            FROM {OvertureDivisionsLogic.BuildDivisionAreaSource(releaseUrl, alpha2)}
-            WHERE {OvertureCountrySourceCodes.BuildCountryFilter(alpha2)}
-            ";
-        ReportProgress(iso3, "Downloading and querying Overture areas");
-        using var reader = ExecuteWithProgress(selectCmd, iso3);
-        ReportProgress(iso3, "Building cache");
+        selectCmd.CommandText = query.BuildResultQuery();
+        using var cancellation = ct.Register(selectCmd.Cancel);
+        ReportProgress(iso3, "Writing country cache", phase: 4, totalRows: areaCount);
+        using var reader = selectCmd.ExecuteReader();
 
         using var sqlite = new SqliteConnection($"Data Source={tmpPath};Pooling=false");
         sqlite.Open();
@@ -516,20 +503,13 @@ public class OvertureDivisionCacheService
             rows++;
             if (rows % 100 == 0)
             {
-                ReportProgress(iso3, "Building cache", rows: rows);
+                ReportProgress(iso3, "Writing country cache", rows: rows, phase: 4, totalRows: areaCount);
             }
         }
 
         tx.Commit();
         sqlite.Close();
         return rows;
-    }
-
-    private DuckDBDataReader ExecuteWithProgress(DuckDBCommand command, string iso3)
-    {
-        using var progress = new DuckDbQueryProgressMonitor((DuckDBConnection)command.Connection!,
-            percentage => ReportProgress(iso3, "Downloading and querying Overture areas", queryPercentage: percentage), _logger);
-        return command.ExecuteReader();
     }
 
     protected virtual string GetLatestOvertureReleaseForCache(CancellationToken ct) => OvertureReleaseCatalog.GetLatestRelease(_memoryPolicy, _dataDir, ct);

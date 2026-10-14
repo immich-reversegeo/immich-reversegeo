@@ -8,6 +8,25 @@ namespace ImmichReverseGeo.Tests;
 public class CacheDownloadProgressTests
 {
     [TestMethod]
+    public void Observations_TrackRealChanges_AndResetAtPhaseTransitions()
+    {
+        var start = DateTimeOffset.Parse("2026-10-14T10:00:00Z");
+        var initial = new CacheDownloadProgress("Overture", "ESP", start, "Starting")
+            .Observe("Reading boundaries", 2, 10, 100, 1000, timestamp: start);
+        var repeated = initial.Observe("Reading boundaries", 2, 10, 100, 1000, timestamp: start.AddSeconds(20));
+        Assert.AreEqual(start, repeated.LastProgressAt);
+        var advanced = repeated.Observe("Reading boundaries", 2, 10, 101, 1000, timestamp: start.AddSeconds(30));
+        Assert.AreEqual(start.AddSeconds(30), advanced.LastProgressAt);
+        Assert.AreEqual(start, advanced.PhaseStartedAt);
+        var next = advanced.Observe("Writing cache", 4, rows: 25, totalRows: 100, timestamp: start.AddSeconds(40));
+        Assert.AreEqual(start.AddSeconds(40), next.PhaseStartedAt);
+        Assert.AreEqual(25d, next.WritePercentage);
+        Assert.IsNull(next.QueryPercentage);
+        Assert.AreEqual(0UL, next.QueryRowsTotal);
+        Assert.IsNull(next.Observe("Validating cache", 5).WritePercentage);
+    }
+
+    [TestMethod]
     [DataRow(null, null)]
     [DataRow(0L, null)]
     [DataRow(200L, 50d)]

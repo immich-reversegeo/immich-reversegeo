@@ -19,6 +19,7 @@ public class ScheduleConfig
 public class ProcessingConfig
 {
     public bool LowMemoryMode { get; set; } = false;
+    public int DuckDbThreads { get; set; } = 0;
     public bool UseBoundedCountryCache { get; set; } = false;
     public int CountryCacheMiB { get; set; } = 256;
     public int CountryIndexIdleMinutes { get; set; } = 5;

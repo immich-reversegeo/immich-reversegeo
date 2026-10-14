@@ -15,7 +15,7 @@ public class DuckDbQueryProgressTests
         connection.Open();
         var reported = new TaskCompletionSource<double?>(TaskCreationOptions.RunContinuationsAsynchronously);
         using var monitor = new DuckDbQueryProgressMonitor(connection,
-            value => reported.TrySetResult(value), NullLogger.Instance);
+            value => reported.TrySetResult(value.Percentage), NullLogger.Instance);
         Assert.IsNull(await reported.Task.WaitAsync(TimeSpan.FromSeconds(5)));
     }
 
@@ -23,7 +23,7 @@ public class DuckDbQueryProgressTests
     public async Task ParquetQuery_ReportsNativePercentage_AndStopsBeforeConnectionCloses()
     {
         var path = Path.Combine(Path.GetTempPath(), $"query-progress-{Guid.NewGuid():N}.parquet");
-        var samples = new ConcurrentQueue<double?>();
+        var samples = new ConcurrentQueue<DuckDbQueryProgressSnapshot>();
         try
         {
             using (var connection = new DuckDBConnection("Data Source=:memory:"))
@@ -45,7 +45,7 @@ public class DuckDbQueryProgressTests
                     await Task.Run(() => command.ExecuteScalar());
                 }
             }
-            Assert.IsTrue(samples.Any(value => value is > 0 and < 100),
+            Assert.IsTrue(samples.Any(value => value.Percentage is > 0 and < 100),
                 "Expected an in-flight percentage from a real local Parquet scan.");
             var countAfterDispose = samples.Count;
             await Task.Delay(300);
