@@ -12,7 +12,7 @@ namespace ImmichReverseGeo.Gadm.Services;
 public static class GadmCacheExporter
 {
     private static readonly WKBReader WkbReader = new();
-    public static long ExportGeoPackageToSqlite(string geoPackagePath, string outputPath, string iso3, CancellationToken ct = default)
+    public static long ExportGeoPackageToSqlite(string geoPackagePath, string outputPath, string iso3, CancellationToken ct = default, Action<long>? reportRows = null)
     {
         ct.ThrowIfCancellationRequested();
         var layers = LoadLayerDefinitions(geoPackagePath);
@@ -102,6 +102,10 @@ public static class GadmCacheExporter
                 pYMax.Value = bbox.YMax;
                 insert.ExecuteNonQuery();
                 rows++;
+                if (rows % 100 == 0)
+                {
+                    reportRows?.Invoke(rows);
+                }
             }
         }
 

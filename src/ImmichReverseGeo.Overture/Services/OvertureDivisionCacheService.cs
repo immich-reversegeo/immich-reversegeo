@@ -20,6 +20,17 @@ public class OvertureDivisionCacheService
     private readonly ConcurrentDictionary<string, Lazy<Task>> _inflightDownloads = new();
     private readonly ConcurrentDictionary<string, byte> _readyCaches = new();
 
+    private readonly ConcurrentDictionary<string, CacheDownloadProgress> _downloadProgress = new();
+
+    public CacheDownloadProgress[] GetActiveDownloads() => [.. _downloadProgress.Values];
+
+    private void ReportProgress(string iso3, string stage, long bytes = 0, long? total = null, long rows = 0, double? queryPercentage = null)
+    {
+        _downloadProgress.AddOrUpdate(iso3,
+            _ => new CacheDownloadProgress("Overture", iso3, DateTimeOffset.UtcNow, stage, bytes, total, rows, queryPercentage),
+            (_, previous) => previous with { Stage = stage, BytesReceived = bytes, TotalBytes = total, RowsWritten = rows, QueryPercentage = queryPercentage });
+    }
+
     public OvertureDivisionCacheService(
         ILogger<OvertureDivisionCacheService> logger,
         StorageOptions dirs,
@@ -173,7 +184,9 @@ public class OvertureDivisionCacheService
 
         try
         {
-            var rowCount = await Task.Run(() => ExportOvertureDivisions(tmpPath, alpha2, ct), ct);
+            ReportProgress(iso3, "Finding the latest Overture release");
+            var rowCount = await Task.Run(() => ExportOvertureDivisions(tmpPath, alpha2, iso3, ct), ct);
+            ReportProgress(iso3, "Validating and saving cache", rows: rowCount);
             if (rowCount == 0)
             {
                 throw new InvalidOperationException($"No Overture division rows were downloaded for {iso3}.");
@@ -196,11 +209,12 @@ public class OvertureDivisionCacheService
         }
         finally
         {
+            _downloadProgress.TryRemove(iso3, out _);
             _inflightDownloads.TryRemove(iso3, out _);
         }
     }
 
-    private long ExportOvertureDivisions(string tmpPath, string alpha2, CancellationToken ct)
+    private long ExportOvertureDivisions(string tmpPath, string alpha2, string iso3, CancellationToken ct)
     {
         var release = GetLatestOvertureReleaseForCache(ct);
         var releaseUrl = string.Format(
@@ -208,8 +222,10 @@ public class OvertureDivisionCacheService
             OvertureDivisionsLogic.DivisionAreaReleaseUrlTemplate,
             release);
 
+        ReportProgress(iso3, "Waiting for a data processing slot");
         using var work = new DuckDbWorkScope(_memoryPolicy, _dataDir, ct);
         var duck = work.Connection;
+        ReportProgress(iso3, "Preparing download connection");
         OvertureDataAccess.LoadAzureAndSpatial(duck);
 
         using var selectCmd = duck.CreateCommand();
@@ -233,7 +249,9 @@ public class OvertureDivisionCacheService
             FROM {OvertureDivisionsLogic.BuildDivisionAreaSource(releaseUrl, alpha2)}
             WHERE {OvertureCountrySourceCodes.BuildCountryFilter(alpha2)}
             ";
-        using var reader = selectCmd.ExecuteReader();
+        ReportProgress(iso3, "Downloading and querying Overture areas");
+        using var reader = ExecuteWithProgress(selectCmd, iso3);
+        ReportProgress(iso3, "Building cache");
 
         using var sqlite = new SqliteConnection($"Data Source={tmpPath};Pooling=false");
         sqlite.Open();
@@ -330,11 +348,22 @@ public class OvertureDivisionCacheService
             pHierarchy.Value = reader.IsDBNull(14) ? DBNull.Value : reader.GetString(14);
             insert.ExecuteNonQuery();
             rows++;
+            if (rows % 100 == 0)
+            {
+                ReportProgress(iso3, "Building cache", rows: rows);
+            }
         }
 
         tx.Commit();
         sqlite.Close();
         return rows;
+    }
+
+    private DuckDBDataReader ExecuteWithProgress(DuckDBCommand command, string iso3)
+    {
+        using var progress = new DuckDbQueryProgressMonitor((DuckDBConnection)command.Connection!,
+            percentage => ReportProgress(iso3, "Downloading and querying Overture areas", queryPercentage: percentage), _logger);
+        return command.ExecuteReader();
     }
 
     private string GetLatestOvertureReleaseForCache(CancellationToken ct) => OvertureReleaseCatalog.GetLatestRelease(_memoryPolicy, _dataDir, ct);

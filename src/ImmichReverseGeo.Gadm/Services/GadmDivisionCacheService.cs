@@ -18,6 +18,16 @@ public class GadmDivisionCacheService
     private readonly MemoryResourcePolicy _memoryPolicy;
     private readonly ConcurrentDictionary<string, Lazy<Task>> _inflightDownloads = new();
     private readonly ConcurrentDictionary<string, byte> _readyCaches = new();
+    private readonly ConcurrentDictionary<string, CacheDownloadProgress> _downloadProgress = new();
+
+    public CacheDownloadProgress[] GetActiveDownloads() => [.. _downloadProgress.Values];
+
+    private void ReportProgress(string iso3, string stage, long bytes = 0, long? total = null, long rows = 0)
+    {
+        _downloadProgress.AddOrUpdate(iso3,
+            _ => new CacheDownloadProgress("GADM", iso3, DateTimeOffset.UtcNow, stage, bytes, total, rows),
+            (_, previous) => previous with { Stage = stage, BytesReceived = bytes, TotalBytes = total, RowsWritten = rows });
+    }
 
     public GadmDivisionCacheService(ILogger<GadmDivisionCacheService> logger, StorageOptions dirs, MemoryResourcePolicy? memoryPolicy = null)
     {
@@ -168,9 +178,13 @@ public class GadmDivisionCacheService
 
         try
         {
+            ReportProgress(iso3, "Waiting for a data processing slot");
             using var budget = await _memoryPolicy.EnterAsync(ct);
-            await DownloadFileAsync(GadmDivisionsLogic.BuildCountryGeoPackageUrl(gadmCode), tmpDownloadPath, ct);
-            var rowCount = await Task.Run(() => GadmCacheExporter.ExportGeoPackageToSqlite(tmpDownloadPath, tmpDbPath, iso3, ct), ct);
+            await DownloadFileAsync(GadmDivisionsLogic.BuildCountryGeoPackageUrl(gadmCode), tmpDownloadPath, ct, (bytes, total) => ReportProgress(iso3, "Downloading GADM file", bytes, total));
+            ReportProgress(iso3, "Building cache");
+            var rowCount = await Task.Run(() => GadmCacheExporter.ExportGeoPackageToSqlite(
+                tmpDownloadPath, tmpDbPath, iso3, ct, rows => ReportProgress(iso3, "Building cache", rows: rows)), ct);
+            ReportProgress(iso3, "Validating and saving cache", rows: rowCount);
             if (rowCount == 0)
             {
                 throw new InvalidOperationException($"No GADM rows were downloaded for {iso3}.");
@@ -195,6 +209,7 @@ public class GadmDivisionCacheService
         finally
         {
             TryDelete(tmpDownloadPath);
+            _downloadProgress.TryRemove(iso3, out _);
             _inflightDownloads.TryRemove(iso3, out _);
         }
     }
@@ -294,15 +309,30 @@ public class GadmDivisionCacheService
         }
     }
 
-    private static async Task DownloadFileAsync(string url, string destinationPath, CancellationToken ct)
+    private static async Task DownloadFileAsync(string url, string destinationPath, CancellationToken ct, Action<long, long?> report)
     {
+        report(0, null);
         using var http = new HttpClient();
         using var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
         response.EnsureSuccessStatusCode();
 
         await using var source = await response.Content.ReadAsStreamAsync(ct);
         await using var destination = File.Create(destinationPath);
-        await source.CopyToAsync(destination, ct);
+        var total = response.Content.Headers.ContentLength;
+        var buffer = new byte[81920];
+        long received = 0;
+        report(received, total);
+        while (true)
+        {
+            var count = await source.ReadAsync(buffer.AsMemory(), ct);
+            if (count == 0)
+            {
+                break;
+            }
+            await destination.WriteAsync(buffer.AsMemory(0, count), ct);
+            received += count;
+            report(received, total);
+        }
     }
 }
 

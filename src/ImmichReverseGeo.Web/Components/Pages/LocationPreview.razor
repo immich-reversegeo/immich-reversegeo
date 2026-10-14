@@ -202,6 +202,11 @@
     </details>
 </section>
 
+@if (_busy)
+{
+    <CacheDownloadStatus />
+}
+
 @if (_rows.Count > 0 || _review.Count > 0 || _hasMore || (_scanner?.CheckedCount ?? 0) > 0)
 {
     <section class="settings-card wide-card">
