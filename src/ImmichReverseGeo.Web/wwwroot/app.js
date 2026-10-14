@@ -3,6 +3,10 @@ window.formatLocalTimestamp = (utcValue) => {
     return `${formatter.format(new Date(utcValue))} (${formatter.resolvedOptions().timeZone})`;
 };
 
+window.scrollLogsToBottom = (container) => {
+    container.scrollTop = container.scrollHeight;
+};
+
 window.downloadFile = (filename, mimeType, base64Content) => {
     const link = document.createElement('a');
     link.href = `data:${mimeType};base64,${base64Content}`;

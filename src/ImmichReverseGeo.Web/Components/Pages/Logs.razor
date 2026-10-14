@@ -18,6 +18,10 @@
             <option value="[WARN]">Warnings+</option>
         </select>
     </label>
+    <label>
+        <input type="checkbox" @bind="_followLogs" />
+        Follow logs
+    </label>
     <button @onclick="DownloadLog" class="btn btn-secondary" disabled="@(!FilteredLog.Any())">↓ Download Filtered Recent Logs</button>
 </div>
 @if (!FilteredLog.Any())
@@ -25,7 +29,7 @@
     <p role="status">No recent entries match this filter.</p>
 }
 
-<div class="log-full">
+<div class="log-full" @ref="_logContainer">
     @foreach (var entry in FilteredLog)
     {
         <div class="log-line @(entry.Message.Contains("[ERROR]") ? "error" : entry.Message.Contains("[WARN]") ? "warn" : "")">[<LocalTimestamp Timestamp="entry.Timestamp" />] @entry.Message</div>
@@ -34,6 +38,8 @@
 
 @code {
     private string _levelFilter = "";
+    private bool _followLogs = true;
+    private ElementReference _logContainer;
 
     private IEnumerable<ProcessingLogEntry> FilteredLog =>
         State.GetRecentLogEntries().Where(entry => entry.MatchesFilter(_levelFilter));
@@ -41,6 +47,23 @@
     protected override void OnInitialized() => State.OnChanged += Refresh;
     public void Dispose() => State.OnChanged -= Refresh;
     private void Refresh() => InvokeAsync(StateHasChanged);
+
+    protected override async Task OnAfterRenderAsync(bool firstRender)
+    {
+        if (!_followLogs)
+        {
+            return;
+        }
+
+        try
+        {
+            await JS.InvokeVoidAsync("scrollLogsToBottom", _logContainer);
+        }
+        catch (JSDisconnectedException)
+        {
+            // The page can disconnect while an activity update is rendering.
+        }
+    }
 
     private async Task DownloadLog()
     {
