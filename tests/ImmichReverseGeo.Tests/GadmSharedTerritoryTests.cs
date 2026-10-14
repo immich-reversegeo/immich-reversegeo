@@ -42,7 +42,7 @@ public class GadmSharedTerritoryTests
                 new CityResolverProfileCatalogService(
                     NullLogger<CityResolverProfileCatalogService>.Instance, new StorageOptions(root, root)),
                 new OvertureDivisionsService(NullLogger<OvertureDivisionsService>.Instance, places, root, root, _ => iso3),
-                new OvertureDivisionCacheService(NullLogger<OvertureDivisionCacheService>.Instance, root, _ => alpha2),
+                new FixtureCacheService(root, _ => alpha2),
                 new GadmDivisionsService(NullLogger<GadmDivisionsService>.Instance, root),
                 new GadmDivisionCacheService(NullLogger<GadmDivisionCacheService>.Instance, root));
             var progress = new RecordingProgress();
@@ -105,6 +105,9 @@ public class GadmSharedTerritoryTests
                 'ready', 'Ready', 'region', 'land', 1, NULL, 1, 0, NULL,
                 1000, 1000, 1001, 1001);
             """;
+        command.ExecuteNonQuery();
+        command.CommandText = "INSERT INTO _meta VALUES ('cacheFormatVersion', $version)";
+        command.Parameters.AddWithValue("$version", OvertureDivisionCacheService.CacheFormatVersion);
         command.ExecuteNonQuery();
     }
 
@@ -174,6 +177,12 @@ public class GadmSharedTerritoryTests
             admin_level INTEGER, country TEXT, is_land INTEGER, is_territorial INTEGER,
             geom_wkb BLOB, bbox_xmin REAL, bbox_ymin REAL, bbox_xmax REAL, bbox_ymax REAL);
         """;
+
+    private sealed class FixtureCacheService(string root, Func<string, string?> codes)
+        : OvertureDivisionCacheService(NullLogger<OvertureDivisionCacheService>.Instance, root, codes)
+    {
+        protected override string GetLatestOvertureReleaseForCache(CancellationToken ct) => "test";
+    }
 
     private sealed class RecordingProgress : IAdministrativeAreaResolutionProgress
     {

@@ -13,13 +13,25 @@ namespace ImmichReverseGeo.Overture.Services;
 
 public class OvertureDivisionCacheService
 {
+    // Bump when export behavior changes invalidate previously downloaded results.
+    public const string CacheFormatVersion = "1";
+    private static readonly TimeSpan ReleaseCheckInterval = TimeSpan.FromDays(1);
+    private static readonly TimeSpan RefreshRetryDelay = TimeSpan.FromHours(1);
+    private readonly SemaphoreSlim _releaseCheckLock = new(1, 1);
+    private readonly object _releaseScopeLock = new();
+    private Lazy<Task<string?>>? _runRelease;
+    private int _releaseScopeCount;
+    private sealed record ReleaseStatus(string? Release, DateTimeOffset NextCheck);
+    private ReleaseStatus _releaseStatus = new(null, DateTimeOffset.MinValue);
+    private readonly ConcurrentDictionary<string, DateTimeOffset> _refreshRetries = new();
+    protected virtual DateTimeOffset UtcNow => DateTimeOffset.UtcNow;
+
     private readonly ILogger<OvertureDivisionCacheService> _logger;
     private readonly string _dataDir;
     private readonly Func<string, string?> _iso3ToAlpha2;
     private readonly MemoryResourcePolicy _memoryPolicy;
     private readonly ConcurrentDictionary<string, Lazy<Task>> _inflightDownloads = new();
-    private readonly ConcurrentDictionary<string, byte> _readyCaches = new();
-
+    private readonly ConcurrentDictionary<string, string> _readyCaches = new();
     private readonly ConcurrentDictionary<string, CacheDownloadProgress> _downloadProgress = new();
 
     public CacheDownloadProgress[] GetActiveDownloads() => [.. _downloadProgress.Values];
@@ -74,9 +86,13 @@ public class OvertureDivisionCacheService
                 var release = ReadMetaValue(conn, "release");
                 var fileSizeBytes = new FileInfo(file).Length;
                 result[iso3] = new OvertureDivisionStatus(count, downloadedAt, release, fileSizeBytes);
-                if (count > 0 && HasCurrentSourceCoverage(conn, iso3))
+                if (count > 0 && HasCurrentCacheMetadata(conn, iso3))
                 {
-                    _readyCaches[iso3] = 0;
+                    _readyCaches[iso3] = release;
+                }
+                else
+                {
+                    _readyCaches.TryRemove(iso3, out _);
                 }
             }
             catch (Exception ex)
@@ -101,10 +117,10 @@ public class OvertureDivisionCacheService
             return true;
         }
 
-        var hasRows = HasCurrentRows(GetDbPath(iso3), iso3);
+        var hasRows = HasCurrentRows(GetDbPath(iso3), iso3, out var release);
         if (hasRows)
         {
-            _readyCaches[iso3] = 0;
+            _readyCaches[iso3] = release;
         }
 
         return hasRows;
@@ -113,29 +129,25 @@ public class OvertureDivisionCacheService
     public void DeleteFile(string iso3)
     {
         _readyCaches.TryRemove(iso3, out _);
+        _refreshRetries.TryRemove(iso3, out _);
+        var status = Volatile.Read(ref _releaseStatus);
+        Volatile.Write(ref _releaseStatus, status with { NextCheck = DateTimeOffset.MinValue });
         DeleteFileAndTemps(GetDbPath(iso3), iso3);
     }
 
     public (Task Task, OvertureDivisionEnsureResult Result) GetOrStartDownload(string iso3, CancellationToken ct = default)
     {
-        if (HasData(iso3))
+        if (HasData(iso3) && CanReuseWithoutReleaseCheck(iso3))
         {
             return (Task.CompletedTask, OvertureDivisionEnsureResult.AlreadyReady);
         }
 
-        var startedNew = false;
-        var lazyDownload = _inflightDownloads.GetOrAdd(
-            iso3,
-            key =>
-            {
-                startedNew = true;
-                return new Lazy<Task>(
-                    () => DownloadDataInternalAsync(key, ct),
-                    LazyThreadSafetyMode.ExecutionAndPublication);
-            });
+        var candidate = new Lazy<Task>(() => PrepareDataAsync(iso3, ct), LazyThreadSafetyMode.ExecutionAndPublication);
+        var lazyDownload = _inflightDownloads.GetOrAdd(iso3, candidate);
+        var startedNew = ReferenceEquals(candidate, lazyDownload);
 
         var result = startedNew
-            ? OvertureDivisionEnsureResult.StartedDownload
+            ? (HasData(iso3) ? OvertureDivisionEnsureResult.CheckingForUpdates : OvertureDivisionEnsureResult.StartedDownload)
             : OvertureDivisionEnsureResult.AwaitedExistingDownload;
 
         return (lazyDownload.Value, result);
@@ -145,27 +157,171 @@ public class OvertureDivisionCacheService
     {
         var (downloadTask, result) = GetOrStartDownload(iso3, ct);
 
-        try
+        await downloadTask.WaitAsync(ct);
+        return result;
+    }
+
+    public IDisposable BeginReleaseScope()
+    {
+        lock (_releaseScopeLock)
         {
-            await downloadTask.WaitAsync(ct);
-            return result;
+            _runRelease ??= new Lazy<Task<string?>>(() => CheckLatestReleaseAsync(CancellationToken.None),
+                LazyThreadSafetyMode.ExecutionAndPublication);
+            _releaseScopeCount++;
         }
-        finally
+        return new ReleaseScope(this);
+    }
+
+    private sealed class ReleaseScope(OvertureDivisionCacheService owner) : IDisposable
+    {
+        private OvertureDivisionCacheService? _owner = owner;
+        public void Dispose()
         {
-            if (downloadTask.IsCompleted)
+            var service = Interlocked.Exchange(ref _owner, null);
+            if (service is null)
             {
-                _inflightDownloads.TryRemove(iso3, out _);
+                return;
+            }
+            lock (service._releaseScopeLock)
+            {
+                if (--service._releaseScopeCount == 0)
+                {
+                    service._runRelease = null;
+                }
             }
         }
     }
 
-    private async Task DownloadDataInternalAsync(string iso3, CancellationToken ct)
+    private bool CanReuseWithoutReleaseCheck(string iso3)
+    {
+        lock (_releaseScopeLock)
+        {
+            if (_runRelease is not null)
+            {
+                return _runRelease.IsValueCreated && _runRelease.Value.IsCompletedSuccessfully
+                    && IsReleaseReady(iso3, _runRelease.Value.Result);
+            }
+        }
+        var status = Volatile.Read(ref _releaseStatus);
+        return UtcNow < status.NextCheck && IsReleaseReady(iso3, status.Release);
+    }
+
+    private bool IsReleaseReady(string iso3, string? release)
+    {
+        if (_refreshRetries.TryGetValue(iso3, out var retry) && UtcNow < retry)
+        {
+            return true;
+        }
+        if (release is null)
+        {
+            return true;
+        }
+        if (!_readyCaches.TryGetValue(iso3, out var cached))
+        {
+            return false;
+        }
+        if (cached == release)
+        {
+            return true;
+        }
+        return TryParseRelease(cached, out var cachedDate, out var cachedPatch)
+            && TryParseRelease(release, out var latestDate, out var latestPatch)
+            && (cachedDate > latestDate || (cachedDate == latestDate && cachedPatch >= latestPatch));
+    }
+
+    private static bool TryParseRelease(string release, out DateOnly date, out int patch)
+    {
+        date = default;
+        patch = 0;
+        return release.Length > 11 && release[10] == '.'
+            && DateOnly.TryParseExact(release[..10], "yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture,
+                System.Globalization.DateTimeStyles.None, out date)
+            && int.TryParse(release[11..], System.Globalization.NumberStyles.None,
+                System.Globalization.CultureInfo.InvariantCulture, out patch);
+    }
+
+    private async Task<string?> GetTargetReleaseAsync(CancellationToken ct)
+    {
+        Lazy<Task<string?>>? runRelease;
+        lock (_releaseScopeLock)
+        {
+            runRelease = _runRelease;
+        }
+        return runRelease is null
+            ? await CheckLatestReleaseAsync(ct)
+            : await runRelease.Value.WaitAsync(ct);
+    }
+
+    private async Task<string?> CheckLatestReleaseAsync(CancellationToken ct)
+    {
+        await _releaseCheckLock.WaitAsync(ct);
+        try
+        {
+            var status = Volatile.Read(ref _releaseStatus);
+            if (UtcNow < status.NextCheck)
+            {
+                return status.Release;
+            }
+            try
+            {
+                var release = await Task.Run(() => GetLatestOvertureReleaseForCache(ct), ct);
+                status = new ReleaseStatus(release, UtcNow + ReleaseCheckInterval);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex)
+            {
+                status = status with { NextCheck = UtcNow + RefreshRetryDelay };
+                _logger.LogWarning(ex, "Unable to check the latest Overture release; retaining compatible caches and retrying in one hour");
+            }
+            Volatile.Write(ref _releaseStatus, status);
+            return status.Release;
+        }
+        finally
+        {
+            _releaseCheckLock.Release();
+        }
+    }
+
+    private async Task PrepareDataAsync(string iso3, CancellationToken ct)
+    {
+        try
+        {
+            var release = await GetTargetReleaseAsync(ct);
+            if (HasData(iso3) && IsReleaseReady(iso3, release))
+            {
+                return;
+            }
+            if (release is null)
+            {
+                throw new InvalidOperationException("Unable to discover an Overture release for cache preparation. Check network access and retry.");
+            }
+            try
+            {
+                await DownloadDataInternalAsync(iso3, release, ct);
+                _refreshRetries.TryRemove(iso3, out _);
+            }
+            catch (OperationCanceledException) when (ct.IsCancellationRequested)
+            {
+                throw;
+            }
+            catch (Exception ex) when (HasData(iso3))
+            {
+                _refreshRetries[iso3] = UtcNow + RefreshRetryDelay;
+                _logger.LogWarning(ex, "Refresh to Overture {Release} failed for {ISO3}; using the previous compatible cache and retrying in one hour", release, iso3);
+            }
+        }
+        finally
+        {
+            _inflightDownloads.TryRemove(iso3, out _);
+        }
+    }
+
+    private async Task DownloadDataInternalAsync(string iso3, string release, CancellationToken ct)
     {
         var dbPath = GetDbPath(iso3);
-        if (HasData(iso3))
-        {
-            return;
-        }
 
         var alpha2 = _iso3ToAlpha2(iso3);
         if (alpha2 is null)
@@ -185,38 +341,46 @@ public class OvertureDivisionCacheService
         try
         {
             ReportProgress(iso3, "Finding the latest Overture release");
-            var rowCount = await Task.Run(() => ExportOvertureDivisions(tmpPath, alpha2, iso3, ct), ct);
+            var rowCount = await Task.Run(() => ExportOvertureDivisions(tmpPath, alpha2, iso3, release, ct), ct);
             ReportProgress(iso3, "Validating and saving cache", rows: rowCount);
             if (rowCount == 0)
             {
                 throw new InvalidOperationException($"No Overture division rows were downloaded for {iso3}.");
             }
 
-            if (!IsValidDb(tmpPath))
+            if (!IsValidDb(tmpPath) || !HasCurrentRows(tmpPath, iso3, out _))
             {
                 throw new InvalidOperationException(
                     $"Overture division download for {iso3} produced an invalid SQLite file at {tmpPath}");
             }
 
+            ct.ThrowIfCancellationRequested();
+            using (var replacement = new SqliteConnection($"Data Source={tmpPath};Mode=ReadOnly;Pooling=false"))
+            {
+                replacement.Open();
+                if (ReadMetaValue(replacement, "release") != release)
+                {
+                    throw new InvalidOperationException($"Overture cache for {iso3} does not match the requested release {release}.");
+                }
+            }
             File.Move(tmpPath, dbPath, overwrite: true);
-            _readyCaches[iso3] = 0;
+            _readyCaches[iso3] = release;
             _logger.LogInformation("Overture division download complete for {ISO3}: {Rows} areas", iso3, rowCount);
         }
-        catch
+        catch (Exception ex)
         {
             TryDelete(tmpPath);
+            _logger.LogWarning(ex, "Overture cache preparation failed for {ISO3}; any existing cache file was retained", iso3);
             throw;
         }
         finally
         {
             _downloadProgress.TryRemove(iso3, out _);
-            _inflightDownloads.TryRemove(iso3, out _);
         }
     }
 
-    private long ExportOvertureDivisions(string tmpPath, string alpha2, string iso3, CancellationToken ct)
+    protected virtual long ExportOvertureDivisions(string tmpPath, string alpha2, string iso3, string release, CancellationToken ct)
     {
-        var release = GetLatestOvertureReleaseForCache(ct);
         var releaseUrl = string.Format(
             System.Globalization.CultureInfo.InvariantCulture,
             OvertureDivisionsLogic.DivisionAreaReleaseUrlTemplate,
@@ -292,10 +456,12 @@ public class OvertureDivisionCacheService
                 INSERT INTO _meta VALUES ('downloadedAt', $at);
                 INSERT INTO _meta VALUES ('release', $release);
                 INSERT INTO _meta VALUES ('sourceCountries', $sourceCountries);
+                INSERT INTO _meta VALUES ('cacheFormatVersion', $cacheFormatVersion);
                 ";
             meta.Parameters.AddWithValue("$at", DateTime.UtcNow.ToString("O"));
             meta.Parameters.AddWithValue("$release", release);
             meta.Parameters.AddWithValue("$sourceCountries", OvertureCountrySourceCodes.GetCoverageSignature(alpha2));
+            meta.Parameters.AddWithValue("$cacheFormatVersion", CacheFormatVersion);
             meta.ExecuteNonQuery();
         }
 
@@ -366,15 +532,16 @@ public class OvertureDivisionCacheService
         return command.ExecuteReader();
     }
 
-    private string GetLatestOvertureReleaseForCache(CancellationToken ct) => OvertureReleaseCatalog.GetLatestRelease(_memoryPolicy, _dataDir, ct);
+    protected virtual string GetLatestOvertureReleaseForCache(CancellationToken ct) => OvertureReleaseCatalog.GetLatestRelease(_memoryPolicy, _dataDir, ct);
 
     private string GetDbPath(string iso3)
     {
         return Path.Combine(_dataDir, "overture-divisions", $"{iso3}.db");
     }
 
-    private bool HasCurrentRows(string path, string iso3)
+    private bool HasCurrentRows(string path, string iso3, out string release)
     {
+        release = string.Empty;
         if (!File.Exists(path))
         {
             return false;
@@ -386,7 +553,12 @@ public class OvertureDivisionCacheService
             conn.Open();
             using var cmd = conn.CreateCommand();
             cmd.CommandText = "SELECT COUNT(*) FROM division_area";
-            return (long)cmd.ExecuteScalar()! > 0 && HasCurrentSourceCoverage(conn, iso3);
+            if ((long)cmd.ExecuteScalar()! <= 0 || !HasCurrentCacheMetadata(conn, iso3))
+            {
+                return false;
+            }
+            release = ReadMetaValue(conn, "release");
+            return true;
         }
         catch
         {
@@ -394,15 +566,20 @@ public class OvertureDivisionCacheService
         }
     }
 
-    private bool HasCurrentSourceCoverage(SqliteConnection conn, string iso3)
+    private bool HasCurrentCacheMetadata(SqliteConnection conn, string iso3)
     {
+        if (ReadMetaValue(conn, "cacheFormatVersion") != CacheFormatVersion)
+        {
+            return false;
+        }
+
         var alpha2 = _iso3ToAlpha2(iso3);
         if (alpha2 is null)
         {
             return false;
         }
 
-        // Keep existing ordinary-country caches usable; only expanded source sets need a refresh.
+        // Ordinary countries do not require expanded source coverage metadata.
         if (OvertureCountrySourceCodes.GetCodes(alpha2).Count == 1)
         {
             return true;
@@ -505,5 +682,6 @@ public enum OvertureDivisionEnsureResult
 {
     AlreadyReady,
     AwaitedExistingDownload,
-    StartedDownload
+    StartedDownload,
+    CheckingForUpdates
 }

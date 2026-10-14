@@ -85,9 +85,7 @@ public class AdministrativeAreaResolverTerritoryTests
             root,
             root,
             alpha2 => catalog.FindByAlpha2(alpha2)?.Alpha3);
-        var overtureCache = new OvertureDivisionCacheService(
-            NullLogger<OvertureDivisionCacheService>.Instance,
-            root,
+        var overtureCache = new FixtureCacheService(root,
             iso3 => catalog.FindByAlpha3(iso3)?.Alpha2);
         var gadmDivisions = new GadmDivisionsService(
             NullLogger<GadmDivisionsService>.Instance,
@@ -106,6 +104,12 @@ public class AdministrativeAreaResolverTerritoryTests
             overtureCache,
             gadmDivisions,
             gadmCache);
+    }
+
+    private sealed class FixtureCacheService(string root, Func<string, string?> codes)
+        : OvertureDivisionCacheService(NullLogger<OvertureDivisionCacheService>.Instance, root, codes)
+    {
+        protected override string GetLatestOvertureReleaseForCache(CancellationToken ct) => "test";
     }
 
     private static void CreateReadyOvertureCache(string root, string iso3)
@@ -139,6 +143,9 @@ public class AdministrativeAreaResolverTerritoryTests
             INSERT INTO _meta VALUES ('release', 'test');
             INSERT INTO _meta VALUES ('downloadedAt', '2026-08-19T00:00:00Z');
             """;
+        command.ExecuteNonQuery();
+        command.CommandText = "INSERT INTO _meta VALUES ('cacheFormatVersion', $version)";
+        command.Parameters.AddWithValue("$version", OvertureDivisionCacheService.CacheFormatVersion);
         command.ExecuteNonQuery();
     }
 

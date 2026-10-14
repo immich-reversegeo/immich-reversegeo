@@ -63,11 +63,12 @@ public class OvertureCountrySourceCodesTests
     }
 
     [TestMethod]
-    public void ExistingOrdinaryCountryCache_RemainsReadyWithoutCoverageMetadata()
+    public void CurrentFormatOrdinaryCountryCache_RemainsReadyWithoutCoverageMetadata()
     {
         WithCache("CHE", null, (service, _) =>
         {
             Assert.IsTrue(service.HasData("CHE"));
+            service.EnsureDataAsync("CHE").GetAwaiter().GetResult();
             Assert.AreEqual(OvertureDivisionEnsureResult.AlreadyReady, service.GetOrStartDownload("CHE").Result);
         }, "CH");
     }
@@ -79,6 +80,7 @@ public class OvertureCountrySourceCodesTests
         {
             service.GetStatus();
             Assert.IsTrue(service.HasData("BES"));
+            service.EnsureDataAsync("BES").GetAwaiter().GetResult();
             var (task, result) = service.GetOrStartDownload("BES");
             Assert.AreEqual(OvertureDivisionEnsureResult.AlreadyReady, result);
             Assert.IsTrue(task.IsCompletedSuccessfully);
@@ -105,6 +107,12 @@ public class OvertureCountrySourceCodesTests
                     INSERT INTO _meta VALUES ('release', '2026-09-23.1');
                     """;
                 create.ExecuteNonQuery();
+                using (var format = conn.CreateCommand())
+                {
+                    format.CommandText = "INSERT INTO _meta VALUES ('cacheFormatVersion', $version)";
+                    format.Parameters.AddWithValue("$version", OvertureDivisionCacheService.CacheFormatVersion);
+                    format.ExecuteNonQuery();
+                }
                 if (coverage is not null)
                 {
                     using var meta = conn.CreateCommand();
@@ -114,12 +122,17 @@ public class OvertureCountrySourceCodesTests
                 }
             }
 
-            var service = new OvertureDivisionCacheService(NullLogger<OvertureDivisionCacheService>.Instance, root, _ => alpha2);
+            var service = new FixtureCacheService(root, alpha2);
             check(service, path);
         }
         finally
         {
             Directory.Delete(root, recursive: true);
         }
+    }
+    private sealed class FixtureCacheService(string root, string alpha2)
+        : OvertureDivisionCacheService(NullLogger<OvertureDivisionCacheService>.Instance, root, _ => alpha2)
+    {
+        protected override string GetLatestOvertureReleaseForCache(CancellationToken ct) => "2026-09-23.1";
     }
 }

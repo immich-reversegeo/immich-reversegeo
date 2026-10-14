@@ -654,7 +654,10 @@
 
         await ensureDivisionTask;
         await UpdateLookupStatusAsync("Querying cached Overture administrative areas...");
-        r.OvertureDivisionDiagnostics = await OvertureDivisions.FindContainingDivisionAreasAsync(lat, lon, r.Alpha2, r.Iso3);
+        r.OvertureDivisionDiagnostics = r.OvertureDivisionCacheReady
+            ? await OvertureDivisions.FindContainingDivisionAreasAsync(lat, lon, r.Alpha2, r.Iso3)
+            : new OvertureDivisionLookupDiagnostics(null, [], null,
+                "Could not prepare the current Overture administrative cache. Check Lookup Trace and retry.");
         r.OvertureDivision = r.OvertureDivisionDiagnostics.BestMatch;
         var overtureAdmin = OvertureDivisionsLogic.SelectAdministrativeAreas(r.OvertureDivisionDiagnostics.Candidates, cityResolverProfile);
         r.OvertureDivisionState = overtureAdmin.State;
@@ -783,6 +786,7 @@
             await UpdateLookupStatusAsync(ensureResult switch
             {
                 OvertureDivisionEnsureResult.StartedDownload => $"Downloading Overture administrative cache for {r.Iso3}...",
+                OvertureDivisionEnsureResult.CheckingForUpdates => $"Checking Overture cache updates for {r.Iso3}...",
                 OvertureDivisionEnsureResult.AwaitedExistingDownload => $"Waiting for Overture administrative cache for {r.Iso3}...",
                 _ => $"Overture administrative cache already ready for {r.Iso3}."
             });
