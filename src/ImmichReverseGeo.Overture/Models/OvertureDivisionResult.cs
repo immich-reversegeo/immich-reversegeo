@@ -14,7 +14,11 @@ public record OvertureDivisionResult(
     bool IsTerritorial,
     bool BoundingBoxContainsPoint,
     bool GeometryContainsPoint,
-    double BoundingBoxArea);
+    double BoundingBoxArea,
+    bool? ExactGeometryContainsPoint = null)
+{
+    public bool IsExactGeometryMatch => GeometryContainsPoint && (ExactGeometryContainsPoint ?? true);
+}
 
 public record OvertureDivisionLookupDiagnostics(
     OvertureDivisionResult? BestMatch,
@@ -37,7 +41,11 @@ public record OvertureDivisionCandidateDiagnostic(
     bool Selected,
     string Decision,
     string? DivisionId = null,
-    string? HierarchyJson = null);
+    string? HierarchyJson = null,
+    bool? ExactGeometryContainsPoint = null)
+{
+    public bool IsExactGeometryMatch => GeometryContainsPoint && (ExactGeometryContainsPoint ?? true);
+}
 
 public record OvertureDivisionAncestor(string DivisionId, string Name, string SubType);
 

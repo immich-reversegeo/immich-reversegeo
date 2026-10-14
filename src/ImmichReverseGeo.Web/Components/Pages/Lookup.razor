@@ -347,7 +347,7 @@
                                         <span class="trace-meta">@((candidate.SubType ?? "unknown").ToLowerInvariant())</span>
                                         <span class="trace-meta">admin @((candidate.AdminLevel?.ToString()) ?? "—")</span>
                                         <span class="trace-meta">bbox @(candidate.BoundingBoxContainsPoint ? "yes" : "no")</span>
-                                        <span class="trace-meta">geom @(candidate.GeometryContainsPoint ? "yes" : "no")</span>
+                                        <span class="trace-meta">geometry @(candidate.IsExactGeometryMatch ? "exact" : candidate.GeometryContainsPoint ? "tolerance only" : "no")</span>
                                         <span class="trace-meta">territorial @(candidate.IsTerritorial ? "yes" : "no")</span>
                                     </div>
                                     <div class="trace-candidate-sub">
@@ -886,6 +886,7 @@
     {
         return candidates
             .OrderByDescending(c => c.Selected)
+            .ThenByDescending(c => c.IsExactGeometryMatch)
             .ThenByDescending(c => c.GeometryContainsPoint)
             .ThenByDescending(c => c.BoundingBoxContainsPoint)
             .ThenBy(c => OvertureDivisionsLogic.GetSubtypeRank(c.SubType))

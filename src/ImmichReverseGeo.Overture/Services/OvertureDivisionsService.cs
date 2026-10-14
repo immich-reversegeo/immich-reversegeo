@@ -670,9 +670,10 @@ public class OvertureDivisionsService : IDisposable
                                && lon <= reader.GetDouble(11)
                                && lat >= reader.GetDouble(10)
                                && lat <= reader.GetDouble(12);
+            var exactGeometryContains = false;
             var geometryContains = bboxContains
                                    && !reader.IsDBNull(8)
-                                   && OvertureDataAccess.TryGeometryContains(OvertureDataAccess.ReadBlobValue(reader.GetValue(8)), point);
+                                   && OvertureDataAccess.TryGeometryContains(OvertureDataAccess.ReadBlobValue(reader.GetValue(8)), point, out exactGeometryContains);
             var bboxArea = bboxContains
                 ? Math.Abs((reader.GetDouble(11) - reader.GetDouble(9)) * (reader.GetDouble(12) - reader.GetDouble(10)))
                 : double.MaxValue;
@@ -689,7 +690,8 @@ public class OvertureDivisionsService : IDisposable
                 OvertureDataAccess.ReadSqliteBool(reader, 7),
                 bboxContains,
                 geometryContains,
-                bboxArea);
+                bboxArea,
+                exactGeometryContains);
 
             var selected = false;
             var decision = $"considered: weaker than current {selectionLabel} best";
@@ -697,6 +699,8 @@ public class OvertureDivisionsService : IDisposable
             {
                 decision = best is null
                     ? $"selected: first {selectionLabel} division area"
+                    : candidate.IsExactGeometryMatch && !best.IsExactGeometryMatch
+                        ? $"selected: {selectionLabel} exact containment outranked tolerance or bounding box match"
                     : candidate.GeometryContainsPoint && !best.GeometryContainsPoint
                         ? $"selected: {selectionLabel} geometry containment outranked previous best"
                         : OvertureDivisionsLogic.GetSubtypeRank(candidate.SubType) < OvertureDivisionsLogic.GetSubtypeRank(best.SubType)
@@ -725,7 +729,8 @@ public class OvertureDivisionsService : IDisposable
                 selected,
                 decision,
                 OvertureDataAccess.ReadNullableString(reader, 13),
-                OvertureDataAccess.ReadNullableString(reader, 14)));
+                OvertureDataAccess.ReadNullableString(reader, 14),
+                candidate.ExactGeometryContainsPoint));
         }
 
         using var meta = conn.CreateCommand();

@@ -226,6 +226,8 @@ This keeps the main Settings page simple while still giving you a way to fix cou
 
 The City Resolver controls which city-like area the app prefers. When Overture provides parent information for that area, the app also uses it to select a consistent state.
 
+An area that contains the coordinate exactly takes priority over a neighbouring area that matches only through boundary tolerance. Tolerance remains a fallback when no eligible area contains the point exactly. Lookup labels these matches as **exact** or **tolerance only**. This avoids choosing a smaller neighbour near a boundary, but cannot correct inaccurate source polygons. Test affected coordinates in Lookup before changing broader or tighter matching.
+
 It is useful when the app finds the right general area, but chooses the wrong name for your taste. For example:
 
 - it picks a district instead of the wider city
