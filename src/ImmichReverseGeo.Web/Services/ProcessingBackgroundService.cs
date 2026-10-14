@@ -140,6 +140,7 @@ public class ProcessingBackgroundService(
         var outcome = ProcessingRunOutcome.Completed;
         try
         {
+            using var releaseScope = locationResolver.BeginOvertureReleaseScope();
             var total = await db.GetUnprocessedCountAsync(ct);
             state.StartRun(total);
 

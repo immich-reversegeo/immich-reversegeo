@@ -216,7 +216,13 @@ Country Caches supports country names and codes. Country names and download time
 
 ![Country Caches showing a downloaded country and its maintenance actions](assets/screenshots/country-caches.png){ .doc-screenshot .on-glb }
 
-Overture administrative names prefer English when available, including names taken from parent areas. Local names remain the fallback when English is unavailable. If an older cache still shows a local name despite an English name being available, use **Re-download Overture cache** for that country, then check the coordinates in **Lookup**. Re-downloading does not update existing Immich metadata; use **Location Management → Scan & Review** to review and apply any desired changes.
+Overture administrative names prefer English when available, including names taken from parent areas. Local names remain the fallback when English is unavailable. After an app upgrade changes how caches are built, affected older Overture caches rebuild automatically when next needed by Lookup, preview, or processing. The first request waits for the rebuild. A failed rebuild retains the previous file, reports an error, and can be retried; the older cache is not treated as ready.
+
+When Overture caches are used, the app checks for a newer Overture release at most once per day. Countries using an older release refresh automatically when next needed; unused country caches are not downloaded in the background. A processing pass keeps the same target release until it finishes. The first request for a country waits for any required refresh.
+
+If the release check or refresh fails, the app logs a warning and retries after an hour. A previous cache with a compatible format remains usable during a release-refresh failure. A cache requiring a format upgrade must rebuild successfully before use. New downloads are validated before replacing existing files.
+
+Use **Re-download Overture cache** to request a country download manually, then check the coordinates in **Lookup**. Refreshing a cache does not update existing Immich metadata; use **Location Management → Scan & Review** to review and apply any desired changes. This refresh policy applies to downloaded Overture administrative caches; bundled country and airport data update with the app, and GADM caches have separate download controls.
 
 ## Logs
 
