@@ -12,7 +12,7 @@ public sealed class DuckDbQueryProgressMonitor : IDisposable
     private readonly CancellationTokenSource _stop = new();
     private readonly Task _polling;
 
-    public DuckDbQueryProgressMonitor(DuckDBConnection connection, Action<double?> report, ILogger logger)
+    public DuckDbQueryProgressMonitor(DuckDBConnection connection, Action<DuckDbQueryProgressSnapshot> report, ILogger logger)
     {
         using var settings = connection.CreateCommand();
         settings.CommandText = "SET enable_progress_bar = true; SET enable_progress_bar_print = false; SET progress_bar_time = 0;";
@@ -24,9 +24,11 @@ public sealed class DuckDbQueryProgressMonitor : IDisposable
             {
                 while (await timer.WaitForNextTickAsync(_stop.Token).ConfigureAwait(false))
                 {
-                    var percentage = connection.GetQueryProgress().Percentage;
-                    report(double.IsFinite(percentage) && percentage >= 0 && percentage <= 100
-                        ? percentage : null);
+                    var native = connection.GetQueryProgress();
+                    var percentage = native.Percentage;
+                    report(new DuckDbQueryProgressSnapshot(
+                        double.IsFinite(percentage) && percentage >= 0 && percentage <= 100 ? percentage : null,
+                        native.RowsProcessed, native.TotalRowsToProcess));
                 }
             }
             catch (OperationCanceledException) when (_stop.IsCancellationRequested)
@@ -36,7 +38,7 @@ public sealed class DuckDbQueryProgressMonitor : IDisposable
             {
                 // A telemetry failure must not fail a cache download.
                 logger.LogDebug(ex, "DuckDB query progress unavailable");
-                report(null);
+                report(new DuckDbQueryProgressSnapshot(null, 0, 0));
             }
         });
     }
@@ -49,3 +51,5 @@ public sealed class DuckDbQueryProgressMonitor : IDisposable
         _stop.Dispose();
     }
 }
+
+public sealed record DuckDbQueryProgressSnapshot(double? Percentage, ulong RowsProcessed, ulong TotalRows);

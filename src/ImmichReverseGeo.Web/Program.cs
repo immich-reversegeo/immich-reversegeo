@@ -124,6 +124,7 @@ try
 {
     var startupConfig = await app.Services.GetRequiredService<ConfigService>().GetConfigAsync();
     app.Services.GetRequiredService<MemoryResourcePolicy>().LowMemoryMode = startupConfig.Processing.LowMemoryMode;
+    app.Services.GetRequiredService<MemoryResourcePolicy>().DuckDbThreads = startupConfig.Processing.DuckDbThreads;
     app.Services.GetRequiredService<MemoryResourcePolicy>().CountryIndexIdleMinutes = startupConfig.Processing.CountryIndexIdleMinutes;
     app.Services.GetRequiredService<MemoryResourcePolicy>().UseBoundedCountryCache = startupConfig.Processing.UseBoundedCountryCache;
     app.Services.GetRequiredService<MemoryResourcePolicy>().CountryCacheMiB = startupConfig.Processing.CountryCacheMiB;

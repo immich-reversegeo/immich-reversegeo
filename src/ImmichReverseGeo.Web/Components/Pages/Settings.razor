@@ -195,6 +195,12 @@ else
     <details class="settings-disclosure">
         <summary>Advanced Processing Limits</summary>
         <div class="form-group">
+            <label>DuckDB threads
+                <input type="number" min="0" max="32" @bind="_cfg.Processing.DuckDbThreads" />
+            </label>
+            <span class="hint">Default: 0 (automatic). Try 8 for slow Overture cache downloads, then compare completion time and memory use. Range: 0–32. Applies to new Overture queries after saving; each query can use this many threads. Low-memory mode always uses 1. More threads can increase CPU and RAM use.</span>
+        </div>
+        <div class="form-group">
             <label><input type="checkbox" @bind="_cfg.Processing.UseBoundedCountryCache" /> Limit country boundary cache</label>
             <span class="hint">Uses less RAM for country matching while keeping your processing parallelism. Lookups can be slower than the default full index. Low-memory mode overrides this option and reads boundaries without retaining them.</span>
         </div>

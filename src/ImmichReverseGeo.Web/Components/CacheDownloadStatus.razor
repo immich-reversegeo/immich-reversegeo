@@ -13,8 +13,17 @@
         @foreach (var download in _downloads)
         {
             <div @key="(download.Source, download.Iso3)">
-                <p role="status"><strong>@download.Source @download.Iso3</strong>: @download.Stage
-                    · @ElapsedLabel(download) elapsed
+                <p role="status"><strong>@download.Source @download.Iso3</strong>:
+                    @if (download.Phase > 0)
+                    {
+                        <span>Step @download.Phase of @CacheDownloadProgress.OverturePhaseCount · </span>
+                    }
+                    @download.Stage
+                    · @ElapsedLabel(download) total
+                    @if (download.PhaseStartedAt is { } phaseStarted && download.Phase > 0)
+                    {
+                        <span> · @ElapsedSince(phaseStarted) in this step</span>
+                    }
                     @if (download.BytesReceived > 0 || download.TotalBytes is not null)
                     {
                         <span> · @Size(download.BytesReceived) downloaded@(download.TotalBytes is > 0 ? $" of {Size(download.TotalBytes.Value)}" : " (total size unavailable)")</span>
@@ -24,6 +33,14 @@
                         <span> · @download.RowsWritten.ToString("N0") areas saved</span>
                     }
                 </p>
+                @if (download.QueryRowsTotal > 0)
+                {
+                    <p class="hint">@download.QueryRowsProcessed.ToString("N0") of about @download.QueryRowsTotal.ToString("N0") query rows processed (estimated).</p>
+                }
+                @if (download.LastProgressAt is { } last && DateTimeOffset.UtcNow - last >= TimeSpan.FromSeconds(15))
+                {
+                    <p class="hint">No reported progress change for @ElapsedSince(last). Work may still be active; this does not confirm a stalled download.</p>
+                }
                 @if (download.TransferPercentage is { } percentage)
                 {
                     <progress max="100" value="@percentage.ToString("F1", CultureInfo.InvariantCulture)" aria-label="@($"{download.Source} {download.Iso3} file download")"></progress>
@@ -34,13 +51,18 @@
                     <progress max="100" value="@queryPercentage.ToString("F1", CultureInfo.InvariantCulture)" aria-label="@($"{download.Source} {download.Iso3} query progress")"></progress>
                     <span> @queryPercentage.ToString("F1")% of query (estimated)</span>
                 }
+                else if (download.WritePercentage is { } writePercentage && download.Phase == 4)
+                {
+                    <progress max="100" value="@writePercentage.ToString("F1", CultureInfo.InvariantCulture)" aria-label="@($"{download.Source} {download.Iso3} cache rows written")"></progress>
+                    <span> @writePercentage.ToString("F1")% of cache rows written</span>
+                }
                 else
                 {
                     <progress aria-label="@($"{download.Source} {download.Iso3} cache preparation; percentage unavailable")"></progress>
                 }
             </div>
         }
-        <p class="hint">Overture shows an estimated query percentage when available; cache building and validation follow. This is not a percentage of downloaded bytes. Elapsed time alone does not confirm that data is still arriving.</p>
+        <p class="hint">Overture reports each step separately. Query percentages and row counts are estimates for the current step, and may pause or restart at the next step. This is not a percentage of downloaded bytes. Elapsed time alone does not confirm that data is still arriving.</p>
     </div>
 }
 
@@ -82,6 +104,8 @@
     }
 
     private static string Size(long bytes) => $"{bytes / (1024d * 1024):N1} MiB";
+    private static string ElapsedSince(DateTimeOffset timestamp) =>
+        $"{Math.Max(0, (DateTimeOffset.UtcNow - timestamp).TotalSeconds):N0}s";
     private static string ElapsedLabel(CacheDownloadProgress download) =>
         $"{Math.Max(0, (DateTimeOffset.UtcNow - download.StartedAt).TotalSeconds):N0}s";
 

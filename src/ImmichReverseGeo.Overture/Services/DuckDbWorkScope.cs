@@ -20,6 +20,13 @@ public sealed class DuckDbWorkScope : IDisposable
         try
         {
             Connection.Open();
+            var threads = policy.DuckDbThreads;
+            if (!_lease.IsLowMemoryMode && threads > 0)
+            {
+                using var configure = Connection.CreateCommand();
+                configure.CommandText = $"SET threads={threads};";
+                configure.ExecuteNonQuery();
+            }
             if (_lease.IsLowMemoryMode)
             {
                 _tempDirectory = Path.GetFullPath(Path.Combine(dataDir, "duckdb-tmp", Guid.NewGuid().ToString("N")));
