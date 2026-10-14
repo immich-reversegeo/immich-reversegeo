@@ -296,6 +296,8 @@ The app ships with built-in default rules. Your own settings sit on top of them:
 
 That means you only need to change the countries you care about.
 
+Leave the tie-break mode on **Inherit** to follow the current defaults. An empty place-type list also inherits the default order. These choices are independent: you can change the order without fixing a tie-break rule, or choose tighter or broader matching without copying the order. New country overrides start with both fields inherited. Existing explicit overrides stay explicit; select Inherit or remove the listed place types if you want them to follow future default changes. Check the effective profile and test known coordinates in Lookup before saving.
+
 ### Want to improve the bundled defaults for everyone?
 
 If you find a country setting that clearly works better, you can open a pull request.
