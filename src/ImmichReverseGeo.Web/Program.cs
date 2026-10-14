@@ -141,6 +141,8 @@ if (!app.Environment.IsDevelopment())
 app.UseAntiforgery();
 
 app.MapStaticAssets();
+app.MapProcessingEndpoints(
+    () => app.Services.GetRequiredService<ProcessingBackgroundService>().TryTriggerRun());
 app.MapGet("/api/location-previews/{previewId:guid}/assets/{assetId:guid}/thumbnail",
     async Task<IResult> (Guid previewId, Guid assetId, ImmichPhotoService photos, HttpContext context) =>
     {

@@ -211,7 +211,7 @@ else if (_dbError is not null)
         _runPending = false;
         if (_dbError is null)
         {
-            await Processor.TriggerRunAsync();
+            Processor.TryTriggerRun();
         }
     }
 

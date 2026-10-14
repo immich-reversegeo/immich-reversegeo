@@ -32,6 +32,25 @@ Progress counts examined assets, including those already on the skip list. Missi
 
 Run-end and activity timestamps use your browser's local timezone, shown beside each time. This does not change the UTC processing schedule.
 
+## Start a run from a script
+
+After a photo sync, a script can start the same processing pass as **Run Now** with `POST /api/processing/run`. Call it after Immich has imported the assets and extracted their GPS metadata.
+
+Call the URL from your script:
+
+```sh
+curl --fail-with-body --request POST http://localhost:8080/api/processing/run
+```
+
+Use the host and published port reachable from your script. No API key or request body is needed. `GET` does not start a run. Like the web UI, this endpoint has no built-in authentication: keep the service on your private network. Anyone who can reach it can start processing.
+
+| HTTP response | Meaning |
+|---|---|
+| `202` with `status: accepted` | The background pass was accepted. Check Dashboard or Logs for progress and the final outcome. |
+| `409` with `status: busy` | Processing or maintenance is active. No additional run was queued; retry after it finishes if newly imported assets still need processing. |
+
+The response returns immediately; `202` does not mean processing succeeded or that every photo received a location. The pass uses your saved processing settings even when scheduling is disabled. It fills missing city and country names, keeps existing names, and respects the skip list, just like a Dashboard run. It cannot process media that Immich has not imported yet or that lacks GPS coordinates.
+
 ## Lookup
 
 Use the Lookup page when you want to test a coordinate before running a full processing pass.

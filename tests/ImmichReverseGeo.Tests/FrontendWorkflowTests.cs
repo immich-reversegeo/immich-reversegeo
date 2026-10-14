@@ -21,7 +21,7 @@ public class FrontendWorkflowTests
         var management = new LocationManagementService(null!, null!, null!, NullLogger<LocationManagementService>.Instance, processor);
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => management.RunAsync(Guid.NewGuid(), false));
         await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => management.RunAsync(Guid.NewGuid(), true));
-        await processor.TriggerRunAsync();
+        Assert.IsFalse(processor.TryTriggerRun());
         Assert.IsFalse(state.IsRunning);
         first.Dispose();
         first.Dispose();
