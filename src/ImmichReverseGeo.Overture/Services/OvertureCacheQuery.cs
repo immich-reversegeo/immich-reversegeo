@@ -13,19 +13,17 @@ public sealed class OvertureCacheQuery : IDisposable
     private readonly DuckDBConnection _connection;
     private readonly ILogger _logger;
     private readonly Action<int, string, DuckDbQueryProgressSnapshot?> _report;
-    private readonly Action<int, string>? _profile;
     private readonly string _directory;
     private readonly string _names;
     private readonly string _areas;
     private readonly string _hierarchies;
 
     public OvertureCacheQuery(DuckDBConnection connection, string dataDir, ILogger logger,
-        Action<int, string, DuckDbQueryProgressSnapshot?> report, Action<int, string>? profile = null)
+        Action<int, string, DuckDbQueryProgressSnapshot?> report)
     {
         _connection = connection;
         _logger = logger;
         _report = report;
-        _profile = profile;
         _directory = Path.GetFullPath(Path.Combine(dataDir, "duckdb-cache-work", Guid.NewGuid().ToString("N")));
         Directory.CreateDirectory(_directory);
         _names = Path.Combine(_directory, "names.parquet");
@@ -87,22 +85,11 @@ public sealed class OvertureCacheQuery : IDisposable
         _report(phase, stage, null);
         using var command = _connection.CreateCommand();
         var sql = $"COPY ({select}) TO {Literal(output)} (FORMAT PARQUET, ROW_GROUP_SIZE 2048)";
-        command.CommandText = _profile is null ? sql : $"EXPLAIN ANALYZE {sql}";
+        command.CommandText = sql;
         using var cancellation = ct.Register(command.Cancel);
         using var monitor = new DuckDbQueryProgressMonitor(_connection, snapshot => _report(phase, stage, snapshot), _logger);
         ct.ThrowIfCancellationRequested();
-        if (_profile is null)
-        {
-            command.ExecuteNonQuery();
-        }
-        else
-        {
-            using var reader = command.ExecuteReader();
-            while (reader.Read())
-            {
-                _profile(phase, reader.GetString(1));
-            }
-        }
+        command.ExecuteNonQuery();
         ct.ThrowIfCancellationRequested();
     }
 

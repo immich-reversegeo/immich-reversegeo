@@ -8,17 +8,15 @@ namespace ImmichReverseGeo.Overture.Tests;
 public class OvertureCacheQueryTests
 {
     [TestMethod]
-    [DataRow(false, false, false)]
-    [DataRow(false, false, true)]
-    [DataRow(true, false, false)]
-    [DataRow(false, true, false)]
-    public void StagedQuery_PreservesRowsGeometryAndHierarchy_AndCleansDisk(bool missingParent, bool profile, bool lowMemory)
+    [DataRow(false, false)]
+    [DataRow(false, true)]
+    [DataRow(true, false)]
+    public void StagedQuery_PreservesRowsGeometryAndHierarchy_AndCleansDisk(bool missingParent, bool lowMemory)
     {
         var root = Path.Combine(Path.GetTempPath(), $"cache-phases-{Guid.NewGuid():N}");
         Directory.CreateDirectory(Path.Combine(root, "type=division"));
         Directory.CreateDirectory(Path.Combine(root, "type=division_area"));
         var stages = new List<int>();
-        var plans = new List<string>();
         try
         {
             using var connection = new DuckDBConnection("Data Source=:memory:");
@@ -60,8 +58,7 @@ public class OvertureCacheQueryTests
             var original = OvertureCacheQuery.BuildAreaProjection(OvertureDivisionsLogic.BuildDivisionAreaSource(areaUrl, "AE"), true)
                 + " WHERE " + OvertureCountrySourceCodes.BuildCountryFilter("AE");
             using (var query = new OvertureCacheQuery(connection, root, NullLogger.Instance,
-                (phase, _, snapshot) => { if (snapshot is null) { stages.Add(phase); } },
-                profile ? (_, plan) => plans.Add(plan) : null))
+                (phase, _, snapshot) => { if (snapshot is null) { stages.Add(phase); } }))
             {
                 Assert.AreEqual(2L, query.Prepare(areaUrl, "AE"));
                 command.CommandText = $"SELECT count(*) FROM (({original}) EXCEPT ALL ({query.BuildResultQuery()}))";
@@ -72,7 +69,6 @@ public class OvertureCacheQueryTests
                 StringAssert.Contains(command.ExecuteScalar()!.ToString()!, missingParent ? "local city" : "English city");
             }
             CollectionAssert.AreEqual(new[] { 1, 2, 3 }, stages);
-            Assert.AreEqual(profile ? 3 : 0, plans.Count);
             Assert.HasCount(0, Directory.GetDirectories(Path.Combine(root, "duckdb-cache-work")));
         }
         finally

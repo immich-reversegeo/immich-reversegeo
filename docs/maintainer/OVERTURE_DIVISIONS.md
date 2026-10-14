@@ -65,6 +65,3 @@ dotnet run --project src/ImmichReverseGeo.Tools.OvertureExport -- --dataset coun
 ```
 
 Validation checks that the expected identity has exact boundary coverage at each coordinate. It does not choose the runtime winner when boundaries overlap, or validate the runtime resolver's tolerance and routing behavior. Those belong in resolver tests. The existing shipped database predates the new export schema and is not expected to pass this validator. Shipping a replacement is a separate change.
-## Country-cache query benchmarks
-
-Use the [Docker cache benchmark](../../tests/OvertureCacheBenchmark/README.md) to compare the combined query, phased export, Azure read buffers, and DuckDB threads against a pinned release. It records effective settings, phase timings, Azure request profiles, memory, and logical output fingerprints. Keep normal and low-memory comparisons separate and validate actual Linux container behavior before changing defaults.
