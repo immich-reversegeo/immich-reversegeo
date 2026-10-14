@@ -8,7 +8,7 @@ using Microsoft.Extensions.Logging.Abstractions;
 namespace ImmichReverseGeo.Tests;
 
 [TestClass]
-public class AdministrativeAreaResolverTerritoryTests
+public partial class AdministrativeAreaResolverTerritoryTests
 {
     [TestMethod]
     public async Task MandatoryTerritories_ReachOwnOvertureAndGadmCacheStages()
