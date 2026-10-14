@@ -259,6 +259,7 @@ The recommended workflow is:
 - built-in Overture country and airport data ships inside the app image
 - low-memory country lookups prepare a regenerable polygon index under `/data/country-polygon-parts.db`, without downloading or changing the bundled data
 - downloaded Overture and GADM country caches are stored under `/data`
+- if a downloaded cache disappears or its file size or timestamps change, the app checks it again before reuse; missing or unusable caches are recreated when needed. Use the Country Caches page to manage downloads, then verify restored data in Lookup
 - new Overture downloads discover the current release from its public catalog; if discovery fails, the app reports an error instead of trying an expired release
 - the first lookup or processing pass for a new country may take longer because the cache must be created locally
 - larger countries can use hundreds of megabytes of local storage per cached country

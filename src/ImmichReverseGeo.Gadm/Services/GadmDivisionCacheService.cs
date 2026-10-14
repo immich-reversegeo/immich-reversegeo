@@ -17,7 +17,7 @@ public class GadmDivisionCacheService
     private readonly string _dataDir;
     private readonly MemoryResourcePolicy _memoryPolicy;
     private readonly ConcurrentDictionary<string, Lazy<Task>> _inflightDownloads = new();
-    private readonly ConcurrentDictionary<string, byte> _readyCaches = new();
+    private readonly ConcurrentDictionary<string, CacheFileStamp> _readyCaches = new();
     private readonly ConcurrentDictionary<string, CacheDownloadProgress> _downloadProgress = new();
 
     public CacheDownloadProgress[] GetActiveDownloads() => [.. _downloadProgress.Values];
@@ -66,10 +66,6 @@ public class GadmDivisionCacheService
                 var version = ReadMetaValue(conn, "version");
                 var fileSizeBytes = new FileInfo(file).Length;
                 result[iso3] = new GadmDivisionStatus(count, downloadedAt, version, fileSizeBytes);
-                if (count > 0)
-                {
-                    _readyCaches[iso3] = 0;
-                }
             }
             catch (Exception ex)
             {
@@ -88,18 +84,31 @@ public class GadmDivisionCacheService
             return false;
         }
 
-        if (_readyCaches.ContainsKey(iso3))
+        var path = GetDbPath(iso3);
+        if (!CacheFileStamp.TryRead(path, out var stamp))
         {
-            return true;
+            _readyCaches.TryRemove(iso3, out _);
+            return false;
         }
 
-        var hasRows = HasRows(GetDbPath(iso3), "gadm_area");
-        if (hasRows)
+        if (_readyCaches.TryGetValue(iso3, out var cached))
         {
-            _readyCaches[iso3] = 0;
+            if (cached == stamp)
+            {
+                return true;
+            }
+            _readyCaches.TryRemove(iso3, out _);
         }
 
-        return hasRows;
+        // Do not remember a validation result if the file changed while it was read.
+        if (!HasRows(path, "gadm_area")
+            || !CacheFileStamp.TryRead(path, out var after) || after != stamp)
+        {
+            return false;
+        }
+
+        _readyCaches[iso3] = stamp;
+        return true;
     }
 
     public void DeleteFile(string iso3)
@@ -198,7 +207,7 @@ public class GadmDivisionCacheService
 
             SqliteConnection.ClearAllPools();
             File.Move(tmpDbPath, dbPath, overwrite: true);
-            _readyCaches[iso3] = 0;
+            _readyCaches.TryRemove(iso3, out _);
             _logger.LogInformation("GADM division download complete for {ISO3} via {GadmCode}: {Rows} areas", iso3, gadmCode, rowCount);
         }
         catch
