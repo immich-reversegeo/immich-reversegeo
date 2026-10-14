@@ -11,52 +11,12 @@ namespace ImmichReverseGeo.Tests;
 [TestClass]
 public class ProcessingEndpointsTests
 {
-    private const string Key = "test-run-api-secret";
-
     [TestMethod]
-    [DataRow(null)]
-    [DataRow("")]
-    [DataRow("   ")]
-    public async Task UnconfiguredApi_DoesNotStartProcessing(string? key)
+    public async Task Post_AcceptsRunWithoutRequiringAuthorizationBodyOrAntiforgeryToken()
     {
         var calls = 0;
-        await using var app = await StartAppAsync(key, () => { calls++; return true; });
+        await using var app = await StartAppAsync(() => { calls++; return true; });
         using var client = CreateClient(app);
-        using var response = await client.PostAsync("/api/processing/run", null);
-        Assert.AreEqual(HttpStatusCode.ServiceUnavailable, response.StatusCode);
-        Assert.AreEqual("disabled", (await response.Content.ReadFromJsonAsync<ApiResponse>())!.Status);
-        Assert.AreEqual(0, calls);
-    }
-
-    [TestMethod]
-    [DataRow(null)]
-    [DataRow("Bearer wrong-key")]
-    [DataRow("Bearer TEST-RUN-API-SECRET")]
-    [DataRow("Basic test-run-api-secret")]
-    [DataRow("Bearer")]
-    [DataRow("Bearer test-run-api-secret, Bearer test-run-api-secret")]
-    public async Task InvalidAuthorization_DoesNotStartProcessing(string? authorization)
-    {
-        var calls = 0;
-        await using var app = await StartAppAsync(Key, () => { calls++; return true; });
-        using var client = CreateClient(app);
-        if (authorization is not null)
-        {
-            client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", authorization);
-        }
-        using var response = await client.PostAsync("/api/processing/run?apiKey=" + Key, null);
-        Assert.AreEqual(HttpStatusCode.Unauthorized, response.StatusCode);
-        Assert.AreEqual("Bearer", response.Headers.WwwAuthenticate.Single().Scheme);
-        Assert.AreEqual(0, calls);
-    }
-
-    [TestMethod]
-    public async Task AuthorizedPost_AcceptsRunWithoutRequiringBodyOrAntiforgeryToken()
-    {
-        var calls = 0;
-        await using var app = await StartAppAsync(Key, () => { calls++; return true; });
-        using var client = CreateClient(app);
-        client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", "bearer " + Key);
         using var response = await client.PostAsync("/api/processing/run", null);
         Assert.AreEqual(HttpStatusCode.Accepted, response.StatusCode);
         Assert.AreEqual("accepted", (await response.Content.ReadFromJsonAsync<ApiResponse>())!.Status);
@@ -68,9 +28,8 @@ public class ProcessingEndpointsTests
     public async Task Get_DoesNotStartProcessing()
     {
         var calls = 0;
-        await using var app = await StartAppAsync(Key, () => { calls++; return true; });
+        await using var app = await StartAppAsync(() => { calls++; return true; });
         using var client = CreateClient(app);
-        client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", "Bearer " + Key);
         using var response = await client.GetAsync("/api/processing/run");
         Assert.AreEqual(HttpStatusCode.MethodNotAllowed, response.StatusCode);
         Assert.AreEqual(0, calls);
@@ -84,9 +43,8 @@ public class ProcessingEndpointsTests
             null!, null!, state, null!, null!);
         using var maintenance = processor.TryBeginMaintenance();
         Assert.IsNotNull(maintenance);
-        await using var app = await StartAppAsync(Key, processor.TryTriggerRun);
+        await using var app = await StartAppAsync(processor.TryTriggerRun);
         using var client = CreateClient(app);
-        client.DefaultRequestHeaders.TryAddWithoutValidation("Authorization", "Bearer " + Key);
         using var response = await client.PostAsync("/api/processing/run", null);
         Assert.AreEqual(HttpStatusCode.Conflict, response.StatusCode);
         Assert.AreEqual("busy", (await response.Content.ReadFromJsonAsync<ApiResponse>())!.Status);
@@ -131,7 +89,7 @@ public class ProcessingEndpointsTests
         Assert.IsNull(maintenance);
     }
 
-    private static async Task<WebApplication> StartAppAsync(string? key, Func<bool> trigger)
+    private static async Task<WebApplication> StartAppAsync(Func<bool> trigger)
     {
         var builder = WebApplication.CreateBuilder();
         builder.Logging.ClearProviders();
@@ -139,7 +97,7 @@ public class ProcessingEndpointsTests
         var app = builder.Build();
         app.Urls.Add("http://127.0.0.1:0");
         app.UseAntiforgery();
-        app.MapProcessingEndpoints(key, trigger);
+        app.MapProcessingEndpoints(trigger);
         await app.StartAsync();
         return app;
     }

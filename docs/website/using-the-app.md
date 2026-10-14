@@ -36,22 +36,18 @@ Run-end and activity timestamps use your browser's local timezone, shown beside 
 
 After a photo sync, a script can start the same processing pass as **Run Now** with `POST /api/processing/run`. Call it after Immich has imported the assets and extracted their GPS metadata.
 
-First, [configure `RUN_API_KEY`](configuration.md#run-api-key) and recreate the Immich ReverseGeo container. Then call the URL from your script, using the same key in an Authorization header:
+Call the URL from your script:
 
 ```sh
-curl --fail-with-body --request POST \
-  --header "Authorization: Bearer ${RUN_API_KEY}" \
-  http://localhost:8080/api/processing/run
+curl --fail-with-body --request POST http://localhost:8080/api/processing/run
 ```
 
-Use the host and published port reachable from your script. No request body is needed. `GET` does not start a run, and keys in the URL are not accepted.
+Use the host and published port reachable from your script. No API key or request body is needed. `GET` does not start a run. Like the web UI, this endpoint has no built-in authentication: keep the service on your private network. Anyone who can reach it can start processing.
 
 | HTTP response | Meaning |
 |---|---|
 | `202` with `status: accepted` | The background pass was accepted. Check Dashboard or Logs for progress and the final outcome. |
 | `409` with `status: busy` | Processing or maintenance is active. No additional run was queued; retry after it finishes if newly imported assets still need processing. |
-| `401` with `status: unauthorized` | The Bearer key is missing or incorrect. |
-| `503` with `status: disabled` | `RUN_API_KEY` is unset or blank. Configure it and recreate the container. |
 
 The response returns immediately; `202` does not mean processing succeeded or that every photo received a location. The pass uses your saved processing settings even when scheduling is disabled. It fills missing city and country names, keeps existing names, and respects the skip list, just like a Dashboard run. It cannot process media that Immich has not imported yet or that lacks GPS coordinates.
 
