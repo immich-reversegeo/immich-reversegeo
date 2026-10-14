@@ -46,6 +46,7 @@ public class AdministrativeAreaResolverService
         IAdministrativeAreaResolutionProgress? progress = null,
         CancellationToken ct = default)
     {
+        ct.ThrowIfCancellationRequested();
         progress?.Report("Checking bundled Overture country coverage...");
         var countryLookup = await _overtureDivisions.FindBundledCountryAsync(lat, lon, ct);
         if (countryLookup.Status == BundledCountryLookupStatus.SpatialNoMatch)
@@ -73,16 +74,20 @@ public class AdministrativeAreaResolverService
             overtureResult = await ResolveOvertureAsync(lat, lon, alpha2, iso3, cityResolverProfile, progress, ct);
         }
 
-        if (config.UseGadmAdministrativeAreas)
+        // The secondary source can only contribute fields the preferred source did not resolve.
+        if (config.UseGadmAdministrativeAreas
+            && (config.PreferGadmAdministrativeAreas || overtureResult?.City is null || overtureResult.State is null))
         {
             gadmResult = await ResolveGadmAsync(lat, lon, iso3, config.UseGadmTerritoryFallbacks, progress, ct);
         }
 
-        if (config.UseGadmAdministrativeAreas && config.PreferGadmAdministrativeAreas)
+        if (config.UseGadmAdministrativeAreas && config.PreferGadmAdministrativeAreas
+            && (gadmResult?.City is null || gadmResult.State is null))
         {
             overtureResult ??= await ResolveOvertureAsync(lat, lon, alpha2, iso3, cityResolverProfile, progress, ct);
         }
 
+        ct.ThrowIfCancellationRequested();
         var finalState = SelectPreferredValue(
             config,
             gadmResult?.State,

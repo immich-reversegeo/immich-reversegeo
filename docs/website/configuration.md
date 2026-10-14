@@ -178,6 +178,8 @@ Use Lookup on a known coordinate before and after the idle period to check the r
 
 When enabled, GADM adds another country-level administrative boundary source for `state` and `city` matching.
 
+Processing and location scans query the preferred source first. If it supplies both state and city, the other source is skipped. Otherwise, the other source fills only missing fields. This can avoid unnecessary country-cache downloads; it cannot repair incorrect names supplied by the preferred source. Lookup still queries both enabled sources so you can compare their results before changing your preference.
+
 Recommended starting point:
 
 - turn `Enable GADM administrative areas` on
