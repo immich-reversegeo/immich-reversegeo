@@ -37,3 +37,11 @@ Brand assets for Immich ReverseGeo.
 - Text accent: `#93C5FD`
 
 These are SVG-first assets — scalable to any size without quality loss.
+
+## Browser favicon
+
+The app's `src/ImmichReverseGeo.Web/wwwroot/favicon.svg` and the website's
+`docs/website/assets/images/favicon.svg` use the same simplified pin for browser
+tabs: a transparent background, larger colored head, bright blue tip, and a
+single white center. Keep these two files in sync. The full logo retains its
+more detailed center for larger displays.

@@ -1,0 +1,10 @@
+<svg width="32" height="32" viewBox="0 0 32 32" xmlns="http://www.w3.org/2000/svg">
+  <!-- Tab-size pin: transparent surround, bright tip, and one clear center. -->
+  <path d="M6 20H26L16 31Z" fill="#1E83F7"/>
+  <path d="M16 13V1A12 12 0 0 1 27.41 9.29Z" fill="#FA2921"/>
+  <path d="M16 13L27.41 9.29A12 12 0 0 1 23.05 22.71Z" fill="#FFB400"/>
+  <path d="M16 13L23.05 22.71A12 12 0 0 1 8.95 22.71Z" fill="#18C249"/>
+  <path d="M16 13L8.95 22.71A12 12 0 0 1 4.59 9.29Z" fill="#1E83F7"/>
+  <path d="M16 13L4.59 9.29A12 12 0 0 1 16 1Z" fill="#ED79B5"/>
+  <circle cx="16" cy="13" r="4" fill="#FFFFFF"/>
+</svg>

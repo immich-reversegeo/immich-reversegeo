@@ -19,7 +19,7 @@ theme:
   variant: modern
   language: en
   logo: assets/images/logo-mark.svg
-  favicon: assets/images/logo-mark.svg
+  favicon: assets/images/favicon.svg
   features:
     - navigation.instant
     - navigation.instant.progress
