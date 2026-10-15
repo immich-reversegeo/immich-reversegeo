@@ -55,6 +55,9 @@ npm run test
 # Run integration tests explicitly
 npm run test:integration
 
+# Run disposable Immich database-contract tests (requires Docker with Linux containers)
+npm run test:database
+
 # Build docs / exports
 npm run docs:build
 npm run export:airports
@@ -76,6 +79,16 @@ Test notes:
 - Avoid concurrent test/build runs against the same output directory on Windows; running test executables can also lock rebuild outputs.
 
 ---
+
+## Disposable Immich integration tests
+
+- Run `npm run test:database` from the repository root when changing Immich SQL, processing eligibility, location writes/resets, Location Management apply/undo, or their fixtures. It uses Testcontainers for .NET and requires a running Docker engine with Linux containers.
+- The suite lives in `tests/ImmichReverseGeo.Database.Tests/`, outside the default solution test run. Normal `npm run test` and `npm run test:integration` do not run it. CI runs it as a separate job.
+- Reuse the contract assertions in `tests/LiveImmichDb/`; keep disposable tests and persistent Compose checks aligned. Independent location-management attempts need fresh scans because the service rejects already attempted scan entries.
+- Keep images pinned by digest, ports dynamically assigned, and each test's network, volumes, credentials, and synthetic fixtures isolated. Preserve version/marker checks before writes and automatic resource cleanup; do not use production connection settings or persistent `.local/immich-db/` state.
+- Persistent Compose stacks are for manual inspection. Do not delete their volumes or account files as Testcontainers cleanup. Reports and redacted failure logs belong under `_out/testcontainers/`; never commit or upload credentials.
+- These checks validate database and location-management contracts. Geographic-data accuracy, external downloads, browser workflows, and the production image require their own checks. If Docker is unavailable, report that the suite was not run.
+- Details: [Live Immich database checks](docs/maintainer/immich-db-testing.md).
 
 ## Key Architecture
 
