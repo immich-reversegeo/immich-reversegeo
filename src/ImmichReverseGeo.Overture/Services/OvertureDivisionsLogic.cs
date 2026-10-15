@@ -38,7 +38,8 @@ public static class OvertureDivisionsLogic
                 ST_Intersects(geometry, ST_Point({lon.ToString(CultureInfo.InvariantCulture)}, {lat.ToString(CultureInfo.InvariantCulture)})) AS geometry_contains_point,
                 ABS((bbox.xmax - bbox.xmin) * (bbox.ymax - bbox.ymin)) AS bbox_area,
                 division_id,
-                hierarchy_json
+                hierarchy_json,
+                to_json(struct_pack("primary" := names.primary, common := names.common)) AS names_json
             FROM {BuildDivisionAreaSource(releaseUrl, alpha2)}
             WHERE names.primary IS NOT NULL
               AND bbox.xmax >= {lon.ToString(CultureInfo.InvariantCulture)}
@@ -59,7 +60,8 @@ public static class OvertureDivisionsLogic
         return $"""
             (
                 WITH division_names AS MATERIALIZED (
-                    SELECT id, hierarchies,
+                    SELECT id, hierarchies, country,
+                        struct_pack("primary" := names.primary, common := names.common) AS names,
                         COALESCE(NULLIF(trim(names.common['en']), ''), NULLIF(trim(names.primary), '')) AS name
                     FROM read_parquet('{divisionUrl}', hive_partitioning = 1) {countryFilter}
                 )
@@ -67,7 +69,9 @@ public static class OvertureDivisionsLogic
                     SELECT to_json(list(struct_pack(
                         division_id := entry.division_id,
                         subtype := entry.subtype,
-                        name := COALESCE(parent.name, entry.name)
+                        name := COALESCE(parent.name, entry.name),
+                        names := parent.names,
+                        country := parent.country
                     ) ORDER BY position))
                     FROM UNNEST(d.hierarchies[1]) WITH ORDINALITY AS ancestors(entry, position)
                     LEFT JOIN division_names parent ON parent.id = entry.division_id
@@ -214,7 +218,9 @@ public static class OvertureDivisionsLogic
                     return [];
                 }
 
-                ancestors.Add(new OvertureDivisionAncestor(id, name, subtype));
+                ancestors.Add(new OvertureDivisionAncestor(id, name, subtype,
+                    entry.TryGetProperty("country", out var country) && country.ValueKind == JsonValueKind.String
+                        ? country.GetString() : null));
             }
 
             // Only accept a chain ending at this area owner; never borrow an unrelated hierarchy.

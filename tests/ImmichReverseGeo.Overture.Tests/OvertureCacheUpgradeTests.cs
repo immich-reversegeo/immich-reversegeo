@@ -10,6 +10,7 @@ public class OvertureCacheUpgradeTests
     [TestMethod]
     [DataRow(null)]
     [DataRow("0")]
+    [DataRow("1")]
     [DataRow("999")]
     [DataRow("invalid")]
     public void NonCurrentFormat_IsNotReadyEvenAfterStatusRead(string? version)

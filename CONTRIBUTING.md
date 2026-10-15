@@ -71,6 +71,22 @@ The suite creates fresh SQLite fixtures under `_out/frontend-tests/runs/`, disab
 
 The HTML report is under `_out/frontend-tests/report/`; failures retain screenshots and traces under `_out/frontend-tests/results/`. CI runs the same suite before Docker validation and image publication. These checks cover the UI with saved fixtures; the separate integration suite verifies live database contracts.
 
+
+### Browser end-to-end tests
+
+With Docker running, build and install the test browser once, then run the suite:
+
+```powershell
+dotnet build tests/ImmichReverseGeo.E2E.Tests/ImmichReverseGeo.E2E.Tests.csproj
+$env:PLAYWRIGHT_SKIP_BROWSER_GC = '1'
+pwsh -NoProfile -File tests/ImmichReverseGeo.E2E.Tests/bin/Debug/net10.0/playwright.ps1 install chromium
+npm run test:e2e
+```
+
+The language suite runs the production Blazor app on a random loopback port, with separate settings, local multilingual Parquet fixtures, and a disposable PostgreSQL container. It checks desktop and phone workflows through Settings, Lookup, correction preview, and Run Now, including database values, cache reuse, and failed cache upgrades. It overrides inherited database credentials and does not use an existing Immich library. The fixture tables exercise the app's database contract; use `npm run test:database` separately for compatibility against real Immich schemas.
+
+Screenshots, Playwright traces, fixture data, and TRX results are saved under `_out/language-e2e/`. The suite stays separate from normal fast tests. Initial package, browser, and container-image installation requires network access; test geodata comes from local fixtures.
+
 ### Environment
 
 For local Visual Studio or `dotnet run` usage, the app reads real process environment variables for database access:

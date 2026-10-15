@@ -1,0 +1,36 @@
+<input id="location-name-language" class="form-control" list="location-name-languages" value="@_input" @oninput="OnInput" @onblur="OnBlur" maxlength="128" placeholder="Search by language name or code" autocomplete="off" spellcheck="false" aria-describedby="location-name-language-help" />
+<datalist id="location-name-languages">
+    @foreach (var language in LocationLanguageCatalog.Languages)
+    {
+        <option value="@language.Label">@language.NativeName</option>
+    }
+</datalist>
+
+@code {
+    [Parameter] public string Value { get; set; } = "en";
+    [Parameter] public EventCallback<string> ValueChanged { get; set; }
+
+    private string? _lastValue;
+    private string _input = string.Empty;
+
+    protected override void OnParametersSet()
+    {
+        if (_lastValue != Value)
+        {
+            _lastValue = Value;
+            _input = LocationLanguageCatalog.Display(Value);
+        }
+    }
+
+    private async Task OnInput(ChangeEventArgs args)
+    {
+        _input = args.Value?.ToString() ?? string.Empty;
+        _lastValue = LocationLanguageCatalog.Resolve(_input);
+        await ValueChanged.InvokeAsync(_lastValue);
+    }
+
+    private void OnBlur()
+    {
+        _input = LocationLanguageCatalog.Display(Value);
+    }
+}

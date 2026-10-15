@@ -556,15 +556,18 @@ public class OvertureDivisionsService : IDisposable
         string? alpha2,
         string? iso3,
         CityResolverProfile? cityResolverProfile = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        LocationNameOptions? locationNames = null)
     {
-        var diagnostics = await FindContainingDivisionAreasAsync(lat, lon, alpha2, iso3, ct);
+        var diagnostics = await FindContainingDivisionAreasAsync(lat, lon, alpha2, iso3, ct, locationNames);
         if (diagnostics.Error is not null || diagnostics.Candidates.Count == 0)
         {
             return null;
         }
 
-        return OvertureDivisionsLogic.SelectAdministrativeAreas(diagnostics.Candidates, cityResolverProfile);
+        var result = OvertureDivisionsLogic.SelectAdministrativeAreas(diagnostics.Candidates, cityResolverProfile);
+        var country = OvertureNameLocalizer.SelectCountryName(diagnostics, alpha2 ?? string.Empty, string.Empty, locationNames);
+        return result with { Country = string.IsNullOrWhiteSpace(country) ? null : country };
     }
 
     public async Task<OvertureDivisionLookupDiagnostics> FindContainingDivisionAreasAsync(
@@ -572,19 +575,20 @@ public class OvertureDivisionsService : IDisposable
         double lon,
         string? alpha2,
         string? iso3 = null,
-        CancellationToken ct = default)
+        CancellationToken ct = default,
+        LocationNameOptions? locationNames = null)
     {
         try
         {
             var cached = QueryCachedDivisionAreas(lat, lon, iso3);
             if (cached is not null)
             {
-                return cached;
+                return OvertureNameLocalizer.Localize(cached, locationNames);
             }
 
             var release = await _overturePlacesService.GetLatestReleaseForOvertureAsync(ct);
             var result = await Task.Run(() => QueryDivisionAreas(lat, lon, alpha2, release, ct), ct);
-            return result with { Release = release };
+            return OvertureNameLocalizer.Localize(result with { Release = release }, locationNames);
         }
         catch (OperationCanceledException) when (ct.IsCancellationRequested)
         {
@@ -628,6 +632,7 @@ public class OvertureDivisionsService : IDisposable
         var adminLevelColumn = HasColumn(conn, "division_area", "admin_level") ? "admin_level" : "NULL AS admin_level";
         var divisionIdColumn = HasColumn(conn, "division_area", "division_id") ? "division_id" : "NULL AS division_id";
         var hierarchyColumn = HasColumn(conn, "division_area", "hierarchy_json") ? "hierarchy_json" : "NULL AS hierarchy_json";
+        var namesColumn = HasColumn(conn, "division_area", "names_json") ? "names_json" : "NULL AS names_json";
         using var cmd = conn.CreateCommand();
         cmd.CommandText = $"""
             SELECT
@@ -645,7 +650,8 @@ public class OvertureDivisionsService : IDisposable
                 bbox_xmax,
                 bbox_ymax,
                 {divisionIdColumn},
-                {hierarchyColumn}
+                {hierarchyColumn},
+                {namesColumn}
             FROM division_area
             WHERE bbox_xmax >= $lon
               AND bbox_xmin <= $lon
@@ -730,7 +736,8 @@ public class OvertureDivisionsService : IDisposable
                 decision,
                 OvertureDataAccess.ReadNullableString(reader, 13),
                 OvertureDataAccess.ReadNullableString(reader, 14),
-                candidate.ExactGeometryContainsPoint));
+                candidate.ExactGeometryContainsPoint,
+                OvertureDataAccess.ReadNullableString(reader, 15)));
         }
 
         using var meta = conn.CreateCommand();
@@ -813,7 +820,8 @@ public class OvertureDivisionsService : IDisposable
                 selected,
                 decision,
                 OvertureDataAccess.ReadNullableString(reader, 11),
-                OvertureDataAccess.ReadNullableString(reader, 12)));
+                OvertureDataAccess.ReadNullableString(reader, 12),
+                NamesJson: OvertureDataAccess.ReadNullableString(reader, 13)));
         }
 
         return new OvertureDivisionLookupDiagnostics(best, candidates, release);

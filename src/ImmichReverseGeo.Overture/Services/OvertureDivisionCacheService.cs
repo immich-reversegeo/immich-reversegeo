@@ -14,7 +14,7 @@ namespace ImmichReverseGeo.Overture.Services;
 public class OvertureDivisionCacheService
 {
     // Bump when export behavior changes invalidate previously downloaded results.
-    public const string CacheFormatVersion = "1";
+    public const string CacheFormatVersion = "2";
     private static readonly TimeSpan ReleaseCheckInterval = TimeSpan.FromDays(1);
     private static readonly TimeSpan RefreshRetryDelay = TimeSpan.FromHours(1);
     private readonly SemaphoreSlim _releaseCheckLock = new(1, 1);
@@ -392,16 +392,13 @@ public class OvertureDivisionCacheService
 
     protected virtual long ExportOvertureDivisions(string tmpPath, string alpha2, string iso3, string release, CancellationToken ct)
     {
-        var releaseUrl = string.Format(
-            System.Globalization.CultureInfo.InvariantCulture,
-            OvertureDivisionsLogic.DivisionAreaReleaseUrlTemplate,
-            release);
+        var releaseUrl = GetDivisionAreaReleaseUrl(release);
 
         ReportProgress(iso3, "Waiting for a data processing slot");
         using var work = new DuckDbWorkScope(_memoryPolicy, _dataDir, ct);
         var duck = work.Connection;
         ReportProgress(iso3, "Preparing download connection");
-        OvertureDataAccess.LoadAzureAndSpatial(duck);
+        PrepareExportConnection(duck);
 
         using var query = new OvertureCacheQuery(duck, _dataDir, _logger,
             (phase, stage, snapshot) => ReportProgress(iso3, stage, phase: phase, query: snapshot));
@@ -433,7 +430,8 @@ public class OvertureDivisionCacheService
                     bbox_xmax REAL NULL,
                     bbox_ymax REAL NULL,
                     division_id TEXT NULL,
-                    hierarchy_json TEXT NULL
+                    hierarchy_json TEXT NULL,
+                    names_json TEXT NULL
                 );
                 CREATE TABLE _meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
                 CREATE INDEX idx_division_area_bbox_x ON division_area (bbox_xmin, bbox_xmax);
@@ -465,10 +463,10 @@ public class OvertureDivisionCacheService
         insert.CommandText = @"
             INSERT OR IGNORE INTO division_area (
                 id, name, subtype, class_name, admin_level, country, is_land, is_territorial,
-                geom_wkb, bbox_xmin, bbox_ymin, bbox_xmax, bbox_ymax, division_id, hierarchy_json
+                geom_wkb, bbox_xmin, bbox_ymin, bbox_xmax, bbox_ymax, division_id, hierarchy_json, names_json
             ) VALUES (
                 $id, $name, $subtype, $class, $adminLevel, $country, $isLand, $isTerritorial,
-                $geom, $xmin, $ymin, $xmax, $ymax, $divisionId, $hierarchy
+                $geom, $xmin, $ymin, $xmax, $ymax, $divisionId, $hierarchy, $names
             )
             ";
         var pId = insert.Parameters.Add("$id", SqliteType.Text);
@@ -487,6 +485,7 @@ public class OvertureDivisionCacheService
 
         var pDivisionId = insert.Parameters.Add("$divisionId", SqliteType.Text);
         var pHierarchy = insert.Parameters.Add("$hierarchy", SqliteType.Text);
+        var pNames = insert.Parameters.Add("$names", SqliteType.Text);
 
         long rows = 0;
         while (reader.Read())
@@ -507,6 +506,7 @@ public class OvertureDivisionCacheService
             pYMax.Value = reader.IsDBNull(12) ? DBNull.Value : reader.GetDouble(12);
             pDivisionId.Value = reader.IsDBNull(13) ? DBNull.Value : reader.GetString(13);
             pHierarchy.Value = reader.IsDBNull(14) ? DBNull.Value : reader.GetString(14);
+            pNames.Value = reader.IsDBNull(15) ? DBNull.Value : reader.GetString(15);
             insert.ExecuteNonQuery();
             rows++;
             if (rows % 100 == 0)
@@ -519,6 +519,11 @@ public class OvertureDivisionCacheService
         sqlite.Close();
         return rows;
     }
+
+    protected virtual string GetDivisionAreaReleaseUrl(string release) => string.Format(
+        System.Globalization.CultureInfo.InvariantCulture, OvertureDivisionsLogic.DivisionAreaReleaseUrlTemplate, release);
+
+    protected virtual void PrepareExportConnection(DuckDBConnection connection) => OvertureDataAccess.LoadAzureAndSpatial(connection);
 
     protected virtual string GetLatestOvertureReleaseForCache(CancellationToken ct) => OvertureReleaseCatalog.GetLatestRelease(_memoryPolicy, _dataDir, ct);
 

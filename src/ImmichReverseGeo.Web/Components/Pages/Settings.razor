@@ -189,6 +189,24 @@ else
 <section class="settings-card">
     <h3>Processing</h3>
     <div class="form-group">
+        <label for="location-name-mode">Location name language</label>
+        <select id="location-name-mode" class="form-control" @bind="_cfg.Processing.LocationNames.Mode" aria-describedby="location-name-help">
+            <option value="english">English (default)</option>
+            <option value="local">Local / source name</option>
+            <option value="preferred">Preferred language</option>
+        </select>
+        <span id="location-name-help" class="hint">Choose the names used by Overture for cities, states, and available country labels. GADM and bundled airport names keep their source names. Test known coordinates in Lookup after saving.</span>
+    </div>
+    @if (_cfg.Processing.LocationNames.Mode == LocationNameOptions.Preferred)
+    {
+        <div class="form-group">
+            <label for="location-name-language">Preferred language</label>
+            <LocationLanguagePicker @bind-Value="_cfg.Processing.LocationNames.PreferredLanguage" />
+            <span id="location-name-language-help" class="hint">Search by name or code, for example French (fr). You can also enter a regional or script code such as fr-CA or zh-Hant. Tries the full code, then its broader language, then the source name, then English. The list does not guarantee translated names; availability varies by place.</span>
+        </div>
+    }
+    <p class="hint">This applies to new lookups, previews, and processing runs. Existing Immich names stay as they are. Use Location Management → Scan & Review to review and apply changes to selected assets.</p>
+    <div class="form-group">
         <label><input type="checkbox" @bind="_cfg.Processing.LowMemoryMode" /> Low-memory mode</label>
         <span class="hint">Uses one processing worker, batches of at most 25 assets, and less memory for downloads. Country boundaries are read from disk as needed. Processing can be slower. Save before starting a run; work already in progress keeps its current limits.</span>
     </div>

@@ -65,6 +65,8 @@ Use the Lookup page when you want to test a coordinate before running a full pro
 
 Click the screenshot to enlarge it. Lookup previews do not update Immich assets.
 
+If the required Overture country cache cannot be prepared, Lookup reports **incomplete — would not write**, even when country coverage is known. Check **Lookup Trace**, restore network access or free disk space as needed, and retry. Processing also leaves the asset unchanged when this cache preparation fails.
+
 Nearby-place suggestions recognise Overture's current labels for religious sites, performance venues, and public offices. Routine shops, storage businesses, and clinics remain excluded. The filters preserve the original category labels and source attribution shown in Lookup. Use these suggestions to investigate a location; they do not replace the proposed city or state.
 
 ### Country lookup failures
@@ -218,7 +220,7 @@ Country Caches supports country names and codes. Country names and download time
 
 ![Country Caches showing a downloaded country and its maintenance actions](assets/screenshots/country-caches.png){ .doc-screenshot .on-glb }
 
-Overture administrative names prefer English when available, including names taken from parent areas. Local names remain the fallback when English is unavailable. After an app upgrade changes how caches are built, affected older Overture caches rebuild automatically when next needed by Lookup, preview, or processing. The first request waits for the rebuild. A failed rebuild retains the previous file, reports an error, and can be retried; the older cache is not treated as ready.
+Overture administrative names use the saved [Location name language](configuration.md#location-name-language), including names taken from parent areas. English remains the default; local or preferred-language names are available when present in the source. After an app upgrade changes how caches are built, affected older Overture caches rebuild automatically when next needed by Lookup, preview, or processing. The first request waits for the rebuild. A failed rebuild retains the previous file, reports an error, and can be retried; the older cache is not treated as ready.
 
 When Overture caches are used, the app checks for a newer Overture release at most once per day. Countries using an older release refresh automatically when next needed; unused country caches are not downloaded in the background. A processing pass keeps the same target release until it finishes. The first request for a country waits for any required refresh.
 
