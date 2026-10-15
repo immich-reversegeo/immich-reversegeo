@@ -7,6 +7,7 @@
     "test:frontend": "playwright test --config tests/Frontend/playwright.config.mjs",
     "test": "dotnet test --filter \"TestCategory!=Integration&TestCategory!=Performance\"",
     "test:immich-db": "pwsh -NoProfile -File tests/LiveImmichDb/Run-LiveImmichDb.ps1 -Action Test",
+    "test:database": "dotnet test --project tests/ImmichReverseGeo.Database.Tests/ImmichReverseGeo.Database.Tests.csproj --settings integration.runsettings --results-directory _out/testcontainers/reversegeo --report-trx",
     "test:integration": "dotnet test --settings integration.runsettings --filter \"TestCategory=Integration\"",
     "start": "dotnet run --project src/ImmichReverseGeo.Web",
     "docker:build": "docker compose -f docker-compose.local.yml build --no-cache",

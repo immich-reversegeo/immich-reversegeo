@@ -164,4 +164,4 @@ Reader features use content tabs, collapsible details, and selectively enlarged 
 
 Public pages should have concise `description` front matter for link previews. The `social` and `llmstxt` features are provided by Zensical; generated cards and Markdown exports stay under `_out/website`. Add new guides to the `llmstxt.sections` list in `mkdocs.yml` when they should be exported and offer Copy as Markdown.
 
-For opt-in checks against real pinned Immich database schemas, see [Live Immich database checks](./docs/maintainer/immich-db-testing.md). CI compiles this tooling; live checks require local Docker and dedicated synthetic fixtures.
+For automated checks against real pinned Immich database schemas, run `npm run test:database` with Docker running. Testcontainers creates and removes isolated synthetic Immich stacks; CI runs the same suite separately from the fast tests. See [Live Immich database checks](./docs/maintainer/immich-db-testing.md) for details and the persistent Compose workflow for manual inspection.

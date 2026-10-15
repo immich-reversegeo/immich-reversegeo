@@ -41,27 +41,27 @@ internal static class Program
         }
     }
 
-    private static async Task RunAsync(Target target, string directory)
+    internal static async Task RunAsync(Target target, string directory, string? databasePassword = null)
     {
         using var http = new HttpClient
         {
-            BaseAddress = new Uri($"http://127.0.0.1:{target.ApiPort}"),
+            BaseAddress = new UriBuilder("http", target.Host, target.ApiPort).Uri,
             Timeout = TimeSpan.FromSeconds(30)
         };
         var version = await http.GetFromJsonAsync<JsonElement>("/api/server/version");
         var actual = $"{version.GetProperty("major")}.{version.GetProperty("minor")}.{version.GetProperty("patch")}";
         Require(actual == target.Version, "Fixture server version does not match the pinned target.");
-        var environment = File.ReadAllLines(Path.Combine(directory, $"{target.Name}.env"));
-        var password = environment.Single(line => line.StartsWith("DB_PASSWORD=", StringComparison.Ordinal))["DB_PASSWORD=".Length..];
+        var password = databasePassword ?? File.ReadAllLines(Path.Combine(directory, $"{target.Name}.env"))
+            .Single(line => line.StartsWith("DB_PASSWORD=", StringComparison.Ordinal))["DB_PASSWORD=".Length..];
         var connectionString = new NpgsqlConnectionStringBuilder
         {
-            Host = "127.0.0.1", Port = target.DbPort, Database = "immich", Username = "postgres",
+            Host = target.Host, Port = target.DbPort, Database = "immich", Username = "postgres",
             Password = password, Timeout = 10, Pooling = false
         }.ConnectionString;
         await using var dataSource = NpgsqlDataSource.Create(connectionString);
         await using var connection = await dataSource.OpenConnectionAsync();
         var marker = await ScalarAsync<string>(connection, "SELECT name FROM immich_reversegeo_fixture.guard");
-        Require(marker == $"immich-reversegeo-db-{target.Name}", "Database is not the dedicated fixture database; refusing all writes.");
+        Require(marker == (target.GuardName ?? $"immich-reversegeo-db-{target.Name}"), "Database is not the dedicated fixture database; refusing all writes.");
 
         var statePath = Path.Combine(directory, $"{target.Name}-account.json");
         var state = File.Exists(statePath)
@@ -170,11 +170,9 @@ internal static class Program
         var scans = new SavedLocationPreviewRepository(managementDir);
         var journal = new LocationChangeRepository(managementDir);
         var management = new LocationManagementService(scans, journal, repository, NullLogger<LocationManagementService>.Instance);
-        var scanId = await scans.CreateAsync(LocationPreviewSelection.Create(LocationPreviewScope.AssetIds, ids[0].ToString()), new());
         var expectedLocation = new GeoResult("Switzerland", "Zürich", "O'Malley");
         var exactProposal = new GeoResult("France", null, "Reviewed city");
-        await scans.AppendAsync(scanId, new(new(ids[0], 47.3769, 8.5417, expectedLocation), exactProposal));
-        await scans.SetStatusAsync(scanId, "Complete");
+        var scanId = await CreateManagementScanAsync();
         var operation = await management.CreateApplyAsync(scanId, [ids[0]]);
         await management.RunAsync(operation, false);
         Check(await LocationAsync(ids[0]) == "Reviewed city||France", "selected apply uses exact reviewed values");
@@ -194,14 +192,14 @@ internal static class Program
         await journal.QueueUndoAsync(operation, [ids[0]]);
         await management.RunAsync(operation, true);
         Check(await LocationAsync(ids[0]) == "O'Malley|Zürich|Switzerland", "guarded undo restores exact previous names");
-        var reapplied = await management.CreateApplyAsync(scanId, [ids[0]]);
+        var reapplied = await management.CreateApplyAsync(await CreateManagementScanAsync(), [ids[0]]);
         await management.RunAsync(reapplied, false);
         await repository.WriteLocationAsync(ids[0], exactProposal); // Same text, newer metadata revision.
         await journal.QueueUndoAsync(reapplied, [ids[0]]);
         await management.RunAsync(reapplied, true);
         Check((await journal.GetItemsAsync(reapplied)).Single().UndoStatus == LocationUndoStatus.Skipped,
             "undo does not overwrite a later metadata revision with identical location names");
-        var stale = await management.CreateApplyAsync(scanId, [ids[0]]);
+        var stale = await management.CreateApplyAsync(await CreateManagementScanAsync(), [ids[0]]);
         await management.RunAsync(stale, false);
         Check((await journal.GetItemsAsync(stale)).Single().ApplyStatus == LocationChangeStatus.Skipped, "stale saved scan skips newer names");
         await repository.WriteLocationAsync(ids[0], expectedLocation);
@@ -241,6 +239,14 @@ internal static class Program
         Console.WriteLine($"Immich {target.Version}: PASS - {checks.Count} live database checks.");
 
         Task SaveStateAsync() => File.WriteAllTextAsync(statePath, JsonSerializer.Serialize(state, JsonOptions));
+        async Task<Guid> CreateManagementScanAsync()
+        {
+            // Each scenario needs an unattempted scan, including the intentionally stale snapshot.
+            var id = await scans.CreateAsync(LocationPreviewSelection.Create(LocationPreviewScope.AssetIds, ids[0].ToString()), new());
+            await scans.AppendAsync(id, new(new(ids[0], 47.3769, 8.5417, expectedLocation), exactProposal));
+            await scans.SetStatusAsync(id, "Complete");
+            return id;
+        }
         // Immich triggers maintain revision IDs and timestamps after any EXIF update.
         Task<string> ExifSnapshotAsync(Guid id) => ScalarAsync<string>(connection,
             "SELECT (to_jsonb(e) - ARRAY['city','state','country','updatedAt','updateId'])::text FROM asset_exif e WHERE \"assetId\"=@id", ("id", id));
@@ -332,7 +338,8 @@ internal static class Program
         }
     }
 
-    private sealed record Target(string Name, string Version, int ApiPort, int DbPort);
+    internal sealed record Target(string Name, string Version, int ApiPort, int DbPort,
+        string Host = "127.0.0.1", string? GuardName = null);
     private sealed class FixtureState
     {
         public string Password { get; set; } = Guid.NewGuid().ToString("N") + "Aa1!";

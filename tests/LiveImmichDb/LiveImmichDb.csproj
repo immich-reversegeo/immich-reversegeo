@@ -6,6 +6,7 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
   <ItemGroup>
+    <InternalsVisibleTo Include="ImmichReverseGeo.Database.Tests" />
     <ProjectReference Include="../../src/ImmichReverseGeo.Web/ImmichReverseGeo.Web.csproj" />
   </ItemGroup>
 </Project>

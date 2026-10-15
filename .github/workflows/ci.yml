@@ -68,9 +68,41 @@ jobs:
       - name: Build Docker image
         run: docker build -f src/ImmichReverseGeo.Web/Dockerfile -t immich-reversegeo:test .
 
+  database:
+    name: Immich database contracts
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          lfs: true
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Test disposable Immich stacks
+        run: npm run test:database -- --configuration Release
+
+      - name: Upload database test results
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: immich-database-contracts
+          path: |
+            _out/testcontainers/reversegeo/**/*.trx
+            _out/testcontainers/reversegeo/**/*-results.json
+            _out/testcontainers/reversegeo/**/*-database.log
+            _out/testcontainers/reversegeo/**/*-redis.log
+            _out/testcontainers/reversegeo/**/*-server.log
+          include-hidden-files: true
+          if-no-files-found: ignore
+
   publish:
     name: Publish validated master image
-    needs: app
+    needs: [app, database]
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     permissions:
       contents: read
