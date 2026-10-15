@@ -6,6 +6,10 @@ For a shorter user-facing summary, see [docs/website/changelog.md](./docs/websit
 
 ## Unreleased
 
+- Keep Lookup's write eligibility aligned with processing after mandatory Overture cache preparation fails: show an incomplete result instead of a writable country-name city fallback. Add desktop/mobile browser E2E coverage of language settings, the production Parquet-to-SQLite exporter, correction previews, PostgreSQL writes, cache reuse, failed upgrades, and retry.
+
+- Add `processing.locationNames` with English (existing default), source-primary, and preferred-language policies. Retain primary/common names in Overture cache format 2 and parent hierarchies; choose labels at lookup time across Lookup, previews, and processing. Localize available country names only for the matched country identity. Preserve GADM, bundled-airport, and live Places naming. Older administrative caches rebuild on demand once; switching language afterward reuses the cache and does not rewrite existing Immich metadata.
+
 ## 0.2.0 — 2026-10-14
 
 - Automatically refresh outdated Overture administrative caches to the latest discovered release on use. Preserve a compatible previous cache if refresh fails, retry after one hour, and share release discovery across a processing pass or location scan.

@@ -131,6 +131,23 @@ The fallback uses the nearest airport represented by a valid point within 100 m.
 
 Proximity does not confirm the photo was taken on airport grounds. A point may be far from the terminal, so some airport photos still will not match. Missing, invalid, and line geometries do not qualify. Test airport and nearby non-airport photos in Lookup first; it labels this result as an unconfirmed point-only proximity fallback. Review proposed corrections in [Location Management](./using-the-app.md#location-management) before applying them.
 
+### Location name language
+
+Under **Settings → Processing**, choose **Location name language**:
+
+- **English (default)** prefers an available English name, then the source's primary name. Existing settings keep this behavior.
+- **Local / source name** prefers the primary name supplied by Overture, then English. This can restore names such as **Bayern** instead of **Bavaria**. The primary name is a source choice; multilingual areas do not necessarily have one universally preferred local name.
+- **Preferred language** lets you search by language name or code, such as French (`fr`). Suggestions show the main languages. You can still enter a regional or script code manually. It tries your language code, then broader forms of that code, then the primary name, then English. For example, `fr-CA` tries `fr-CA`, then `fr`. Other examples include `de`, `ja`, and `zh-Hant`. The language list does not guarantee translated names; availability varies by place. Save your choice and test known coordinates in Lookup before processing.
+
+Save the setting, test familiar coordinates in **Lookup**, then use **Location Management → Scan & Review** to compare existing names and apply reviewed changes to selected assets. Changing the language does not rewrite existing Immich metadata. A processing run or preview already in progress keeps its starting settings.
+
+The preference applies to Overture city and state names, including names obtained from parent areas. Local and preferred-language modes also use available Overture country names for the already resolved country or territory. If none is available, the bundled country name remains. The English default keeps the bundled country name. Country codes and geographic matching do not change.
+
+Translations depend on the source data. Missing translations fall back independently for each name, so a result can contain more than one language. GADM administrative names, bundled airport names, and optional Nearby Places suggestions keep their existing source naming behavior. The setting does not change the app's interface language or create missing translations.
+
+Older Overture administrative caches rebuild once when next needed to retain alternate names. The first lookup, preview, or processing request waits for that download. After rebuilding, switching language does not require another download. Cache rebuilding alone does not update Immich metadata.
+
+
 ### Low-memory mode
 
 Normal mode uses compact boundary storage automatically, with full coordinate precision. No extra setting or cache download is needed for this reduction.

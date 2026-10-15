@@ -146,6 +146,7 @@ public class ConfigService(ILogger<ConfigService> logger, string? configDir = nu
     {
         config.Schedule ??= new ScheduleConfig();
         config.Processing ??= new ProcessingConfig();
+        config.Processing.LocationNames ??= new LocationNameOptions();
         config.Processing.CityResolver ??= new CityResolverConfig();
         config.Processing.CityResolver.DefaultProfile ??= CityResolverProfile.CreateEmpty();
         config.Processing.CityResolver.CountryOverrides ??= new(StringComparer.OrdinalIgnoreCase);

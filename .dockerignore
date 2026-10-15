@@ -13,6 +13,7 @@
 .cache/
 _out/
 localdata/
+.local/
 reversegeo/
 src/ImmichReverseGeo.Web/localdata/
 tests/

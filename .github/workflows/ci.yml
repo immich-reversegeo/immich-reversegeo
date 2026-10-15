@@ -100,9 +100,47 @@ jobs:
           include-hidden-files: true
           if-no-files-found: ignore
 
+  e2e:
+    name: Browser language workflows
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v7
+        with:
+          lfs: true
+
+      - name: Setup .NET
+        uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: 10.0.x
+
+      - name: Build browser tests
+        run: dotnet build tests/ImmichReverseGeo.E2E.Tests/ImmichReverseGeo.E2E.Tests.csproj --configuration Release
+
+      - name: Install Chromium
+        run: pwsh tests/ImmichReverseGeo.E2E.Tests/bin/Release/net10.0/playwright.ps1 install --with-deps chromium
+        env:
+          PLAYWRIGHT_SKIP_BROWSER_GC: '1'
+
+      - name: Test language workflows
+        run: npm run test:e2e -- --configuration Release --no-build
+
+      - name: Upload browser test evidence
+        if: always()
+        uses: actions/upload-artifact@v7
+        with:
+          name: language-e2e
+          path: |
+            _out/language-e2e/**/*.trx
+            _out/language-e2e/**/*.png
+            _out/language-e2e/**/trace.zip
+          include-hidden-files: true
+          if-no-files-found: ignore
+
   publish:
     name: Publish validated master image
-    needs: [app, database]
+    needs: [app, database, e2e]
     if: github.event_name == 'push' && github.ref == 'refs/heads/master'
     permissions:
       contents: read

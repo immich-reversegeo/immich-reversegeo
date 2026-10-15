@@ -36,7 +36,8 @@ public sealed class OvertureCacheQuery : IDisposable
         var divisionUrl = releaseUrl.Replace("type=division_area/", "type=division/", StringComparison.Ordinal);
         var filter = OvertureCountrySourceCodes.BuildCountryFilter(alpha2);
         Copy(1, "Reading country divisions and names", $"""
-            SELECT id, hierarchies,
+            SELECT id, hierarchies, country,
+                struct_pack("primary" := names.primary, common := names.common) AS names,
                 COALESCE(NULLIF(trim(names.common['en']), ''), NULLIF(trim(names.primary), '')) AS name
             FROM read_parquet({Literal(divisionUrl)}, hive_partitioning = 1)
             WHERE {filter}
@@ -50,7 +51,9 @@ public sealed class OvertureCacheQuery : IDisposable
                 SELECT to_json(list(struct_pack(
                     division_id := entry.division_id,
                     subtype := entry.subtype,
-                    name := COALESCE(parent.name, entry.name)
+                    name := COALESCE(parent.name, entry.name),
+                    names := parent.names,
+                    country := parent.country
                 ) ORDER BY position))
                 FROM UNNEST(d.hierarchies[1]) WITH ORDINALITY AS ancestors(entry, position)
                 LEFT JOIN read_parquet({Literal(_names)}) parent ON parent.id = entry.division_id
@@ -64,7 +67,7 @@ public sealed class OvertureCacheQuery : IDisposable
     }
 
     public string BuildResultQuery() => $"""
-        SELECT a.*, h.hierarchy_json
+        SELECT a.* EXCLUDE (names_json), h.hierarchy_json, a.names_json
         FROM read_parquet({Literal(_areas)}) a
         LEFT JOIN read_parquet({Literal(_hierarchies)}) h ON a.division_id = h.id
         """;
@@ -75,7 +78,8 @@ public sealed class OvertureCacheQuery : IDisposable
             COALESCE(is_land, true) AS is_land, COALESCE(is_territorial, false) AS is_territorial,
             ST_AsWKB(geometry) AS geom_wkb,
             bbox.xmin AS bbox_xmin, bbox.ymin AS bbox_ymin,
-            bbox.xmax AS bbox_xmax, bbox.ymax AS bbox_ymax, division_id{(includeHierarchy ? ", hierarchy_json" : "")}
+            bbox.xmax AS bbox_xmax, bbox.ymax AS bbox_ymax, division_id{(includeHierarchy ? ", hierarchy_json" : "")},
+            to_json(struct_pack("primary" := names.primary, common := names.common)) AS names_json
         FROM {source}
         """;
 

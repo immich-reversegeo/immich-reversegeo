@@ -36,6 +36,7 @@ public class ProcessingConfig
     public bool PreferGadmAdministrativeAreas { get; set; } = false;
     public bool UseGadmTerritoryFallbacks { get; set; } = true;
     public CityResolverConfig CityResolver { get; set; } = new();
+    public LocationNameOptions LocationNames { get; set; } = new();
     public bool VerboseLogging { get; set; } = false;
 }
 

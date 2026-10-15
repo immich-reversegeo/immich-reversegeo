@@ -42,13 +42,15 @@ public record OvertureDivisionCandidateDiagnostic(
     string Decision,
     string? DivisionId = null,
     string? HierarchyJson = null,
-    bool? ExactGeometryContainsPoint = null)
+    bool? ExactGeometryContainsPoint = null,
+    string? NamesJson = null)
 {
     public bool IsExactGeometryMatch => GeometryContainsPoint && (ExactGeometryContainsPoint ?? true);
 }
 
-public record OvertureDivisionAncestor(string DivisionId, string Name, string SubType);
+public record OvertureDivisionAncestor(string DivisionId, string Name, string SubType, string? Country = null);
 
 public record OvertureAdministrativeResult(
     string? State,
-    string? City);
+    string? City,
+    string? Country = null);

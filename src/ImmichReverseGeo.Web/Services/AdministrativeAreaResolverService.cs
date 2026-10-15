@@ -71,7 +71,7 @@ public class AdministrativeAreaResolverService
 
         if (!config.UseGadmAdministrativeAreas || !config.PreferGadmAdministrativeAreas)
         {
-            overtureResult = await ResolveOvertureAsync(lat, lon, alpha2, iso3, cityResolverProfile, progress, ct);
+            overtureResult = await ResolveOvertureAsync(lat, lon, alpha2, iso3, cityResolverProfile, config.LocationNames, progress, ct);
         }
 
         // The secondary source can only contribute fields the preferred source did not resolve.
@@ -84,7 +84,7 @@ public class AdministrativeAreaResolverService
         if (config.UseGadmAdministrativeAreas && config.PreferGadmAdministrativeAreas
             && (gadmResult?.City is null || gadmResult.State is null))
         {
-            overtureResult ??= await ResolveOvertureAsync(lat, lon, alpha2, iso3, cityResolverProfile, progress, ct);
+            overtureResult ??= await ResolveOvertureAsync(lat, lon, alpha2, iso3, cityResolverProfile, config.LocationNames, progress, ct);
         }
 
         ct.ThrowIfCancellationRequested();
@@ -97,6 +97,7 @@ public class AdministrativeAreaResolverService
             gadmResult?.City,
             overtureResult?.City);
 
+        countryName = overtureResult?.Country ?? countryName;
         return new AdministrativeAreaResolution(
             iso3,
             alpha2,
@@ -112,6 +113,7 @@ public class AdministrativeAreaResolverService
         string? alpha2,
         string iso3,
         CityResolverProfile cityResolverProfile,
+        LocationNameOptions locationNames,
         IAdministrativeAreaResolutionProgress? progress,
         CancellationToken ct)
     {
@@ -135,7 +137,8 @@ public class AdministrativeAreaResolverService
             alpha2,
             iso3,
             cityResolverProfile,
-            ct);
+            ct,
+            locationNames);
     }
 
     private async Task<GadmAdministrativeResult?> ResolveGadmAsync(

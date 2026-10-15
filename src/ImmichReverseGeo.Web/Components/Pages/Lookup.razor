@@ -101,7 +101,7 @@
             </div>
             @if (_result.Iso3 is not null)
             {
-                <div class="result-row"><span class="result-key">Name</span><span class="result-val">@_result.CountryName</span></div>
+                <div class="result-row"><span class="result-key">Name</span><span class="result-val">@_result.CountryLookup?.CountryName</span></div>
                 <div class="result-row"><span class="result-key">ISO3</span><span class="result-val mono">@_result.Iso3</span></div>
                 <div class="result-row"><span class="result-key">Alpha-2</span><span class="result-val mono">@(_result.Alpha2 ?? "—")</span></div>
             }
@@ -560,6 +560,9 @@
 
         var cfg = await Config.GetConfigAsync();
         var cityResolverProfile = CityResolverCatalog.GetProfile(cfg.Processing.CityResolver, r.Iso3);
+        r.Trace.Add($"Location name language: {cfg.Processing.LocationNames.Mode}"
+            + (cfg.Processing.LocationNames.Mode == LocationNameOptions.Preferred
+                ? $" ({cfg.Processing.LocationNames.PreferredLanguage})" : string.Empty));
         r.CityResolverSummary = $"{string.Join(" > ", cityResolverProfile.PreferredSubtypes)} ({cityResolverProfile.TieBreakMode})";
         r.Trace.Add($"City resolver profile: {r.CityResolverSummary}");
 
@@ -583,10 +586,13 @@
         await ensureDivisionTask;
         await UpdateLookupStatusAsync("Querying cached Overture administrative areas...");
         r.OvertureDivisionDiagnostics = r.OvertureDivisionCacheReady
-            ? await OvertureDivisions.FindContainingDivisionAreasAsync(lat, lon, r.Alpha2, r.Iso3)
+            ? await OvertureDivisions.FindContainingDivisionAreasAsync(lat, lon, r.Alpha2, r.Iso3,
+                locationNames: cfg.Processing.LocationNames)
             : new OvertureDivisionLookupDiagnostics(null, [], null,
                 "Could not prepare the current Overture administrative cache. Check Lookup Trace and retry.");
         r.OvertureDivision = r.OvertureDivisionDiagnostics.BestMatch;
+        r.CountryName = OvertureNameLocalizer.SelectCountryName(r.OvertureDivisionDiagnostics,
+            r.Alpha2!, r.CountryName!, cfg.Processing.LocationNames);
         var overtureAdmin = OvertureDivisionsLogic.SelectAdministrativeAreas(r.OvertureDivisionDiagnostics.Candidates, cityResolverProfile);
         r.OvertureDivisionState = overtureAdmin.State;
         r.OvertureDivisionCity = overtureAdmin.City;
@@ -668,7 +674,9 @@
 
         r.FinalState = adminState;
         r.FinalStateSource = adminStateSource;
-        r.FinalCountrySource = r.CountryName is not null ? "Bundled Overture country divisions" : null;
+        r.FinalCountrySource = r.CountryName != countryLookup.CountryName
+            ? "Bundled Overture country identity; name from cached Overture divisions"
+            : r.CountryName is not null ? "Bundled Overture country divisions" : null;
         var adminResult = new GeoResult(r.CountryName, r.FinalState, adminCity);
         var allowPointOnly = r.AirportInfrastructureEnabled && cfg.Processing.UsePointOnlyAirportFallback;
         if (r.OvertureInfrastructureDiagnostics is not null)
@@ -699,6 +707,13 @@
                 : r.FinalState is not null
                     ? r.FinalStateSource
                     : r.FinalCountrySource;
+        if (!r.OvertureDivisionCacheReady)
+        {
+            // Processing cannot write a location when mandatory cache preparation fails.
+            r.FinalCity = null;
+            r.FinalCitySource = null;
+            r.Trace.Add("No location would be written: the required Overture administrative cache could not be prepared.");
+        }
         r.Trace.Add($"Final city decision: {r.FinalCity ?? "no result"}");
         await UpdateLookupStatusAsync("Lookup finished.");
 

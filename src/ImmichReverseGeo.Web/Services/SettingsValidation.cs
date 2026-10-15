@@ -36,6 +36,10 @@ public static class SettingsValidation
 
     public static string? GetError(AppConfig config, DateTime utcNow)
     {
+        if (config.Processing.LocationNames.ValidationError is { } languageError)
+        {
+            return languageError;
+        }
         if (config.Schedule.Enabled && NextRun(config.Schedule.Cron, utcNow) is null)
         {
             return "Enter a valid five-part cron expression with a future run. Schedule times use UTC.";
