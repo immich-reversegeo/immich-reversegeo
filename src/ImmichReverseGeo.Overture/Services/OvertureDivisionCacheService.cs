@@ -404,6 +404,8 @@ public class OvertureDivisionCacheService
             (phase, stage, snapshot) => ReportProgress(iso3, stage, phase: phase, query: snapshot));
         var areaCount = query.Prepare(releaseUrl, alpha2, ct);
         using var selectCmd = duck.CreateCommand();
+        // Avoid materializing all polygon results before the SQLite writer starts.
+        selectCmd.UseStreamingMode = true;
         selectCmd.CommandText = query.BuildResultQuery();
         using var cancellation = ct.Register(selectCmd.Cancel);
         ReportProgress(iso3, "Writing country cache", phase: 4, totalRows: areaCount);

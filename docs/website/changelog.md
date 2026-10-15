@@ -11,6 +11,8 @@ Technical implementation notes live in [CHANGELOG.md](https://github.com/immich-
 
 ## Unreleased
 
+- Reduce memory use while building Overture country caches, including the first processing pass or a cache refresh. Existing caches and location matching rules stay the same.
+
 - Lookup now reports an incomplete result when a required country cache cannot be prepared, instead of suggesting that a country-only fallback would be written. Retry after resolving the cache error.
 
 - Choose English, local/source names, or a preferred language in Settings. Lookup, correction previews, and processing use available Overture translations, including parent-area names. Older country caches rebuild once to retain alternate names. Existing Immich names stay unchanged until you apply reviewed changes or reprocess them. See [Location name language](configuration.md#location-name-language).

@@ -51,6 +51,8 @@ public static class OvertureDivisionsLogic
     }
 
     // Keep area containment and its default parent hierarchy in the same release.
+    // Build each hierarchy before joining polygons: correlating the aggregation with
+    // area rows makes DuckDB buffer geometry through its delimiter join.
     public static string BuildDivisionAreaSource(string releaseUrl, string? alpha2)
     {
         var divisionUrl = releaseUrl.Replace("type=division_area/", "type=division/", StringComparison.Ordinal);
@@ -60,25 +62,27 @@ public static class OvertureDivisionsLogic
         return $"""
             (
                 WITH division_names AS MATERIALIZED (
-                    SELECT id, hierarchies, country,
+                    SELECT id, hierarchies[1] AS hierarchy, country,
                         struct_pack("primary" := names.primary, common := names.common) AS names,
                         COALESCE(NULLIF(trim(names.common['en']), ''), NULLIF(trim(names.primary), '')) AS name
                     FROM read_parquet('{divisionUrl}', hive_partitioning = 1) {countryFilter}
-                )
-                SELECT a.*, (
-                    SELECT to_json(list(struct_pack(
+                ), division_hierarchies AS NOT MATERIALIZED (
+                    SELECT d.id, to_json(list(struct_pack(
                         division_id := entry.division_id,
                         subtype := entry.subtype,
                         name := COALESCE(parent.name, entry.name),
                         names := parent.names,
                         country := parent.country
-                    ) ORDER BY position))
-                    FROM UNNEST(d.hierarchies[1]) WITH ORDINALITY AS ancestors(entry, position)
+                    ) ORDER BY position)) AS hierarchy_json
+                    FROM division_names d,
+                        UNNEST(d.hierarchy) WITH ORDINALITY AS ancestors(entry, position)
                     LEFT JOIN division_names parent ON parent.id = entry.division_id
-                ) AS hierarchy_json
+                    GROUP BY d.id
+                )
+                SELECT a.*, h.hierarchy_json
                 FROM (SELECT * FROM read_parquet('{releaseUrl}', hive_partitioning = 1) {countryFilter}) a
-                LEFT JOIN division_names d
-                    ON a.division_id = d.id
+                LEFT JOIN division_hierarchies h
+                    ON a.division_id = h.id
             )
             """;
     }
