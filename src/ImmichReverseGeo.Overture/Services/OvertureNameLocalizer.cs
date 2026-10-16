@@ -1,4 +1,5 @@
 using System;
+using System.Collections.Generic;
 using System.Linq;
 using System.Text.Json;
 using System.Text.Json.Nodes;
@@ -58,12 +59,13 @@ public static class OvertureNameLocalizer
     }
 
     public static OvertureDivisionLookupDiagnostics Localize(
-        OvertureDivisionLookupDiagnostics diagnostics, LocationNameOptions? options)
+        OvertureDivisionLookupDiagnostics diagnostics, LocationNameOptions? options,
+        IReadOnlyDictionary<string, (string? NamesJson, string? Country)>? divisionNames = null)
     {
         var candidates = diagnostics.Candidates.Select(candidate => candidate with
         {
             Name = SelectName(candidate.NamesJson, candidate.Name, options),
-            HierarchyJson = LocalizeHierarchy(candidate.HierarchyJson, options)
+            HierarchyJson = LocalizeHierarchy(candidate.HierarchyJson, options, divisionNames)
         }).ToList();
         var best = diagnostics.BestMatch;
         return diagnostics with
@@ -104,7 +106,8 @@ public static class OvertureNameLocalizer
         return fallback;
     }
 
-    private static string? LocalizeHierarchy(string? hierarchy, LocationNameOptions? options)
+    private static string? LocalizeHierarchy(string? hierarchy, LocationNameOptions? options,
+        IReadOnlyDictionary<string, (string? NamesJson, string? Country)>? divisionNames)
     {
         if (string.IsNullOrWhiteSpace(hierarchy))
         {
@@ -118,9 +121,25 @@ public static class OvertureNameLocalizer
             }
             foreach (var entry in entries.OfType<JsonObject>())
             {
-                if (entry["name"] is JsonValue name && name.TryGetValue<string>(out var fallback))
+                string? fallback = null;
+                if (entry["name"] is JsonValue name && name.TryGetValue<string>(out var original))
                 {
-                    entry["name"] = SelectName(entry["names"]?.ToJsonString(), fallback, options);
+                    fallback = original;
+                }
+                var namesJson = entry["names"]?.ToJsonString();
+                if (divisionNames is not null && entry["division_id"] is JsonValue id
+                    && id.TryGetValue<string>(out var divisionId) && divisionNames.TryGetValue(divisionId, out var stored))
+                {
+                    namesJson = stored.NamesJson;
+                    entry["country"] = stored.Country;
+                }
+                if (fallback is not null || namesJson is not null)
+                {
+                    var localized = SelectName(namesJson, fallback ?? string.Empty, options);
+                    if (!string.IsNullOrWhiteSpace(localized))
+                    {
+                        entry["name"] = localized;
+                    }
                 }
             }
             return entries.ToJsonString();

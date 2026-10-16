@@ -140,7 +140,7 @@ public class CacheReadinessTests
         Execute(path, $"""
             CREATE TABLE {(gadm ? "gadm_area" : "division_area")} (id TEXT PRIMARY KEY);
             INSERT INTO {(gadm ? "gadm_area" : "division_area")} VALUES ('row');
-            CREATE TABLE _meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS division_name (id TEXT PRIMARY KEY, country TEXT, names_json TEXT); CREATE TABLE _meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
             INSERT INTO _meta VALUES ('release', '2026-09-23.1');
             INSERT INTO _meta VALUES ('cacheFormatVersion', '{OvertureDivisionCacheService.CacheFormatVersion}');
             """);

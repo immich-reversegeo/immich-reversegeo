@@ -277,7 +277,7 @@ public partial class AdministrativeAreaResolverTerritoryTests
             using var command = connection.CreateCommand();
             command.CommandText = """
                 CREATE TABLE division_area (id TEXT PRIMARY KEY, name TEXT NOT NULL, subtype TEXT NULL, class_name TEXT NULL, admin_level INTEGER NULL, country TEXT NULL, is_land INTEGER NOT NULL, is_territorial INTEGER NOT NULL, geom_wkb BLOB NOT NULL, bbox_xmin REAL NULL, bbox_ymin REAL NULL, bbox_xmax REAL NULL, bbox_ymax REAL NULL);
-                CREATE TABLE _meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                CREATE TABLE IF NOT EXISTS division_name (id TEXT PRIMARY KEY, country TEXT, names_json TEXT); CREATE TABLE _meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
                 INSERT INTO _meta VALUES ('release', 'test');
                 INSERT INTO _meta VALUES ('downloadedAt', '2026-08-19T00:00:00Z');
                 INSERT INTO division_area VALUES ('overture-state', 'Overture State', 'region', 'land', 1, $country, 1, 0, $geometry, $xmin, $ymin, $xmax, $ymax);

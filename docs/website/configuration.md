@@ -145,7 +145,7 @@ The preference applies to Overture city and state names, including names obtaine
 
 Translations depend on the source data. Missing translations fall back independently for each name, so a result can contain more than one language. GADM administrative names, bundled airport names, and optional Nearby Places suggestions keep their existing source naming behavior. The setting does not change the app's interface language or create missing translations.
 
-Older Overture administrative caches rebuild once when next needed to retain alternate names. The first lookup, preview, or processing request waits for that download. After rebuilding, switching language does not require another download. Cache rebuilding alone does not update Immich metadata.
+Existing Overture administrative caches rebuild once when next needed to use more compact storage for parent-area translations. All available languages remain in the cache. The first lookup, preview, or processing request waits for that download. After rebuilding, switching language does not require another download. Cache rebuilding alone does not update Immich metadata.
 
 
 ### Country cache preparation

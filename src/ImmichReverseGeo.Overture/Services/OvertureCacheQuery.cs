@@ -36,9 +36,9 @@ public sealed class OvertureCacheQuery : IDisposable
         var divisionUrl = releaseUrl.Replace("type=division_area/", "type=division/", StringComparison.Ordinal);
         var filter = OvertureCountrySourceCodes.BuildCountryFilter(alpha2);
         Copy(1, "Reading country divisions and names", $"""
-            SELECT id, hierarchies, country,
-                struct_pack("primary" := names.primary, common := names.common) AS names,
-                COALESCE(NULLIF(trim(names.common['en']), ''), NULLIF(trim(names.primary), '')) AS name
+            SELECT id, country,
+                to_json(struct_pack("primary" := names.primary, common := names.common)) AS names_json,
+                to_json(hierarchies[1]) AS hierarchy_json
             FROM read_parquet({Literal(divisionUrl)}, hive_partitioning = 1)
             WHERE {filter}
             """, _names, ct);
@@ -47,24 +47,16 @@ public sealed class OvertureCacheQuery : IDisposable
             WHERE {filter}
             """, _areas, ct);
         Copy(3, "Building parent hierarchies", $"""
-            SELECT d.id, (
-                SELECT to_json(list(struct_pack(
-                    division_id := entry.division_id,
-                    subtype := entry.subtype,
-                    name := COALESCE(parent.name, entry.name),
-                    names := parent.names,
-                    country := parent.country
-                ) ORDER BY position))
-                FROM UNNEST(d.hierarchies[1]) WITH ORDINALITY AS ancestors(entry, position)
-                LEFT JOIN read_parquet({Literal(_names)}) parent ON parent.id = entry.division_id
-            ) AS hierarchy_json
-            FROM read_parquet({Literal(_names)}) d
+            SELECT id, hierarchy_json FROM read_parquet({Literal(_names)})
             """, _hierarchies, ct);
         ct.ThrowIfCancellationRequested();
         using var count = _connection.CreateCommand();
         count.CommandText = $"SELECT count(*) FROM read_parquet({Literal(_areas)})";
         return Convert.ToInt64(count.ExecuteScalar(), CultureInfo.InvariantCulture);
     }
+
+    // Store each division's translations once; hierarchy entries only reference its ID.
+    public string BuildNamesQuery() => $"SELECT id, country, names_json FROM read_parquet({Literal(_names)})";
 
     public string BuildResultQuery() => $"""
         SELECT a.* EXCLUDE (names_json), h.hierarchy_json, a.names_json

@@ -60,7 +60,7 @@ public class OvertureHierarchyMemoryTests
             Assert.AreEqual("Area0", reader.GetString(0));
             CollectionAssert.AreEqual(geometry, (byte[])reader.GetValue(1));
             using var hierarchy = JsonDocument.Parse(reader.GetString(2));
-            Assert.AreEqual("English0", hierarchy.RootElement[0].GetProperty("name").GetString());
+            Assert.AreEqual("local0", hierarchy.RootElement[0].GetProperty("name").GetString());
         }
         finally
         {
