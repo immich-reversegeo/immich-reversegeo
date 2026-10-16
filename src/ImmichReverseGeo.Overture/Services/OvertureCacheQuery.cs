@@ -7,7 +7,7 @@ using Microsoft.Extensions.Logging;
 
 namespace ImmichReverseGeo.Overture.Services;
 
-/// <summary>Stages a single country's remote inputs on disk, then builds hierarchies locally.</summary>
+/// <summary>Stages a single country's remote inputs on disk for streaming cache export.</summary>
 public sealed class OvertureCacheQuery : IDisposable
 {
     private readonly DuckDBConnection _connection;
@@ -16,7 +16,6 @@ public sealed class OvertureCacheQuery : IDisposable
     private readonly string _directory;
     private readonly string _names;
     private readonly string _areas;
-    private readonly string _hierarchies;
 
     public OvertureCacheQuery(DuckDBConnection connection, string dataDir, ILogger logger,
         Action<int, string, DuckDbQueryProgressSnapshot?> report)
@@ -28,7 +27,6 @@ public sealed class OvertureCacheQuery : IDisposable
         Directory.CreateDirectory(_directory);
         _names = Path.Combine(_directory, "names.parquet");
         _areas = Path.Combine(_directory, "areas.parquet");
-        _hierarchies = Path.Combine(_directory, "hierarchies.parquet");
     }
 
     public long Prepare(string releaseUrl, string alpha2, CancellationToken ct = default)
@@ -46,22 +44,32 @@ public sealed class OvertureCacheQuery : IDisposable
             {BuildAreaProjection($"read_parquet({Literal(releaseUrl)}, hive_partitioning = 1)")}
             WHERE {filter}
             """, _areas, ct);
-        Copy(3, "Building parent hierarchies", $"""
-            SELECT id, hierarchy_json FROM read_parquet({Literal(_names)})
-            """, _hierarchies, ct);
         ct.ThrowIfCancellationRequested();
         using var count = _connection.CreateCommand();
         count.CommandText = $"SELECT count(*) FROM read_parquet({Literal(_areas)})";
         return Convert.ToInt64(count.ExecuteScalar(), CultureInfo.InvariantCulture);
     }
 
-    // Store each division's translations once; hierarchy entries only reference its ID.
-    public string BuildNamesQuery() => $"SELECT id, country, names_json FROM read_parquet({Literal(_names)})";
+    // Only hierarchies attached to cached areas can supply names at lookup time.
+    // Semi joins retain parent-only divisions without multiplying shared references.
+    public string BuildNamesQuery() => $"""
+        SELECT n.id, n.country, n.names_json
+        FROM read_parquet({Literal(_names)}) n
+        SEMI JOIN (
+            SELECT json_extract_string(entry.value, '$.division_id') AS id
+            FROM (
+                SELECT h.hierarchy_json
+                FROM read_parquet({Literal(_names)}) h
+                SEMI JOIN read_parquet({Literal(_areas)}) a ON h.id = a.division_id
+            ) referenced_hierarchies,
+            LATERAL json_each(referenced_hierarchies.hierarchy_json) entry
+        ) refs ON n.id = refs.id
+        """;
 
     public string BuildResultQuery() => $"""
         SELECT a.* EXCLUDE (names_json), h.hierarchy_json, a.names_json
         FROM read_parquet({Literal(_areas)}) a
-        LEFT JOIN read_parquet({Literal(_hierarchies)}) h ON a.division_id = h.id
+        LEFT JOIN read_parquet({Literal(_names)}) h ON a.division_id = h.id
         """;
 
     public static string BuildAreaProjection(string source, bool includeHierarchy = false) => $"""
@@ -93,7 +101,7 @@ public sealed class OvertureCacheQuery : IDisposable
 
     public void Dispose()
     {
-        foreach (var path in new[] { _names, _areas, _hierarchies })
+        foreach (var path in new[] { _names, _areas })
         {
             try
             {

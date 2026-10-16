@@ -36,13 +36,16 @@ public class NormalizedDivisionNamesTests
                             'subtype': CASE WHEN j=0 THEN 'country' ELSE 'region' END, 'name': 'Parent' || j}),
                             [{'division_id': 'd' || i, 'subtype': 'locality', 'name': 'Local' || i}])] AS hierarchies
                         FROM range(10000) t(i);
+                    INSERT INTO divisions SELECT 'unused', 'FR', names,
+                        [[{'division_id': 'unused', 'subtype': 'locality', 'name': 'Unused'}]]
+                        FROM divisions LIMIT 1;
                     COPY divisions TO '{{{source}}}/type=division/rows.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048);
                     COPY (SELECT id || '-area' AS id, country, names, id AS division_id, 'locality' AS subtype,
                         NULL::VARCHAR AS class, 8 AS admin_level, true AS is_land, false AS is_territorial,
                         from_hex('0103000000010000000500000000000000000000000000000000000000000000000000F03F0000000000000000000000000000F03F000000000000F03F0000000000000000000000000000F03F00000000000000000000000000000000') AS geometry,
                         {'xmin': CASE WHEN id='d9999' THEN 0 ELSE 10 END::DOUBLE, 'ymin': 0::DOUBLE,
                          'xmax': CASE WHEN id='d9999' THEN 1 ELSE 11 END::DOUBLE, 'ymax': 1::DOUBLE} AS bbox
-                        FROM divisions) TO '{{{source}}}/type=division_area/rows.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048);
+                        FROM divisions WHERE id NOT IN ('unused', 'd8')) TO '{{{source}}}/type=division_area/rows.parquet' (FORMAT PARQUET, ROW_GROUP_SIZE 2048);
                     """;
                 command.ExecuteNonQuery();
             }
@@ -59,8 +62,12 @@ public class NormalizedDivisionNamesTests
                 using var command = connection.CreateCommand();
                 command.CommandText = "SELECT count(*) FROM division_name";
                 Assert.AreEqual(10000L, command.ExecuteScalar());
+                command.CommandText = "SELECT count(*) FROM division_name WHERE id='unused'";
+                Assert.AreEqual(0L, command.ExecuteScalar(), "Do not import an unrelated division's self-referencing hierarchy.");
+                command.CommandText = "SELECT count(*) FROM division_name WHERE id='d8'";
+                Assert.AreEqual(1L, command.ExecuteScalar(), "Retain referenced parents even when they have no polygon.");
                 command.CommandText = "SELECT count(*) FROM division_area";
-                Assert.AreEqual(10000L, command.ExecuteScalar());
+                Assert.AreEqual(9999L, command.ExecuteScalar());
                 command.CommandText = "SELECT hierarchy_json FROM division_area WHERE id='d9999-area'";
                 using var hierarchy = JsonDocument.Parse((string)command.ExecuteScalar()!);
                 Assert.AreEqual(10, hierarchy.RootElement.GetArrayLength());
