@@ -11,6 +11,8 @@ Technical implementation notes live in [CHANGELOG.md](https://github.com/immich-
 
 ## Unreleased
 
+- Country caches now download and build one at a time across Overture and GADM in every memory mode. Failed builds wait five minutes before retrying, avoiding repeated downloads for each waiting photo. Existing ready caches remain usable.
+
 - Reduce memory use while building Overture country caches, including the first processing pass or a cache refresh. Existing caches and location matching rules stay the same.
 
 - Lookup now reports an incomplete result when a required country cache cannot be prepared, instead of suggesting that a country-only fallback would be written. Retry after resolving the cache error.

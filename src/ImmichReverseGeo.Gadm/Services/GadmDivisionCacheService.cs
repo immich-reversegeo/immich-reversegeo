@@ -16,6 +16,8 @@ public class GadmDivisionCacheService
     private readonly ILogger<GadmDivisionCacheService> _logger;
     private readonly string _dataDir;
     private readonly MemoryResourcePolicy _memoryPolicy;
+    private readonly CacheBuildRetryPolicy _buildRetries = new();
+    protected virtual DateTimeOffset UtcNow => DateTimeOffset.UtcNow;
     private readonly ConcurrentDictionary<string, Lazy<Task>> _inflightDownloads = new();
     private readonly ConcurrentDictionary<string, CacheFileStamp> _readyCaches = new();
     private readonly ConcurrentDictionary<string, CacheDownloadProgress> _downloadProgress = new();
@@ -113,6 +115,7 @@ public class GadmDivisionCacheService
 
     public void DeleteFile(string iso3)
     {
+        _buildRetries.Clear(iso3);
         _readyCaches.TryRemove(iso3, out _);
         DeleteFileAndTemps(GetDbPath(iso3), iso3);
     }
@@ -124,17 +127,14 @@ public class GadmDivisionCacheService
             return (Task.CompletedTask, GadmDivisionEnsureResult.AlreadyReady);
         }
 
-        var startedNew = false;
-        var lazyDownload = _inflightDownloads.GetOrAdd(
-            iso3,
-            key =>
-            {
-                startedNew = true;
-                return new Lazy<Task>(
-                    () => DownloadDataInternalAsync(key, ct),
-                    LazyThreadSafetyMode.ExecutionAndPublication);
-            });
+        if (_buildRetries.GetDeferredFailure(iso3, UtcNow) is { } deferred)
+        {
+            return (deferred, GadmDivisionEnsureResult.RetryDeferred);
+        }
 
+        var candidate = new Lazy<Task>(() => PrepareDataAsync(iso3, ct), LazyThreadSafetyMode.ExecutionAndPublication);
+        var lazyDownload = _inflightDownloads.GetOrAdd(iso3, candidate);
+        var startedNew = ReferenceEquals(candidate, lazyDownload);
         var result = startedNew
             ? GadmDivisionEnsureResult.StartedDownload
             : GadmDivisionEnsureResult.AwaitedExistingDownload;
@@ -146,17 +146,34 @@ public class GadmDivisionCacheService
     {
         var (downloadTask, result) = GetOrStartDownload(iso3, ct);
 
+        await downloadTask.WaitAsync(ct);
+        return result;
+    }
+
+    private async Task PrepareDataAsync(string iso3, CancellationToken ct)
+    {
+        var deferred = _buildRetries.GetDeferredFailure(iso3, UtcNow);
         try
         {
-            await downloadTask.WaitAsync(ct);
-            return result;
+            if (deferred is not null)
+            {
+                await deferred;
+            }
+            await DownloadDataInternalAsync(iso3, ct);
+            _buildRetries.Clear(iso3);
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex) when (deferred is null)
+        {
+            _buildRetries.RecordFailure(iso3, UtcNow, ex);
+            throw;
         }
         finally
         {
-            if (downloadTask.IsCompleted)
-            {
-                _inflightDownloads.TryRemove(iso3, out _);
-            }
+            _inflightDownloads.TryRemove(iso3, out _);
         }
     }
 
@@ -187,6 +204,8 @@ public class GadmDivisionCacheService
 
         try
         {
+            ReportProgress(iso3, "Waiting for another country cache build to finish");
+            using var build = await _memoryPolicy.EnterCacheBuildAsync(ct);
             ReportProgress(iso3, "Waiting for a data processing slot");
             using var budget = await _memoryPolicy.EnterAsync(ct);
             await DownloadFileAsync(GadmDivisionsLogic.BuildCountryGeoPackageUrl(gadmCode), tmpDownloadPath, ct, (bytes, total) => ReportProgress(iso3, "Downloading GADM file", bytes, total));
@@ -219,7 +238,6 @@ public class GadmDivisionCacheService
         {
             TryDelete(tmpDownloadPath);
             _downloadProgress.TryRemove(iso3, out _);
-            _inflightDownloads.TryRemove(iso3, out _);
         }
     }
 
@@ -318,7 +336,7 @@ public class GadmDivisionCacheService
         }
     }
 
-    private static async Task DownloadFileAsync(string url, string destinationPath, CancellationToken ct, Action<long, long?> report)
+    protected virtual async Task DownloadFileAsync(string url, string destinationPath, CancellationToken ct, Action<long, long?> report)
     {
         report(0, null);
         using var http = new HttpClient();
@@ -349,7 +367,8 @@ public enum GadmDivisionEnsureResult
 {
     AlreadyReady,
     AwaitedExistingDownload,
-    StartedDownload
+    StartedDownload,
+    RetryDeferred
 }
 
 public record GadmDivisionStatus(long RowCount, DateTime? DownloadedAt, string? Version, long? FileSizeBytes);

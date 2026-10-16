@@ -148,6 +148,14 @@ Translations depend on the source data. Missing translations fall back independe
 Older Overture administrative caches rebuild once when next needed to retain alternate names. The first lookup, preview, or processing request waits for that download. After rebuilding, switching language does not require another download. Cache rebuilding alone does not update Immich metadata.
 
 
+### Country cache preparation
+
+Only one country cache is downloaded and built at a time across Overture and GADM, in every memory mode. Processing, Lookup, and correction scans share this queue. Assets using ready caches can continue while another country waits.
+
+Open **Country Caches** to see which build is active and which countries are waiting. A single build can still exceed available memory; the queue is not a total RAM cap. Check the active step and any error before changing DuckDB threads or enabling Low-memory mode.
+
+If an initial download or an incompatible-cache rebuild fails, that country waits five minutes before another request can try again. The error includes the retry time and the original failure. Cancellation does not start this cooldown. Failed refreshes with a usable older Overture cache keep the existing one-hour retry delay. Explicitly deleting/re-downloading a cache clears its cooldown; restarting the app also clears these in-memory delays.
+
 ### Low-memory mode
 
 Normal mode uses compact boundary storage automatically, with full coordinate precision. No extra setting or cache download is needed for this reduction.

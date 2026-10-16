@@ -249,6 +249,7 @@ else
             <span class="hint">Start with 4 and increase carefully. More workers increase load on the host and database.</span>
         </div>
     </details>
+    <p class="hint">Country cache downloads and builds always run one at a time across Overture and GADM. Assets using ready caches can still run in parallel.</p>
     <p class="hint">Effective limits for the next run: @_cfg.Processing.EffectiveBatchSize assets per batch, @_cfg.Processing.EffectiveParallelism worker(s). @(_cfg.Processing.LowMemoryMode ? "Low-memory mode overrides your saved limits." : "Saved limits apply after saving.")</p>
     <div class="form-group">
         <label><input type="checkbox" @bind="_cfg.Processing.UseAirportInfrastructure" /> Use airport names when photos match mapped airport boundaries</label>

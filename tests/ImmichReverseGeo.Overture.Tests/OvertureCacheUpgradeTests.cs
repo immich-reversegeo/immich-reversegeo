@@ -75,7 +75,7 @@ public class OvertureCacheUpgradeTests
     [DataRow("invalid")]
     [DataRow("old-format")]
     [DataRow("empty")]
-    public async Task FailedReplacement_PreservesOriginalAndCanRetry(string outcome)
+    public async Task FailedReplacement_PreservesOriginalAndCanRetryAfterCooldown(string outcome)
     {
         using var fixture = new CacheFixture(null);
         var original = File.ReadAllBytes(fixture.Path);
@@ -97,6 +97,9 @@ public class OvertureCacheUpgradeTests
         CollectionAssert.AreEqual(original, File.ReadAllBytes(fixture.Path));
         Assert.IsFalse(fixture.Service.HasData("ARE"));
         Assert.AreEqual(0, Directory.GetFiles(System.IO.Path.GetDirectoryName(fixture.Path)!, "*.tmp").Length);
+        await Assert.ThrowsExactlyAsync<InvalidOperationException>(() => fixture.Service.EnsureDataAsync("ARE"));
+        Assert.AreEqual(1, fixture.Service.Exports);
+        fixture.Service.Now += ImmichReverseGeo.Core.Models.CacheBuildRetryPolicy.RetryDelay;
         fixture.Service.Export = (path, _) =>
         {
             WriteCache(path, OvertureDivisionCacheService.CacheFormatVersion, "Business Bay");
@@ -176,6 +179,8 @@ public class OvertureCacheUpgradeTests
     private sealed class TestCacheService(string root)
         : OvertureDivisionCacheService(NullLogger<OvertureDivisionCacheService>.Instance, root, _ => "AE")
     {
+        public DateTimeOffset Now = new(2026, 10, 16, 0, 0, 0, TimeSpan.Zero);
+        protected override DateTimeOffset UtcNow => Now;
         public int Exports;
         public Func<string, CancellationToken, long> Export { get; set; } = (_, _) => throw new InvalidOperationException("Unexpected export");
 

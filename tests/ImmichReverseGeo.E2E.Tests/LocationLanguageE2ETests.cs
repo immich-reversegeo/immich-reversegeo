@@ -173,9 +173,11 @@ public sealed class LocationLanguageE2ETests
             await page.GetByRole(AriaRole.Button, new() { Name = "Run Now", Exact = true }).ClickAsync();
             await Expect(page.GetByText("Run ended: CompletedWithErrors.", new() { Exact = false })).ToBeVisibleAsync();
             Assert.AreEqual(new GeoResult(null, null, null), await fixture.ReadLocationAsync(LanguageFixture.MissingAsset));
+            Assert.AreEqual(3, cache.Exports, "Processing must reuse the failed lookup cooldown without another export.");
+            cache.Now += CacheBuildRetryPolicy.RetryDelay;
             cache.FailExport = false;
             await LookupAsync(page, "München", "Bayern", "Deutschland");
-            Assert.AreEqual(5, cache.Exports, "Cold export, replacement, failed lookup, failed processing, and successful retry.");
+            Assert.AreEqual(4, cache.Exports, "Cold export, replacement, one failed build, and successful retry after cooldown.");
         });
     }
 
