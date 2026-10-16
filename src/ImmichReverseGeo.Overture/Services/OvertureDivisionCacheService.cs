@@ -30,6 +30,7 @@ public class OvertureDivisionCacheService
     private readonly string _dataDir;
     private readonly Func<string, string?> _iso3ToAlpha2;
     private readonly MemoryResourcePolicy _memoryPolicy;
+    private readonly CacheBuildRetryPolicy _buildRetries = new();
     private readonly ConcurrentDictionary<string, Lazy<Task>> _inflightDownloads = new();
     private sealed record ReadyCache(string Release, CacheFileStamp Stamp);
     private readonly ConcurrentDictionary<string, ReadyCache> _readyCaches = new();
@@ -139,6 +140,7 @@ public class OvertureDivisionCacheService
 
     public void DeleteFile(string iso3)
     {
+        _buildRetries.Clear(iso3);
         _readyCaches.TryRemove(iso3, out _);
         _refreshRetries.TryRemove(iso3, out _);
         var status = Volatile.Read(ref _releaseStatus);
@@ -151,6 +153,11 @@ public class OvertureDivisionCacheService
         if (HasData(iso3) && CanReuseWithoutReleaseCheck(iso3))
         {
             return (Task.CompletedTask, OvertureDivisionEnsureResult.AlreadyReady);
+        }
+
+        if (_buildRetries.GetDeferredFailure(iso3, UtcNow) is { } deferred)
+        {
+            return (deferred, OvertureDivisionEnsureResult.RetryDeferred);
         }
 
         var candidate = new Lazy<Task>(() => PrepareDataAsync(iso3, ct), LazyThreadSafetyMode.ExecutionAndPublication);
@@ -298,8 +305,13 @@ public class OvertureDivisionCacheService
 
     private async Task PrepareDataAsync(string iso3, CancellationToken ct)
     {
+        var deferred = _buildRetries.GetDeferredFailure(iso3, UtcNow);
         try
         {
+            if (deferred is not null)
+            {
+                await deferred;
+            }
             var release = await GetTargetReleaseAsync(ct);
             if (HasData(iso3) && IsReleaseReady(iso3, release))
             {
@@ -312,6 +324,7 @@ public class OvertureDivisionCacheService
             try
             {
                 await DownloadDataInternalAsync(iso3, release, ct);
+                _buildRetries.Clear(iso3);
                 _refreshRetries.TryRemove(iso3, out _);
             }
             catch (OperationCanceledException) when (ct.IsCancellationRequested)
@@ -323,6 +336,15 @@ public class OvertureDivisionCacheService
                 _refreshRetries[iso3] = UtcNow + RefreshRetryDelay;
                 _logger.LogWarning(ex, "Refresh to Overture {Release} failed for {ISO3}; using the previous compatible cache and retrying in one hour", release, iso3);
             }
+        }
+        catch (OperationCanceledException) when (ct.IsCancellationRequested)
+        {
+            throw;
+        }
+        catch (Exception ex) when (deferred is null)
+        {
+            _buildRetries.RecordFailure(iso3, UtcNow, ex);
+            throw;
         }
         finally
         {
@@ -351,6 +373,8 @@ public class OvertureDivisionCacheService
 
         try
         {
+            ReportProgress(iso3, "Waiting for another country cache build to finish", phase: 0);
+            using var build = await _memoryPolicy.EnterCacheBuildAsync(ct);
             ReportProgress(iso3, "Finding the latest Overture release");
             var rowCount = await Task.Run(() => ExportOvertureDivisions(tmpPath, alpha2, iso3, release, ct), ct);
             ReportProgress(iso3, "Validating and saving cache", rows: rowCount, phase: 5, totalRows: rowCount);
@@ -678,5 +702,6 @@ public enum OvertureDivisionEnsureResult
     AlreadyReady,
     AwaitedExistingDownload,
     StartedDownload,
-    CheckingForUpdates
+    CheckingForUpdates,
+    RetryDeferred
 }

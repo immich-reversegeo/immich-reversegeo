@@ -246,6 +246,7 @@ public class AdministrativeAreaResolverService
         {
             OvertureDivisionEnsureResult.StartedDownload => $"Downloading Overture administrative cache for {iso3}...",
             OvertureDivisionEnsureResult.CheckingForUpdates => $"Checking Overture cache updates for {iso3}...",
+            OvertureDivisionEnsureResult.RetryDeferred => $"Overture cache retry deferred for {iso3} after a recent failure.",
             OvertureDivisionEnsureResult.AwaitedExistingDownload => $"Waiting for Overture administrative cache for {iso3}...",
             _ => null
         };
@@ -257,6 +258,7 @@ public class AdministrativeAreaResolverService
         {
             OvertureDivisionEnsureResult.StartedDownload => $"Starting Overture administrative cache download for {iso3}.",
             OvertureDivisionEnsureResult.CheckingForUpdates => $"Checking Overture administrative cache updates for {iso3}.",
+            OvertureDivisionEnsureResult.RetryDeferred => $"Overture cache retry deferred for {iso3} after a recent failure.",
             OvertureDivisionEnsureResult.AwaitedExistingDownload => $"Waiting for in-flight Overture administrative cache download for {iso3}.",
             _ => $"Overture administrative cache already ready for {iso3}."
         };
@@ -267,6 +269,7 @@ public class AdministrativeAreaResolverService
         return result switch
         {
             GadmDivisionEnsureResult.StartedDownload => $"Downloading GADM administrative cache for {iso3}...",
+            GadmDivisionEnsureResult.RetryDeferred => $"GADM cache retry deferred for {iso3} after a recent failure.",
             GadmDivisionEnsureResult.AwaitedExistingDownload => $"Waiting for GADM administrative cache for {iso3}...",
             _ => null
         };
@@ -277,6 +280,7 @@ public class AdministrativeAreaResolverService
         return result switch
         {
             GadmDivisionEnsureResult.StartedDownload => $"Starting GADM administrative cache download for {iso3}.",
+            GadmDivisionEnsureResult.RetryDeferred => $"GADM cache retry deferred for {iso3} after a recent failure.",
             GadmDivisionEnsureResult.AwaitedExistingDownload => $"Waiting for in-flight GADM administrative cache download for {iso3}.",
             _ => $"GADM administrative cache already ready for {iso3}."
         };

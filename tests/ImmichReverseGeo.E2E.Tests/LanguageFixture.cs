@@ -218,6 +218,8 @@ internal sealed class FixtureCache(string root, string data) : OvertureDivisionC
 {
     public int Exports { get; private set; }
     public bool FailExport { get; set; }
+    public DateTimeOffset Now { get; set; } = DateTimeOffset.UtcNow;
+    protected override DateTimeOffset UtcNow => Now;
     protected override string GetLatestOvertureReleaseForCache(CancellationToken ct) => "2026-10-15.0";
     protected override string GetDivisionAreaReleaseUrl(string release) =>
         Path.Combine(root, "source", "type=division_area", "*.parquet").Replace('\\', '/');

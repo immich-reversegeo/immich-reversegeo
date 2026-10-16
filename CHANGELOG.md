@@ -6,6 +6,8 @@ For a shorter user-facing summary, see [docs/website/changelog.md](./docs/websit
 
 ## Unreleased
 
+- Serialize the full Overture/GADM country cache download, export, validation, and replacement lifecycle through one shared gate in every memory mode. Keep low-memory query limits separate, make queued builds cancellable, and defer failed initial/incompatible builds for five minutes without retrying per asset. Preserve compatible Overture refresh fallback and show explicit queued/deferred status.
+
 - Build localized Overture parent hierarchies once per division before joining polygon payloads, and stream the staged country export into SQLite. Preserve staged download progress, cancellation, hierarchy ordering, language fallbacks, and areas without hierarchies. Add constrained-memory Parquet and production-exporter regression tests.
 
 - Keep Lookup's write eligibility aligned with processing after mandatory Overture cache preparation fails: show an incomplete result instead of a writable country-name city fallback. Add desktop/mobile browser E2E coverage of language settings, the production Parquet-to-SQLite exporter, correction previews, PostgreSQL writes, cache reuse, failed upgrades, and retry.

@@ -8,6 +8,7 @@ namespace ImmichReverseGeo.Core.Models;
 public sealed class MemoryResourcePolicy
 {
     private readonly SemaphoreSlim _heavyWork = new(1, 1);
+    private readonly SemaphoreSlim _cacheBuild = new(1, 1);
     private volatile bool _lowMemoryMode;
     private int _countryIndexIdleMinutes = 5;
     private int _duckDbThreads;
@@ -69,6 +70,20 @@ public sealed class MemoryResourcePolicy
     }
 
     public event Action? LowMemoryEnabled;
+
+    /// <summary>One country cache build across all sources, regardless of memory mode.</summary>
+    public async Task<IDisposable> EnterCacheBuildAsync(CancellationToken ct = default)
+    {
+        await _cacheBuild.WaitAsync(ct);
+        return new CacheBuildLease(_cacheBuild);
+    }
+
+    private sealed class CacheBuildLease(SemaphoreSlim semaphore) : IDisposable
+    {
+        private SemaphoreSlim? _semaphore = semaphore;
+
+        public void Dispose() => Interlocked.Exchange(ref _semaphore, null)?.Release();
+    }
 
     public WorkLease Enter(CancellationToken ct = default)
     {

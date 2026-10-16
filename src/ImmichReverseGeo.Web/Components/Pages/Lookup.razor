@@ -730,6 +730,7 @@
             {
                 OvertureDivisionEnsureResult.StartedDownload => $"Downloading Overture administrative cache for {r.Iso3}...",
                 OvertureDivisionEnsureResult.CheckingForUpdates => $"Checking Overture cache updates for {r.Iso3}...",
+                OvertureDivisionEnsureResult.RetryDeferred => $"Overture cache retry deferred for {r.Iso3} after a recent failure.",
                 OvertureDivisionEnsureResult.AwaitedExistingDownload => $"Waiting for Overture administrative cache for {r.Iso3}...",
                 _ => $"Overture administrative cache already ready for {r.Iso3}."
             });
@@ -759,6 +760,7 @@
                 await UpdateLookupStatusAsync(ensureResult switch
                 {
                     GadmDivisionEnsureResult.StartedDownload => $"Downloading GADM administrative cache for {iso3}...",
+                    GadmDivisionEnsureResult.RetryDeferred => $"GADM cache retry deferred for {iso3} after a recent failure.",
                     GadmDivisionEnsureResult.AwaitedExistingDownload => $"Waiting for GADM administrative cache for {iso3}...",
                     _ => $"GADM administrative cache already ready for {iso3}."
                 });
