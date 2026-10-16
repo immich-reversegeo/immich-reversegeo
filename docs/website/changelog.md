@@ -11,6 +11,8 @@ Technical implementation notes live in [CHANGELOG.md](https://github.com/immich-
 
 ## Unreleased
 
+- Reduce temporary disk work and store only the parent-area translations needed by newly built Overture country caches. Available language choices and location results stay the same; existing compatible caches remain usable.
+
 - Reduce memory use when building multilingual country caches by storing shared parent-area translations once. Existing caches rebuild once when next needed. Language switching still reuses downloaded data, and existing Immich names stay unchanged.
 
 - Country caches now download and build one at a time across Overture and GADM in every memory mode. Failed builds wait five minutes before retrying, avoiding repeated downloads for each waiting photo. Existing ready caches remain usable.

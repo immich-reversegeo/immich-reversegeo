@@ -432,7 +432,7 @@ public class OvertureDivisionCacheService
         selectCmd.UseStreamingMode = true;
         selectCmd.CommandText = query.BuildResultQuery();
         using var cancellation = ct.Register(selectCmd.Cancel);
-        ReportProgress(iso3, "Writing country cache", phase: 4, totalRows: areaCount);
+        ReportProgress(iso3, "Writing referenced division names", phase: 3);
 
         using var sqlite = new SqliteConnection($"Data Source={tmpPath};Pooling=false");
         sqlite.Open();
@@ -506,6 +506,7 @@ public class OvertureDivisionCacheService
                 nameInsert.ExecuteNonQuery();
             }
         }
+        ReportProgress(iso3, "Writing country cache", phase: 4, totalRows: areaCount);
         using var reader = selectCmd.ExecuteReader();
         using var insert = sqlite.CreateCommand();
         insert.CommandText = @"

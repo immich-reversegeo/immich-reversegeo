@@ -34,6 +34,7 @@ public class OvertureCacheQueryTests
                     {'primary': 'local area', 'common': MAP {'en': 'English area'}} AS names,
                     [[{'division_id': 'city', 'subtype': 'locality', 'name': 'local city'},
                       {'division_id': 'area', 'subtype': 'macrohood', 'name': 'local area'}]] AS hierarchies;
+                INSERT INTO divisions VALUES ('unused', 'AE', {'primary': 'unused', 'common': MAP {'en': 'unused'}}, [[{'division_id': 'unused', 'subtype': 'locality', 'name': 'unused'}]]);
                 INSERT INTO divisions VALUES ('city', 'AE', {'primary': 'local city', 'common': MAP {'en': 'English city'}}, NULL);
                 CREATE TABLE areas AS
                 SELECT 'polygon1' AS id, names, 'macrohood' AS subtype, 'land' AS class, 8 AS admin_level,
@@ -61,6 +62,12 @@ public class OvertureCacheQueryTests
                 (phase, _, snapshot) => { if (snapshot is null) { stages.Add(phase); } }))
             {
                 Assert.AreEqual(2L, query.Prepare(areaUrl, "AE"));
+                var files = Directory.GetFiles(Path.Combine(root, "duckdb-cache-work"), "*.parquet", SearchOption.AllDirectories)
+                    .Select(Path.GetFileName).Order().ToArray();
+                CollectionAssert.AreEqual(new[] { "areas.parquet", "names.parquet" }, files);
+                command.CommandText = $"SELECT count(*) FROM ({query.BuildNamesQuery()})";
+                Assert.AreEqual(missingParent ? 1L : 2L, command.ExecuteScalar(),
+                    "Shared references must be unique; parent-only divisions retained; unrelated hierarchies excluded.");
                 command.CommandText = $"SELECT count(*) FROM ((SELECT * EXCLUDE (hierarchy_json) FROM ({original})) EXCEPT ALL (SELECT * EXCLUDE (hierarchy_json) FROM ({query.BuildResultQuery()})))";
                 Assert.AreEqual(0L, command.ExecuteScalar());
                 command.CommandText = $"SELECT count(*) FROM ((SELECT * EXCLUDE (hierarchy_json) FROM ({query.BuildResultQuery()})) EXCEPT ALL (SELECT * EXCLUDE (hierarchy_json) FROM ({original})))";
@@ -78,7 +85,7 @@ public class OvertureCacheQueryTests
                     StringAssert.Contains(parentNames!, "English city");
                 }
             }
-            CollectionAssert.AreEqual(new[] { 1, 2, 3 }, stages);
+            CollectionAssert.AreEqual(new[] { 1, 2 }, stages);
             Assert.HasCount(0, Directory.GetDirectories(Path.Combine(root, "duckdb-cache-work")));
         }
         finally
