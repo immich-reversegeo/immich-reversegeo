@@ -102,7 +102,7 @@ public class OvertureCountrySourceCodesTests
                 create.CommandText = """
                     CREATE TABLE division_area (id TEXT PRIMARY KEY);
                     INSERT INTO division_area VALUES ('fixture');
-                    CREATE TABLE _meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+                    CREATE TABLE IF NOT EXISTS division_name (id TEXT PRIMARY KEY, country TEXT, names_json TEXT); CREATE TABLE _meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
                     INSERT INTO _meta VALUES ('downloadedAt', '2026-09-23T00:00:00Z');
                     INSERT INTO _meta VALUES ('release', '2026-09-23.1');
                     """;

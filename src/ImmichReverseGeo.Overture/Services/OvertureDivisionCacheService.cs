@@ -14,7 +14,7 @@ namespace ImmichReverseGeo.Overture.Services;
 public class OvertureDivisionCacheService
 {
     // Bump when export behavior changes invalidate previously downloaded results.
-    public const string CacheFormatVersion = "2";
+    public const string CacheFormatVersion = "3";
     private static readonly TimeSpan ReleaseCheckInterval = TimeSpan.FromDays(1);
     private static readonly TimeSpan RefreshRetryDelay = TimeSpan.FromHours(1);
     private readonly SemaphoreSlim _releaseCheckLock = new(1, 1);
@@ -433,7 +433,6 @@ public class OvertureDivisionCacheService
         selectCmd.CommandText = query.BuildResultQuery();
         using var cancellation = ct.Register(selectCmd.Cancel);
         ReportProgress(iso3, "Writing country cache", phase: 4, totalRows: areaCount);
-        using var reader = selectCmd.ExecuteReader();
 
         using var sqlite = new SqliteConnection($"Data Source={tmpPath};Pooling=false");
         sqlite.Open();
@@ -459,6 +458,7 @@ public class OvertureDivisionCacheService
                     hierarchy_json TEXT NULL,
                     names_json TEXT NULL
                 );
+                CREATE TABLE division_name (id TEXT PRIMARY KEY, country TEXT NULL, names_json TEXT NULL);
                 CREATE TABLE _meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
                 CREATE INDEX idx_division_area_bbox_x ON division_area (bbox_xmin, bbox_xmax);
                 CREATE INDEX idx_division_area_bbox_y ON division_area (bbox_ymin, bbox_ymax);
@@ -485,6 +485,28 @@ public class OvertureDivisionCacheService
         }
 
         using var tx = sqlite.BeginTransaction();
+        // Import normalized names before starting the polygon stream on this connection.
+        using (var namesQuery = duck.CreateCommand())
+        using (var nameInsert = sqlite.CreateCommand())
+        {
+            namesQuery.UseStreamingMode = true;
+            namesQuery.CommandText = query.BuildNamesQuery();
+            using var namesCancellation = ct.Register(namesQuery.Cancel);
+            nameInsert.CommandText = "INSERT INTO division_name (id, country, names_json) VALUES ($id, $country, $names)";
+            var nameId = nameInsert.Parameters.Add("$id", SqliteType.Text);
+            var nameCountry = nameInsert.Parameters.Add("$country", SqliteType.Text);
+            var nameJson = nameInsert.Parameters.Add("$names", SqliteType.Text);
+            using var namesReader = namesQuery.ExecuteReader();
+            while (namesReader.Read())
+            {
+                ct.ThrowIfCancellationRequested();
+                nameId.Value = namesReader.GetString(0);
+                nameCountry.Value = namesReader.IsDBNull(1) ? DBNull.Value : namesReader.GetString(1);
+                nameJson.Value = namesReader.IsDBNull(2) ? DBNull.Value : namesReader.GetString(2);
+                nameInsert.ExecuteNonQuery();
+            }
+        }
+        using var reader = selectCmd.ExecuteReader();
         using var insert = sqlite.CreateCommand();
         insert.CommandText = @"
             INSERT OR IGNORE INTO division_area (
@@ -592,6 +614,14 @@ public class OvertureDivisionCacheService
             return false;
         }
 
+        using (var schema = conn.CreateCommand())
+        {
+            schema.CommandText = "SELECT count(*) FROM pragma_table_info('division_name') WHERE name IN ('id', 'country', 'names_json')";
+            if (Convert.ToInt64(schema.ExecuteScalar()) != 3)
+            {
+                return false;
+            }
+        }
         var alpha2 = _iso3ToAlpha2(iso3);
         if (alpha2 is null)
         {

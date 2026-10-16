@@ -140,7 +140,9 @@ public sealed class LocationLanguageE2ETests
     }
 
     [TestMethod]
-    public async Task IncompatibleCache_FailedRebuildPreservesFile_ThenRetryRestoresLocalizedLookup()
+    [DataRow("1")]
+    [DataRow("2")]
+    public async Task IncompatibleCache_FailedRebuildPreservesFile_ThenRetryRestoresLocalizedLookup(string oldVersion)
     {
         await RunAsync(1280, 900, async (fixture, page) =>
         {
@@ -155,7 +157,8 @@ public sealed class LocationLanguageE2ETests
             {
                 database.Open();
                 using var update = database.CreateCommand();
-                update.CommandText = "UPDATE _meta SET value='1' WHERE key='cacheFormatVersion'";
+                update.CommandText = "UPDATE _meta SET value=$version WHERE key='cacheFormatVersion'";
+                update.Parameters.AddWithValue("$version", oldVersion);
                 update.ExecuteNonQuery();
             }
             cache.GetStatus(); // Inventory must discard the now-incompatible readiness entry.

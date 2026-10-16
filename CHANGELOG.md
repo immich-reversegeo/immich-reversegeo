@@ -6,6 +6,8 @@ For a shorter user-facing summary, see [docs/website/changelog.md](./docs/websit
 
 ## Unreleased
 
+- Normalize parent-division translations in cache format 3: stream each division into an indexed `division_name` table and keep hierarchy entries as ID references with source-label fallbacks. Remove the staged builder's correlated translation-map aggregation. Localize only referenced parents after spatial lookup; preserve area-specific labels, ordering, missing-parent fallbacks, and country identity. Older caches rebuild atomically on demand. Add a full production-builder regression that previously exhausted 256 MiB with four threads.
+
 - Serialize the full Overture/GADM country cache download, export, validation, and replacement lifecycle through one shared gate in every memory mode. Keep low-memory query limits separate, make queued builds cancellable, and defer failed initial/incompatible builds for five minutes without retrying per asset. Preserve compatible Overture refresh fallback and show explicit queued/deferred status.
 
 - Build localized Overture parent hierarchies once per division before joining polygon payloads, and stream the staged country export into SQLite. Preserve staged download progress, cancellation, hierarchy ordering, language fallbacks, and areas without hierarchies. Add constrained-memory Parquet and production-exporter regression tests.

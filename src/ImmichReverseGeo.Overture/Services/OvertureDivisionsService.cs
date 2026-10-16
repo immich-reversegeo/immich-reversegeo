@@ -580,10 +580,10 @@ public class OvertureDivisionsService : IDisposable
     {
         try
         {
-            var cached = QueryCachedDivisionAreas(lat, lon, iso3);
+            var cached = QueryCachedDivisionAreas(lat, lon, iso3, locationNames);
             if (cached is not null)
             {
-                return OvertureNameLocalizer.Localize(cached, locationNames);
+                return cached;
             }
 
             var release = await _overturePlacesService.GetLatestReleaseForOvertureAsync(ct);
@@ -605,7 +605,7 @@ public class OvertureDivisionsService : IDisposable
         }
     }
 
-    private OvertureDivisionLookupDiagnostics? QueryCachedDivisionAreas(double lat, double lon, string? iso3)
+    private OvertureDivisionLookupDiagnostics? QueryCachedDivisionAreas(double lat, double lon, string? iso3, LocationNameOptions? locationNames)
     {
         if (string.IsNullOrWhiteSpace(iso3))
         {
@@ -618,14 +618,14 @@ public class OvertureDivisionsService : IDisposable
             return null;
         }
 
-        return QueryDivisionAreasFromSqlite(dbPath, lat, lon, "cached");
+        return QueryDivisionAreasFromSqlite(dbPath, lat, lon, "cached", locationNames);
     }
 
     private static OvertureDivisionLookupDiagnostics QueryDivisionAreasFromSqlite(
         string dbPath,
         double lat,
         double lon,
-        string selectionLabel)
+        string selectionLabel, LocationNameOptions? locationNames)
     {
         using var conn = new SqliteConnection($"Data Source={dbPath};Pooling=false");
         conn.Open();
@@ -740,10 +740,13 @@ public class OvertureDivisionsService : IDisposable
                 OvertureDataAccess.ReadNullableString(reader, 15)));
         }
 
+        reader.Close();
+        var divisionNames = OvertureCachedNames.ReadReferenced(conn, candidates);
         using var meta = conn.CreateCommand();
         meta.CommandText = "SELECT value FROM _meta WHERE key='release'";
         var release = meta.ExecuteScalar()?.ToString();
-        return new OvertureDivisionLookupDiagnostics(best, candidates, release);
+        return OvertureNameLocalizer.Localize(new OvertureDivisionLookupDiagnostics(best, candidates, release),
+            locationNames, divisionNames);
     }
 
     private OvertureDivisionLookupDiagnostics QueryDivisionAreas(

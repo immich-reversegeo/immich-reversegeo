@@ -135,7 +135,7 @@ public partial class AdministrativeAreaResolverTerritoryTests
                 bbox_xmax REAL NULL,
                 bbox_ymax REAL NULL
             );
-            CREATE TABLE _meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS division_name (id TEXT PRIMARY KEY, country TEXT, names_json TEXT); CREATE TABLE _meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
             INSERT INTO division_area VALUES (
                 'ready', 'Ready', 'region', 'land', 1, NULL, 1, 0, NULL,
                 1000, 1000, 1001, 1001

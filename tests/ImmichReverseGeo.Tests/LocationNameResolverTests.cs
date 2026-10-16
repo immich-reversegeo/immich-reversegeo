@@ -57,7 +57,7 @@ public class LocationNameResolverTests
                 country TEXT, is_land INTEGER, is_territorial INTEGER, geom_wkb BLOB,
                 bbox_xmin REAL, bbox_ymin REAL, bbox_xmax REAL, bbox_ymax REAL,
                 division_id TEXT, hierarchy_json TEXT, names_json TEXT, alpha3 TEXT);
-            CREATE TABLE _meta (key TEXT, value TEXT);
+            CREATE TABLE IF NOT EXISTS division_name (id TEXT PRIMARY KEY, country TEXT, names_json TEXT); CREATE TABLE _meta (key TEXT, value TEXT);
             INSERT INTO _meta VALUES ('release','test');
             INSERT INTO _meta VALUES ('cacheFormatVersion',$version);
             INSERT INTO _meta VALUES ('downloadedAt','2026-10-15T00:00:00Z');

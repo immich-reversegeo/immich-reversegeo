@@ -99,7 +99,7 @@ public class GadmSharedTerritoryTests
         using var connection = Open(Path.Combine(root, "overture-divisions", $"{iso3}.db"));
         using var command = connection.CreateCommand();
         command.CommandText = DivisionSchema + """
-            CREATE TABLE _meta (key TEXT PRIMARY KEY, value TEXT);
+            CREATE TABLE IF NOT EXISTS division_name (id TEXT PRIMARY KEY, country TEXT, names_json TEXT); CREATE TABLE _meta (key TEXT PRIMARY KEY, value TEXT);
             INSERT INTO _meta VALUES ('release', 'test');
             INSERT INTO division_area VALUES (
                 'ready', 'Ready', 'region', 'land', 1, NULL, 1, 0, NULL,

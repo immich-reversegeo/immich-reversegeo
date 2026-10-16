@@ -11,6 +11,7 @@ public class OvertureCacheUpgradeTests
     [DataRow(null)]
     [DataRow("0")]
     [DataRow("1")]
+    [DataRow("2")]
     [DataRow("999")]
     [DataRow("invalid")]
     public void NonCurrentFormat_IsNotReadyEvenAfterStatusRead(string? version)
@@ -20,6 +21,20 @@ public class OvertureCacheUpgradeTests
         Assert.AreEqual(1L, fixture.Service.GetStatus()["ARE"].RowCount);
         Assert.IsFalse(fixture.Service.HasData("ARE"));
         CollectionAssert.AreEqual(original, File.ReadAllBytes(fixture.Path));
+    }
+
+    [TestMethod]
+    public void CurrentFormatWithoutNormalizedNames_IsNotReady()
+    {
+        using var fixture = new CacheFixture(OvertureDivisionCacheService.CacheFormatVersion);
+        using (var connection = new SqliteConnection($"Data Source={fixture.Path};Pooling=false"))
+        {
+            connection.Open();
+            using var command = connection.CreateCommand();
+            command.CommandText = "DROP TABLE division_name";
+            command.ExecuteNonQuery();
+        }
+        Assert.IsFalse(fixture.Service.HasData("ARE"));
     }
 
     [TestMethod]
@@ -135,7 +150,7 @@ public class OvertureCacheUpgradeTests
         command.CommandText = """
             CREATE TABLE division_area (id TEXT PRIMARY KEY, name TEXT NOT NULL);
             INSERT INTO division_area VALUES ('business-bay', $name);
-            CREATE TABLE _meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
+            CREATE TABLE IF NOT EXISTS division_name (id TEXT PRIMARY KEY, country TEXT, names_json TEXT); CREATE TABLE _meta (key TEXT PRIMARY KEY, value TEXT NOT NULL);
             INSERT INTO _meta VALUES ('downloadedAt', '2020-01-01T00:00:00Z');
             INSERT INTO _meta VALUES ('release', '2020-01-01.0');
             """;

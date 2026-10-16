@@ -61,12 +61,22 @@ public class OvertureCacheQueryTests
                 (phase, _, snapshot) => { if (snapshot is null) { stages.Add(phase); } }))
             {
                 Assert.AreEqual(2L, query.Prepare(areaUrl, "AE"));
-                command.CommandText = $"SELECT count(*) FROM (({original}) EXCEPT ALL ({query.BuildResultQuery()}))";
+                command.CommandText = $"SELECT count(*) FROM ((SELECT * EXCLUDE (hierarchy_json) FROM ({original})) EXCEPT ALL (SELECT * EXCLUDE (hierarchy_json) FROM ({query.BuildResultQuery()})))";
                 Assert.AreEqual(0L, command.ExecuteScalar());
-                command.CommandText = $"SELECT count(*) FROM (({query.BuildResultQuery()}) EXCEPT ALL ({original}))";
+                command.CommandText = $"SELECT count(*) FROM ((SELECT * EXCLUDE (hierarchy_json) FROM ({query.BuildResultQuery()})) EXCEPT ALL (SELECT * EXCLUDE (hierarchy_json) FROM ({original})))";
                 Assert.AreEqual(0L, command.ExecuteScalar());
                 command.CommandText = $"SELECT hierarchy_json FROM ({query.BuildResultQuery()}) LIMIT 1";
-                StringAssert.Contains(command.ExecuteScalar()!.ToString()!, missingParent ? "local city" : "English city");
+                StringAssert.Contains(command.ExecuteScalar()!.ToString()!, "local city");
+                command.CommandText = $"SELECT names_json FROM ({query.BuildNamesQuery()}) WHERE id='city'";
+                var parentNames = command.ExecuteScalar()?.ToString();
+                if (missingParent)
+                {
+                    Assert.IsNull(parentNames);
+                }
+                else
+                {
+                    StringAssert.Contains(parentNames!, "English city");
+                }
             }
             CollectionAssert.AreEqual(new[] { 1, 2, 3 }, stages);
             Assert.HasCount(0, Directory.GetDirectories(Path.Combine(root, "duckdb-cache-work")));
