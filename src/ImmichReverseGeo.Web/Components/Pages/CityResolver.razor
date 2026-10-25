@@ -70,6 +70,7 @@ else
             <div class="form-group">
                 <label>Tie-break mode
                 <select class="form-control" @bind="_defaultTieBreakMode">
+                    <option value="">Inherit bundled default</option>
                     <option value="@CityResolverTieBreakModes.SmallestArea">Prefer tighter area</option>
                     <option value="@CityResolverTieBreakModes.LargestArea">Prefer broader area</option>
                 </select></label>
@@ -80,7 +81,7 @@ else
                 <div class="resolver-subtype-list">
                     @if (_defaultSubtypeOrder.Count == 0)
                     {
-                        <div class="resolver-subtype-item resolver-subtype-empty">No subtype override set.</div>
+                        <div class="resolver-subtype-item resolver-subtype-empty">Inherit the default place-type order.</div>
                     }
                     else
                     {
@@ -182,6 +183,7 @@ else
                 <div class="form-group">
                     <label>Tie-break mode
                     <select class="form-control" @bind="editor.TieBreakMode">
+                        <option value="">Inherit current defaults</option>
                         <option value="@CityResolverTieBreakModes.SmallestArea">Prefer tighter area</option>
                         <option value="@CityResolverTieBreakModes.LargestArea">Prefer broader area</option>
                     </select></label>
@@ -192,7 +194,7 @@ else
                     <div class="resolver-subtype-list">
                         @if (editor.PreferredSubtypes.Count == 0)
                         {
-                            <div class="resolver-subtype-item resolver-subtype-empty">No subtype override set.</div>
+                            <div class="resolver-subtype-item resolver-subtype-empty">Inherit the default place-type order.</div>
                         }
                         else
                         {
@@ -263,7 +265,7 @@ else
     private List<KnownCountryOption> _knownCountries = [];
     private bool _useDefaultOverride;
     private List<string> _defaultSubtypeOrder = [];
-    private string _defaultTieBreakMode = CityResolverTieBreakModes.SmallestArea;
+    private string _defaultTieBreakMode = string.Empty;
     private string _defaultPendingSubtype = string.Empty;
     private string _newCountryInput = string.Empty;
     private string? _countryInputError;
@@ -289,7 +291,7 @@ else
             _defaultSubtypeOrder = _useDefaultOverride ? [.. NormalizeEditableSubtypes(defaultOverride.PreferredSubtypes)] : [];
             _defaultTieBreakMode = _useDefaultOverride
                 ? NormalizeEditableTieBreak(defaultOverride.TieBreakMode)
-                : CityResolverTieBreakModes.SmallestArea;
+                : string.Empty;
 
             _countryEditors = _cfg.Processing.CityResolver.CountryOverrides
                 .OrderBy(kvp => kvp.Key, StringComparer.OrdinalIgnoreCase)
@@ -366,13 +368,12 @@ else
             return;
         }
 
-        var startingProfile = CityResolverCatalog.GetProfile(BuildCityResolverConfig(), country.Iso3);
         _newlyAddedCountry = country.Iso3;
         _countryEditors.Add(new CountryOverrideEditor
         {
             Country = country,
-            PreferredSubtypes = [.. startingProfile.PreferredSubtypes],
-            TieBreakMode = startingProfile.TieBreakMode
+            PreferredSubtypes = [],
+            TieBreakMode = string.Empty
         });
         _countryEditors = _countryEditors
             .OrderBy(editor => editor.Country.DisplayName, StringComparer.OrdinalIgnoreCase)
@@ -406,7 +407,7 @@ else
             return _bundledDefaultProfile;
         }
 
-        var profileOverride = BuildProfile(_defaultSubtypeOrder, _defaultTieBreakMode, allowEmpty: true);
+        var profileOverride = BuildProfile(_defaultSubtypeOrder, _defaultTieBreakMode);
         return _bundledDefaultProfile.ApplyOverride(profileOverride).Normalize();
     }
 
@@ -458,40 +459,24 @@ else
         var config = new CityResolverConfig
         {
             DefaultProfile = _useDefaultOverride
-                ? BuildProfile(_defaultSubtypeOrder, _defaultTieBreakMode, allowEmpty: true)
+                ? BuildProfile(_defaultSubtypeOrder, _defaultTieBreakMode)
                 : CityResolverProfile.CreateEmpty()
         };
 
         foreach (var editor in _countryEditors)
         {
-            config.CountryOverrides[editor.Country.Iso3] = BuildProfile(editor.PreferredSubtypes, editor.TieBreakMode, allowEmpty: true);
+            config.CountryOverrides[editor.Country.Iso3] = BuildProfile(editor.PreferredSubtypes, editor.TieBreakMode);
         }
 
         return config;
     }
 
-    private static CityResolverProfile BuildProfile(List<string> orderedSubtypes, string tieBreakMode, bool allowEmpty)
+    private static CityResolverProfile BuildProfile(List<string> orderedSubtypes, string tieBreakMode)
     {
-        if (allowEmpty && orderedSubtypes.Count == 0 && string.IsNullOrWhiteSpace(tieBreakMode))
-        {
-            return CityResolverProfile.CreateEmpty();
-        }
-
-        if (allowEmpty && orderedSubtypes.Count == 0)
-        {
-            return new CityResolverProfile
-            {
-                PreferredSubtypes = [],
-                TieBreakMode = string.Equals(tieBreakMode, CityResolverTieBreakModes.LargestArea, StringComparison.OrdinalIgnoreCase)
-                    ? CityResolverTieBreakModes.LargestArea
-                    : string.Empty
-            };
-        }
-
         return new CityResolverProfile
         {
             PreferredSubtypes = [.. orderedSubtypes],
-            TieBreakMode = tieBreakMode
+            TieBreakMode = NormalizeEditableTieBreak(tieBreakMode)
         };
     }
 
@@ -638,6 +623,11 @@ else
 
     private static string NormalizeEditableTieBreak(string? tieBreakMode)
     {
+        if (string.IsNullOrWhiteSpace(tieBreakMode))
+        {
+            return string.Empty;
+        }
+
         return string.Equals(tieBreakMode, CityResolverTieBreakModes.LargestArea, StringComparison.OrdinalIgnoreCase)
             ? CityResolverTieBreakModes.LargestArea
             : CityResolverTieBreakModes.SmallestArea;
@@ -647,7 +637,7 @@ else
     {
         public required KnownCountryOption Country { get; init; }
         public List<string> PreferredSubtypes { get; set; } = [];
-        public string TieBreakMode { get; set; } = CityResolverTieBreakModes.SmallestArea;
+        public string TieBreakMode { get; set; } = string.Empty;
         public string PendingSubtype { get; set; } = string.Empty;
     }
 }
