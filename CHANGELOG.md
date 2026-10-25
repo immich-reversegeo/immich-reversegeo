@@ -6,6 +6,8 @@ For a shorter user-facing summary, see [docs/website/changelog.md](./docs/websit
 
 ## Unreleased
 
+- Update DuckDB.NET.Data.Full from 1.5.6 to 1.5.6.1 in the app, Overture services, and export tools. Retain the cache format and streaming exporter; add a repeatable full-builder benchmark with pinned France/USA inputs and exact cache-content comparisons. Record measured results and compatibility boundaries in [the benchmark report](docs/maintainer/duckdb-reader-benchmark.md); no material full-builder speedup was demonstrated.
+
 - Remove the duplicate hierarchy Parquet staging pass from Overture cache builds. Import normalized division names only when referenced by a cached area's hierarchy, retaining parent-only divisions and shared translations once. Keep cache format 3 compatible; existing caches need no forced rebuild.
 
 - Normalize parent-division translations in cache format 3: stream each division into an indexed `division_name` table and keep hierarchy entries as ID references with source-label fallbacks. Remove the staged builder's correlated translation-map aggregation. Localize only referenced parents after spatial lookup; preserve area-specific labels, ordering, missing-parent fallbacks, and country identity. Older caches rebuild atomically on demand. Add a full production-builder regression that previously exhausted 256 MiB with four threads.

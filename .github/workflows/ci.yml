@@ -36,6 +36,9 @@ jobs:
       - name: Compile geographic workload harness
         run: dotnet build tests/GeographicWorkload/GeographicWorkload.csproj --configuration Release
 
+      - name: Compile cache builder benchmark
+        run: dotnet build tests/CacheBuilderBenchmark/CacheBuilderBenchmark.csproj --configuration Release
+
       - name: Test
         run: dotnet test --solution immich-reversegeo.slnx --configuration Release --no-build --filter "TestCategory!=Integration&TestCategory!=Performance"
 
